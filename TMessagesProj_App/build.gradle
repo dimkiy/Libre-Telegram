@@ -1,0 +1,260 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.telegram.build-app-plugin'
+
+repositories {
+    mavenCentral()
+    google()
+}
+
+configurations {
+    compile.exclude module: 'support-v4'
+}
+
+configurations.all {
+    exclude group: 'com.google.firebase', module: 'firebase-core'
+    exclude group: 'androidx.recyclerview', module: 'recyclerview'
+}
+
+dependencies {
+    implementation project(':TMessagesProj')
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+}
+
+// Libre: our OWN signing key. It lives OUTSIDE the project, in C:/Users/<you>/libre-key/:
+//   libre.jks         — the key itself (back it up! without it there are no more updates)
+//   libre.properties  — storeFile=libre.jks, storePassword=..., keyAlias=libre, keyPassword=...
+// Nothing secret is in the project, so it can't leak with the sources.
+// The public repo key (config/release.keystore, password "android") must not sign published builds:
+// anyone has it and could sign a fake "update" that installs over Libre with the user's session.
+def libreKeyDir = new File(System.getProperty("user.home"), "libre-key")
+def libreProps = new Properties()
+def librePropsFile = new File(libreKeyDir, "libre.properties")
+if (librePropsFile.exists()) {
+    librePropsFile.withInputStream { libreProps.load(it) }
+}
+def libreStorePath = libreProps.getProperty('storeFile', 'libre.jks').trim()
+def libreStoreFile = new File(libreStorePath).isAbsolute() ? new File(libreStorePath) : new File(libreKeyDir, libreStorePath)
+def libreKeyConfigured = libreStoreFile.exists() && libreProps.getProperty('storePassword', '').trim().length() > 0
+if (!libreKeyConfigured) {
+    logger.warn("Libre: own signing key not found in " + libreKeyDir + " - armLibre APK will be UNSIGNED (can't be installed)")
+}
+
+android {
+    compileSdkVersion 36
+    buildToolsVersion '36.0.0'
+
+    defaultConfig.applicationId = APP_PACKAGE
+
+
+    lintOptions {
+        disable 'MissingTranslation'
+        disable 'ExtraTranslation'
+        disable 'BlockedPrivateApi'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+
+        coreLibraryDesugaringEnabled true
+    }
+
+    androidResources {
+        noCompress += "pack"
+        localeFilters += ["zz"]
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("../TMessagesProj/config/release.keystore")
+            storePassword RELEASE_STORE_PASSWORD
+            keyAlias RELEASE_KEY_ALIAS
+            keyPassword RELEASE_KEY_PASSWORD
+        }
+
+        release {
+            storeFile file("../TMessagesProj/config/release.keystore")
+            storePassword RELEASE_STORE_PASSWORD
+            keyAlias RELEASE_KEY_ALIAS
+            keyPassword RELEASE_KEY_PASSWORD
+        }
+
+        if (libreKeyConfigured) {
+            libre {
+                storeFile libreStoreFile
+                storePassword libreProps.getProperty('storePassword').trim()
+                keyAlias libreProps.getProperty('keyAlias', 'libre').trim()
+                keyPassword libreProps.getProperty('keyPassword', libreProps.getProperty('storePassword')).trim()
+            }
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            jniDebuggable true
+            // same key as the channel build → "Run" installs over the published Libre without losing data
+            signingConfig libreKeyConfigured ? signingConfigs.libre : signingConfigs.debug
+            applicationIdSuffix ".beta"
+            minifyEnabled false
+            shrinkResources false
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
+            ndk.debugSymbolLevel = 'FULL'
+        }
+
+        standalone {
+            debuggable false
+            jniDebuggable false
+            signingConfig signingConfigs.release
+            applicationIdSuffix ".web"
+            minifyEnabled true
+            shrinkResources true
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
+            ndk.debugSymbolLevel = 'FULL'
+        }
+
+        release {
+            debuggable false
+            jniDebuggable false
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
+            ndk.debugSymbolLevel = 'FULL'
+        }
+
+        // Libre: the build that is published in the channel (variant "armLibre").
+        // Optimised like release: not debuggable (ART compiles it fully), optimised native code,
+        // R8, no debug logging. Keeps the ".beta" package and the debug manifest. Signed with our
+        // own key from libre-key/; without it the APK stays unsigned on purpose, so a
+        // publicly-signed build can't be published by mistake.
+        libre {
+            initWith release
+            matchingFallbacks = ['release']
+            applicationIdSuffix ".beta"
+            signingConfig libreKeyConfigured ? signingConfigs.libre : null
+        }
+    }
+
+    sourceSets.debug {
+        manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest.xml'
+    }
+
+    sourceSets.standalone {
+        manifest.srcFile '../TMessagesProj/config/release/AndroidManifest.xml'
+    }
+
+    sourceSets.release {
+        manifest.srcFile '../TMessagesProj/config/release/AndroidManifest.xml'
+    }
+
+    sourceSets.libre {
+        manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest_SDK23.xml'
+    }
+
+    flavorDimensions "minApi"
+
+    productFlavors {
+        bundleAfat {
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            }
+            ext {
+                abiVersionCode = 1
+            }
+            buildConfigField "boolean", "BUNDLE", "true"
+        }
+        afat {
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            }
+            sourceSets.debug {
+                manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest_SDK23.xml'
+            }
+            sourceSets.release {
+                manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
+            }
+            sourceSets.standalone {
+                manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
+            }
+            ext {
+                abiVersionCode = 9
+            }
+            buildConfigField "boolean", "BUNDLE", "false"
+        }
+        // Libre: phones only (arm64 + armv7). afat also packs x86/x86_64 libraries, which no phone
+        // needs — this APK is about half the size. Same versionCode scheme as afat (…9).
+        arm {
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+            ext {
+                abiVersionCode = 9
+            }
+            buildConfigField "boolean", "BUNDLE", "false"
+        }
+    }
+
+    defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "app.apk"
+            output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode
+        }
+    }
+
+    variantFilter { variant ->
+        def names = variant.flavors*.name
+        if (variant.buildType.name == "libre") {
+            // Libre channel builds: armLibre (recommended) and afatLibre
+            if (!names.contains("arm") && !names.contains("afat")) {
+                setIgnore(true)
+            }
+        } else if (names.contains("arm")) {
+            setIgnore(true)
+        } else if (variant.buildType.name != "release" && !names.contains("afat")) {
+            setIgnore(true)
+        }
+    }
+
+    defaultConfig {
+        minSdkVersion 23
+        targetSdkVersion 36
+        versionName APP_VERSION_NAME
+        ndkVersion "27.2.12479018"
+
+        multiDexEnabled true
+
+        vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
+
+        externalNativeBuild {
+            cmake {
+                version '3.22.1'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23' // , '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                targets 'tmessages.49'
+            }
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+    namespace 'org.telegram.messenger.regular'
+
+    lintOptions {
+        checkReleaseBuilds false
+    }
+}
+
+apply plugin: 'com.google.gms.google-services'

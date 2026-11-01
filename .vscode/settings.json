@@ -1,0 +1,37 @@
+{
+  // Libre: VS Code — для чтения и проверки кода. Собирается APK в Android Studio или через gradlew.
+  // Java открывается в лёгком режиме: подсветка и синтаксические ошибки без тяжёлого импорта Gradle
+  // (полный импорт Android-проекта такого размера VS Code не тянет).
+  "java.server.launchMode": "LightWeight",
+  "java.import.gradle.enabled": false,
+  "java.configuration.updateBuildConfiguration": "disabled",
+
+  // поиск только по нашему коду и Telegram, без нативных библиотек и сборки
+  "search.exclude": {
+    "**/build": true,
+    "**/.gradle": true,
+    "**/.cxx": true,
+    "TMessagesProj/jni/third_party": true,
+    "TMessagesProj/jni/td": true,
+    "TMessagesProj/jni/tgcalls": true,
+    "TMessagesProj/jni/tlottie": true,
+    "TMessagesProj/jni/wallet-engine": true,
+    "TMessagesProj/lib/jlatexmath": true,
+    "TMessagesProj_Modules/media": true,
+    "TMessagesProj/src/main/assets": true
+  },
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/.gradle/**": true,
+    "**/.cxx/**": true,
+    "TMessagesProj/jni/**": true,
+    "TMessagesProj_Modules/**": true
+  },
+  "files.exclude": {
+    "**/.gradle": true,
+    "**/.cxx": true
+  },
+  "git.detectSubmodules": false,
+  "files.encoding": "utf8",
+  "python.analysis.extraPaths": ["server"]
+}

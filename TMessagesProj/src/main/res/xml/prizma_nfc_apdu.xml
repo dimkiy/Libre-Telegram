@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Prizma: NFC contact exchange — answers only our private AID (F0 + "LIBRE"), only when unlocked -->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/AppName"
+    android:requireDeviceUnlock="true">
+    <aid-group
+        android:category="other"
+        android:description="@string/AppName">
+        <aid-filter android:name="F04C49425245" />
+    </aid-group>
+</host-apdu-service>

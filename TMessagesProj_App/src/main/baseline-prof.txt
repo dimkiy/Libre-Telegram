@@ -1,0 +1,103 @@
+# Libre: baseline profile.
+# Classes and methods listed here are compiled to machine code when the APK is installed (via
+# androidx.profileinstaller, already in the app) instead of being interpreted / JIT-compiled on every
+# cold start. Covers startup, the chat list, a chat, the profile and scrolling. AGP expands the
+# wildcards against the dex and maps the names through R8.
+#   H = hot, S = startup, P = post-startup;  ** = anything, including package separators.
+
+# ---- core: startup, data, messages, images ----
+HSPLorg/telegram/messenger/**;->**(**)**
+Lorg/telegram/messenger/**;
+HSPLorg/telegram/SQLite/**;->**(**)**
+Lorg/telegram/SQLite/**;
+
+# ---- network + the most common Telegram objects ----
+HSPLorg/telegram/tgnet/ConnectionsManager**;->**(**)**
+HSPLorg/telegram/tgnet/NativeByteBuffer;->**(**)**
+HSPLorg/telegram/tgnet/TLObject;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Message**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_message**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$User**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_user**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Chat**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_chat**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_channel**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Dialog**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_dialog**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Peer**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_peer**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Photo**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_photo**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Document**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_document**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$MessageMedia**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_messageMedia**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$MessageEntity**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_messageEntity**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$Update**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_update**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$FileLocation**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_fileLocation**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$UserProfilePhoto**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$ChatPhoto**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$UserStatus**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$PhotoSize**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_photoSize**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$DocumentAttribute**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_documentAttribute**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$DraftMessage**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$PeerNotifySettings**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$MessageReplyHeader**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_messageReplyHeader**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$MessageFwdHeader**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_messageFwdHeader**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$MessageReactions**;->**(**)**
+HSPLorg/telegram/tgnet/TLRPC$TL_messageReactions**;->**(**)**
+
+# ---- UI shell: navigation, theme, action bar ----
+HSPLorg/telegram/ui/ActionBar/**;->**(**)**
+Lorg/telegram/ui/ActionBar/**;
+
+# ---- list cells: chat list, messages, profile rows ----
+HSPLorg/telegram/ui/Cells/**;->**(**)**
+Lorg/telegram/ui/Cells/**;
+
+# ---- the main screens ----
+HSPLorg/telegram/ui/LaunchActivity**;->**(**)**
+HSPLorg/telegram/ui/DialogsActivity**;->**(**)**
+HSPLorg/telegram/ui/ChatActivity**;->**(**)**
+HSPLorg/telegram/ui/ProfileActivity**;->**(**)**
+HSPLorg/telegram/ui/Adapters/**;->**(**)**
+HSPLorg/telegram/ui/PrizmaWallActivity**;->**(**)**
+
+# ---- components every screen uses ----
+HSPLorg/telegram/ui/Components/RecyclerListView**;->**(**)**
+HSPLorg/telegram/ui/Components/SizeNotifierFrameLayout**;->**(**)**
+HSPLorg/telegram/ui/Components/AvatarDrawable**;->**(**)**
+HSPLorg/telegram/ui/Components/BackupImageView**;->**(**)**
+HSPLorg/telegram/ui/Components/AnimatedEmojiDrawable**;->**(**)**
+HSPLorg/telegram/ui/Components/AnimatedEmojiSpan**;->**(**)**
+HSPLorg/telegram/ui/Components/AnimatedTextView**;->**(**)**
+HSPLorg/telegram/ui/Components/AnimatedFloat;->**(**)**
+HSPLorg/telegram/ui/Components/CubicBezierInterpolator;->**(**)**
+HSPLorg/telegram/ui/Components/LayoutHelper;->**(**)**
+HSPLorg/telegram/ui/Components/FlickerLoadingView**;->**(**)**
+HSPLorg/telegram/ui/Components/ChatActivityEnterView**;->**(**)**
+HSPLorg/telegram/ui/Components/EditTextBoldCursor**;->**(**)**
+HSPLorg/telegram/ui/Components/EditTextCaption**;->**(**)**
+HSPLorg/telegram/ui/Components/FragmentContextView**;->**(**)**
+HSPLorg/telegram/ui/Components/ColoredImageSpan;->**(**)**
+HSPLorg/telegram/ui/Components/TypefaceSpan;->**(**)**
+HSPLorg/telegram/ui/Components/URLSpan**;->**(**)**
+HSPLorg/telegram/ui/Components/StaticLayoutEx;->**(**)**
+HSPLorg/telegram/ui/Components/LinkPath;->**(**)**
+HSPLorg/telegram/ui/Components/RLottieDrawable**;->**(**)**
+HSPLorg/telegram/ui/Components/RLottieImageView**;->**(**)**
+HSPLorg/telegram/ui/Components/CheckBox2;->**(**)**
+HSPLorg/telegram/ui/Components/CheckBoxBase;->**(**)**
+HSPLorg/telegram/ui/Components/Prizma**;->**(**)**
+HSPLorg/telegram/ui/Components/chat/**;->**(**)**
+HSPLorg/telegram/ui/Components/blur3/**;->**(**)**
+
+# ---- androidx lists ----
+HSPLandroidx/recyclerview/widget/**;->**(**)**
