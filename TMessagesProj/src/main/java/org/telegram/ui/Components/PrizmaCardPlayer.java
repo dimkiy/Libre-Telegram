@@ -44,6 +44,11 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 
+/*
+ * Libre — что это за файл:
+ * «Новый плеер (бета)»: спокойный плеер-карточка с размытой обложкой на фоне.
+ */
+
 /**
  * Prizma: «Новый плеер (бета)» — a calm card player: the cover blurred behind everything, one
  * frosted card with the big cover, title, a thin progress line, three controls, volume and the
@@ -76,9 +81,9 @@ public class PrizmaCardPlayer extends Dialog {
     private AudioManager audio;
 
     private Bitmap backdrop;          // the cover, small and blurred
-    private int backdropFor = Integer.MIN_VALUE;
+    private long backdropFor = Long.MIN_VALUE;
     private int tint = 0xff1b2a4a;    // the cover's mood, for the card and the background
-    private int loadedId = Integer.MIN_VALUE;
+    private long loadedId = Long.MIN_VALUE;
     private boolean running;
     private final Paint bgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final Paint shade = new Paint();
@@ -344,9 +349,9 @@ public class PrizmaCardPlayer extends Dialog {
             dismiss();
             return;
         }
-        if (force || mo.getId() != loadedId) {
-            boolean animate = !force && loadedId != Integer.MIN_VALUE;
-            loadedId = mo.getId();
+        if (force || trackKey(mo) != loadedId) {
+            boolean animate = !force && loadedId != Long.MIN_VALUE;
+            loadedId = trackKey(mo);
             String t = mo.getMusicTitle(), a = mo.getMusicAuthor();
             title.setText(TextUtils.isEmpty(t) ? "Неизвестный трек" : t);
             author.setText(a == null ? "" : a);
@@ -356,7 +361,8 @@ public class PrizmaCardPlayer extends Dialog {
             }
             loadCover(mo);
         }
-        if (backdropFor != mo.getId()) buildBackdrop(mo);
+        checkLateCover();
+        if (backdropFor != trackKey(mo)) buildBackdrop(mo);
         boolean paused = MediaController.getInstance().isMessagePaused();
         playDrawable.setPause(!paused, true);
         if (!progress.dragging) {
@@ -392,30 +398,63 @@ public class PrizmaCardPlayer extends Dialog {
         return sec / 60 + ":" + (sec % 60 < 10 ? "0" : "") + sec % 60;
     }
 
+    /**
+     * Обложка: вшитая в файл → iTunes → картинка Telegram. Под ними всегда заглушка, чтобы не было
+     * чёрного квадрата, а когда файл докачается, checkLateCover() подставит вшитую обложку.
+     */
     private void loadCover(MessageObject mo) {
-        Bitmap bmp = null;
-        try {
-            if (MediaController.getInstance().getAudioInfo() != null) bmp = MediaController.getInstance().getAudioInfo().getCover();
-        } catch (Throwable ignore) {
-        }
+        Bitmap bmp = audioInfoCover();
         if (bmp != null) {
+            coverWaiting = false;
             cover.setImageBitmap(bmp);
             return;
         }
+        coverWaiting = true;
         String artwork = mo.getArtworkUrl(false);
         TLRPC.Document doc = mo.getDocument();
         TLRPC.PhotoSize thumb = doc != null ? FileLoader.getClosestPhotoSizeWithSize(doc.thumbs, 360) : null;
         ImageLocation thumbLoc = thumb instanceof TLRPC.TL_photoSize || thumb instanceof TLRPC.TL_photoSizeProgressive
                 ? ImageLocation.getForDocument(thumb, doc) : null;
+        GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a3556, 0xff141a2c});
+        ph.setCornerRadius(AndroidUtilities.dp(14));
         if (artwork != null && !artwork.isEmpty()) {
-            cover.setImage(ImageLocation.getForPath(artwork), null, thumbLoc, null, null, 0, 1, mo);
+            cover.setImage(ImageLocation.getForPath(artwork), null, thumbLoc, null, ph, null, 0, 1, mo);
         } else if (thumbLoc != null) {
-            cover.setImage(null, null, thumbLoc, null, null, 0, 1, mo);
+            cover.setImage(null, null, thumbLoc, null, ph, null, 0, 1, mo);
         } else {
-            GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a3556, 0xff141a2c});
-            ph.setCornerRadius(AndroidUtilities.dp(14));
             cover.setImageDrawable(ph);
         }
+    }
+
+    private boolean coverWaiting; // на обложке пока заглушка
+
+    private void checkLateCover() {
+        if (!coverWaiting) return;
+        if (cover.getImageReceiver() != null && cover.getImageReceiver().hasImageLoaded() && cover.getImageReceiver().getBitmap() != null) {
+            coverWaiting = false;
+            return;
+        }
+        Bitmap bmp = audioInfoCover();
+        if (bmp != null) {
+            coverWaiting = false;
+            cover.setImageBitmap(bmp);
+        }
+    }
+
+    private static Bitmap audioInfoCover() {
+        try {
+            if (MediaController.getInstance().getAudioInfo() != null) {
+                Bitmap b = MediaController.getInstance().getAudioInfo().getCover();
+                return b != null && !b.isRecycled() ? b : null;
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
+
+    /** Один трек = чат + номер сообщения (в разных чатах номера повторяются). */
+    private static long trackKey(MessageObject mo) {
+        return mo.getDialogId() * 1_000_003L + mo.getId();
     }
 
     /** Waits for the cover bitmap, then blurs a small copy for the background (off the UI thread). */
@@ -426,7 +465,7 @@ public class PrizmaCardPlayer extends Dialog {
         } catch (Throwable ignore) {
         }
         if (src == null || src.isRecycled()) return;
-        final int id = mo.getId();
+        final long id = trackKey(mo);
         backdropFor = id;
         final Bitmap small;
         try {

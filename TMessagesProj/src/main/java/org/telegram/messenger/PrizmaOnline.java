@@ -3,6 +3,11 @@ package org.telegram.messenger;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.tl.TL_account;
 
+/*
+ * Libre — что это за файл:
+ * «Всегда в сети»: время от времени сообщает Telegram, что вы онлайн.
+ */
+
 /**
  * Prizma: keeps the account shown as online by periodically pinging updateStatus(offline=false).
  * Disabled automatically when "hide online" is on (the two would contradict).

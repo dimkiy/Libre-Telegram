@@ -25,6 +25,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Random;
 
+/*
+ * Libre — что это за файл:
+ * «Слушать вместе»: музыка синхронно у нескольких людей.
+ */
+
 /**
  * Prizma: "Listen together" (Libre ↔ Libre).
  *

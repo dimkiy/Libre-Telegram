@@ -18,6 +18,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -186,6 +187,27 @@ ensure_column("users", "ach", "TEXT")
 ensure_column("users", "status", "INTEGER NOT NULL DEFAULT 0")
 ensure_column("users", "status_text", "TEXT")
 ensure_column("users", "status_until", "INTEGER NOT NULL DEFAULT 0")
+# 1.2.1: a Libre gift worn next to the name, and an anonymous (+888) number other Libre users see
+ensure_column("users", "wear", "TEXT")
+ensure_column("users", "anon", "TEXT")
+
+# 1.2.1: tracks of open playlists that came from private chats. Nobody but the owner can download
+# such a track, so the Libre bot re-posts it once into a public channel (MUSIC_CHANNEL); after that
+# every listener takes it from there. One copy per track for everybody.
+db.executescript("""
+CREATE TABLE IF NOT EXISTS relay (
+    doc      INTEGER PRIMARY KEY,   -- the track's id in Telegram
+    src      TEXT NOT NULL,         -- "channel/message" where everyone can get it
+    created  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS relay_wait (
+    user     INTEGER NOT NULL,      -- who will send the track to the bot
+    size     INTEGER NOT NULL,      -- file size: how the bot recognises which track arrived
+    doc      INTEGER NOT NULL,
+    created  INTEGER NOT NULL,
+    PRIMARY KEY (user, doc)
+);
+""")
 
 
 def now() -> int:
@@ -291,17 +313,31 @@ def profile_json(row):
         out["playlist"] = {"name": pl[0], "count": pl[1], "ver": pl[2]}
     if banner:
         out["banner"] = {"url": f"{PUBLIC_URL}/media/b/{banner}", "video": bool(video), "ver": ver}
-    extra = db.execute("SELECT ach, status, status_text, status_until FROM users WHERE id=?", (uid,)).fetchone()
+    extra = db.execute("SELECT ach, status, status_text, status_until, wear, anon FROM users WHERE id=?", (uid,)).fetchone()
     reported = []
     try:
         reported = json.loads(extra[0]) if extra and extra[0] else []
     except ValueError:
         pass
     out["ach"] = achievements_of(uid, since, views, reported)
-    # invisible shows nothing (like Discord); an expired status is gone
-    if extra and (not extra[3] or extra[3] > now()) and (extra[1] in (STATUS_IDLE, STATUS_DND) or extra[1] == STATUS_ONLINE and extra[2]):
-        out["status"] = {"s": extra[1], "text": extra[2] or "", "until": extra[3]}
+    if extra:
+        status = public_status(extra[1], extra[2], extra[3])
+        if status:
+            out["status"] = status
+        if extra[4]:
+            out["wear"] = json.loads(extra[4])
+        if extra[5]:
+            out["anon"] = extra[5]
     return out
+
+
+def public_status(s, text, until):
+    """What others may see of a status: invisible shows nothing (like Discord), an expired one is gone."""
+    if until and until <= now():
+        return None
+    if s in (STATUS_IDLE, STATUS_DND) or s == STATUS_ONLINE and text:
+        return {"s": s, "text": text or "", "until": until}
+    return None
 
 
 # ---------------------------------------------------------------- achievements
@@ -377,6 +413,93 @@ async def put_status(request: web.Request):
         return web.json_response({"error": "bad request"}, status=400)
     text = clean(body.get("text"), 64).replace("\n", " ")
     db.execute("UPDATE users SET status=?, status_text=?, status_until=? WHERE id=?", (s, text, until, uid))
+    return web.json_response({"ok": True})
+
+
+@need_user
+async def presence(request: web.Request):
+    """
+    Many people at once — for the chat list: the colour of each status dot and the gift worn next
+    to the name. The phone sends the ids it is showing; people who aren't in Libre are simply absent.
+    """
+    if limited(("presence", request["uid"]), 40):
+        return web.json_response({"error": "slow down"}, status=429)
+    try:
+        body = await request.json()
+        ids = [int(x) for x in body.get("ids", [])][:200]
+    except Exception:
+        return web.json_response({"error": "bad request"}, status=400)
+    out = {}
+    if ids:
+        marks = ",".join("?" * len(ids))
+        for uid, s, text, until, wear in db.execute(
+                f"SELECT id, status, status_text, status_until, wear FROM users WHERE id IN ({marks})", ids):
+            entry = {}
+            status = public_status(s, text, until)
+            if status:
+                entry["status"] = status
+            if wear:
+                entry["wear"] = json.loads(wear)
+            out[str(uid)] = entry
+    return web.json_response({"users": out})
+
+
+WEAR_TITLE = 64
+
+
+@need_user
+async def put_wear(request: web.Request):
+    """
+    A Libre gift worn next to the name (like Telegram's collectible status). The phone sends what it
+    looks like: the model and pattern (Telegram document ids) and the four background colours.
+    An empty body takes it off.
+    """
+    uid = request["uid"]
+    if limited(("wear", uid), 20):
+        return web.json_response({"error": "slow down"}, status=429)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad request"}, status=400)
+    if not body or not body.get("doc"):
+        db.execute("UPDATE users SET wear=NULL WHERE id=?", (uid,))
+        return web.json_response({"ok": True})
+    try:
+        colors = [int(c) & 0xFFFFFFFF for c in body.get("colors", [])][:4]
+        wear = {
+            "id": int(body["id"]),
+            "doc": int(body["doc"]),
+            "pattern": int(body.get("pattern") or 0),
+            "colors": colors + [0] * (4 - len(colors)),
+            "title": clean(body.get("title"), WEAR_TITLE).replace("\n", " "),
+            "num": max(0, int(body.get("num") or 0)),
+        }
+    except Exception:
+        return web.json_response({"error": "bad request"}, status=400)
+    db.execute("UPDATE users SET wear=? WHERE id=?", (json.dumps(wear, separators=(",", ":")), uid))
+    return web.json_response({"ok": True})
+
+
+ANON_NUMBER = re.compile(r"888\d{4,10}")
+
+
+@need_user
+async def put_anon(request: web.Request):
+    """
+    The person's anonymous number (+888, bought on Fragment) — shown to other Libre users in the
+    profile. Only +888 numbers are accepted: a real phone number never gets here. Empty = hide it.
+    """
+    uid = request["uid"]
+    if limited(("anon", uid), 10):
+        return web.json_response({"error": "slow down"}, status=429)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad request"}, status=400)
+    phone = "".join(ch for ch in str(body.get("phone") or "") if ch.isdigit())
+    if phone and not ANON_NUMBER.fullmatch(phone):
+        return web.json_response({"error": "not an anonymous number"}, status=400)
+    db.execute("UPDATE users SET anon=? WHERE id=?", (phone or None, uid))
     return web.json_response({"ok": True})
 
 
@@ -479,6 +602,7 @@ async def delete_me(request: web.Request):
     db.execute("DELETE FROM showcases WHERE user_id=?", (uid,))
     db.execute("DELETE FROM cards WHERE from_id=? OR to_id=?", (uid, uid))
     db.execute("DELETE FROM public_playlists WHERE user_id=?", (uid,))
+    db.execute("DELETE FROM relay_wait WHERE user=?", (uid,))
     db.execute("DELETE FROM nft_numbers WHERE owner=?", (uid,))
     leave_clan(uid)
     drop_backup(uid)
@@ -1323,11 +1447,25 @@ async def put_playlist(request: web.Request):
             raise ValueError
     except Exception:
         return web.json_response({"error": "bad request"}, status=400)
+    need = []  # tracks from private chats the phone should send to the bot (see "tracks for open playlists")
+    for t in tracks:
+        if not isinstance(t, dict):
+            continue
+        if not SOURCE.fullmatch(str(t.get("src") or "")):
+            t.pop("src", None)
+        doc, size = int_or0(t.get("doc")), int_or0(t.get("size"))
+        if t.get("src") or not doc:
+            continue
+        if db.execute("SELECT 1 FROM relay WHERE doc=?", (doc,)).fetchone():
+            continue
+        if MUSIC_CHANNEL and size > 0 and len(need) < 100:
+            db.execute("INSERT OR REPLACE INTO relay_wait(user, size, doc, created) VALUES(?, ?, ?, ?)", (uid, size, doc, now()))
+            need.append(doc)
     payload = json.dumps(tracks, ensure_ascii=False, separators=(",", ":"))
     db.execute("""INSERT INTO public_playlists(user_id, name, count, payload, ver) VALUES(?, ?, ?, ?, 1)
                   ON CONFLICT(user_id) DO UPDATE SET name=excluded.name, count=excluded.count, payload=excluded.payload,
                   ver=public_playlists.ver+1""", (uid, name, len(tracks), payload))
-    return web.json_response({"ok": True})
+    return web.json_response({"ok": True, "need": need})
 
 
 @need_user
@@ -1341,7 +1479,25 @@ async def get_playlist(request: web.Request):
     row = db.execute("SELECT name, count, payload, ver FROM public_playlists WHERE user_id=?", (int_arg(request, "id") or 0,)).fetchone()
     if not row:
         return web.json_response({"error": "not found"}, status=404)
-    return web.json_response({"name": row[0], "count": row[1], "tracks": json.loads(row[2]), "ver": row[3]})
+    tracks = json.loads(row[2])
+    for t in tracks:
+        # a track from a private chat: where the bot re-posted it, once that has happened
+        if isinstance(t, dict) and not t.get("src") and t.get("doc"):
+            r = db.execute("SELECT src FROM relay WHERE doc=?", (int_or0(t.get("doc")),)).fetchone()
+            if r:
+                t["src"] = r[0]
+    return web.json_response({"name": row[0], "count": row[1], "tracks": tracks, "ver": row[3]})
+
+
+# A public place in Telegram everybody can read: "channel_username/message_id"
+SOURCE = re.compile(r"[A-Za-z][A-Za-z0-9_]{3,31}/\d{1,10}")
+
+
+def int_or0(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
 
 
 # ---------------------------------------------------------------- cloud copy of Libre
@@ -1405,6 +1561,7 @@ async def export_me(request: web.Request):
     walls = db.execute("SELECT who, hidden FROM walls WHERE owner=?", (uid,)).fetchone()
     sc = db.execute("SELECT payload FROM showcases WHERE user_id=?", (uid,)).fetchone()
     pl = db.execute("SELECT name, count FROM public_playlists WHERE user_id=?", (uid,)).fetchone()
+    extra = db.execute("SELECT wear, anon FROM users WHERE id=?", (uid,)).fetchone()
     bpath = backup_path(uid)
     out = {
         "telegram_id": uid,
@@ -1425,6 +1582,8 @@ async def export_me(request: web.Request):
         "showcase_nft": json.loads(sc[0]) if sc else [],
         "nft_numbers": [{"gift": r[0], "num": r[1]} for r in q("SELECT gift_id, num FROM nft_numbers WHERE owner=?", uid)],
         "public_playlist": {"name": pl[0], "tracks": pl[1]} if pl else None,
+        "worn_gift": json.loads(extra[0]) if extra and extra[0] else None,
+        "anonymous_number": extra[1] if extra else None,
         "gifts_waiting_for_me": db.execute("SELECT COUNT(*) FROM gifts WHERE to_id=?", (uid,)).fetchone()[0],
         "gift_cards": [{"id": r[0], "from": r[1], "to": r[2], "date": r[3]}
                        for r in q("SELECT id, from_id, to_id, created FROM cards WHERE from_id=? OR to_id=?", uid, uid)],
@@ -1548,6 +1707,79 @@ async def max_forward(request: web.Request):
     return web.json_response({"error": "telegram"}, status=502)
 
 
+# ---------------------------------------------------------------- tracks for open playlists
+# A track that came from a private chat can be downloaded only by its owner — that's how Telegram
+# works. So the owner's phone forwards such tracks to the Libre bot; the bot re-posts each one into
+# a public channel (MUSIC_CHANNEL, the bot must be its admin) and remembers where. Listeners then
+# take the track from that channel, like from any public channel. The bot deletes the forwarded
+# copy from the chat right away. Without MUSIC_CHANNEL this is off.
+
+MUSIC_CHANNEL = os.environ.get("MUSIC_CHANNEL", "").strip()
+
+
+async def tg_call(method, **params):
+    global _tg_session
+    import aiohttp
+    if _tg_session is None or _tg_session.closed:
+        _tg_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=70))
+    try:
+        async with _tg_session.post(f"{TG_API}/bot{BOT_TOKEN}/{method}", json=params) as r:
+            data = await r.json(content_type=None)
+            return r.status, data
+    except Exception as e:
+        log.warning("tg %s: %s", method, type(e).__name__)
+        return -1, {}
+
+
+async def relay_track(msg):
+    """The bot got an audio from someone: if it's a track we wait for, put it into the channel."""
+    sender = (msg.get("from") or {}).get("id")
+    audio = msg.get("audio") or msg.get("document")
+    if not sender or not audio or not audio.get("file_size"):
+        return
+    wait = db.execute("SELECT doc FROM relay_wait WHERE user=? AND size=?", (sender, audio["file_size"])).fetchone()
+    if not wait:
+        return
+    doc = wait[0]
+    method, field = ("sendAudio", "audio") if msg.get("audio") else ("sendDocument", "document")
+    status, data = await tg_call(method, chat_id=MUSIC_CHANNEL, disable_notification=True, **{field: audio["file_id"]})
+    posted = data.get("result") if status == 200 and data.get("ok") else None
+    username = ((posted or {}).get("chat") or {}).get("username")
+    if posted and username:
+        db.execute("INSERT OR REPLACE INTO relay(doc, src, created) VALUES(?, ?, ?)", (doc, f"{username}/{posted['message_id']}", now()))
+        db.execute("DELETE FROM relay_wait WHERE doc=?", (doc,))
+    else:
+        log.warning("relay: can't post to %s (%s)", MUSIC_CHANNEL, data.get("description"))
+    await tg_call("deleteMessage", chat_id=msg["chat"]["id"], message_id=msg["message_id"])
+
+
+async def bot_updates(app):
+    """Reads what people send to the Libre bot — only to catch forwarded tracks (see above)."""
+    if not MUSIC_CHANNEL:
+        return
+
+    async def loop():
+        offset = 0
+        while True:
+            status, data = await tg_call("getUpdates", offset=offset, timeout=50, allowed_updates=["message"])
+            if status == 409:
+                log.warning("relay: the bot has a webhook or another reader - private tracks can't be relayed")
+                await asyncio.sleep(600)
+                continue
+            if status != 200 or not data.get("ok"):
+                await asyncio.sleep(5)
+                continue
+            for upd in data.get("result", []):
+                offset = max(offset, upd["update_id"] + 1)
+                msg = upd.get("message")
+                if msg and (msg.get("chat") or {}).get("type") == "private":
+                    try:
+                        await relay_track(msg)
+                    except Exception as e:
+                        log.warning("relay: %s", e)
+    app["bot"] = asyncio.create_task(loop())
+
+
 # ---------------------------------------------------------------- misc
 
 APP_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
@@ -1623,6 +1855,7 @@ async def housekeeping(app):
                 db.execute("DELETE FROM tokens WHERE created < ?", (now() - TOKEN_TTL,))
                 db.execute("DELETE FROM gifts WHERE created < ?", (now() - 60 * 86400,))
                 db.execute("DELETE FROM cards WHERE created < ?", (now() - 365 * 86400,))
+                db.execute("DELETE FROM relay_wait WHERE created < ?", (now() - 86400,))
                 drop_orphan_photos()
                 for key in list(_together):
                     together_fresh(key)
@@ -1652,6 +1885,9 @@ def main():
     app.router.add_post("/v1/clan/hello", clan_hello)
     app.router.add_put("/v1/achievements", put_achievements)
     app.router.add_put("/v1/status", put_status)
+    app.router.add_post("/v1/presence", presence)
+    app.router.add_put("/v1/wear", put_wear)
+    app.router.add_put("/v1/anon", put_anon)
     app.router.add_post("/v1/max/forward", max_forward)
     app.router.add_get("/v1/clans/top", clans_top)
     app.router.add_get("/v1/clan/{id}", get_clan)
@@ -1689,6 +1925,7 @@ def main():
     app.router.add_get("/health", health)
     app.router.add_get("/v1/update", update_info)
     app.on_startup.append(housekeeping)
+    app.on_startup.append(bot_updates)
     log.info("Libre Cloud on 127.0.0.1:%s, public %s", PORT, PUBLIC_URL)
     web.run_app(app, host="127.0.0.1", port=PORT, access_log=None, print=None)
 

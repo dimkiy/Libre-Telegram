@@ -16,6 +16,11 @@ import org.telegram.messenger.PrizmaSocial;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 
+/*
+ * Libre — что это за файл:
+ * Выбор статуса: в сети, нет на месте, не беспокоить, невидимка, свой текст.
+ */
+
 /**
  * Prizma: statuses like in Discord — В сети, Нет на месте, Не беспокоить, Невидимка — plus a short
  * text of your own and when it should clear. Other Libre users see it in the Libre block of your

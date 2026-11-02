@@ -30,6 +30,11 @@ import org.telegram.ui.LaunchActivity;
 
 import java.io.File;
 
+/*
+ * Libre — что это за файл:
+ * «Стереть следы»: история поиска, черновики, буфер обмена и прочее одной кнопкой.
+ */
+
 /**
  * Prizma: "erase traces" — one button that removes what the phone remembers about how Libre was
  * used: search history, recent stickers and emoji, drafts, the clipboard, temporary cache, and

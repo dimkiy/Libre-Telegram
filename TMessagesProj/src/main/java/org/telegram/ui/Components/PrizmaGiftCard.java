@@ -17,6 +17,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
+/*
+ * Libre — что это за файл:
+ * Карточка Libre-подарка в чате (когда его передали другу).
+ */
+
 /**
  * Prizma: a handed-over Libre NFT shows up in the chat as Telegram's own gift card.
  *

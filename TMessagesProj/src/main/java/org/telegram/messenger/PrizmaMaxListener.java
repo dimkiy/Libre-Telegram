@@ -19,6 +19,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 
+/*
+ * Libre — что это за файл:
+ * «Уведомления из MAX»: читает уведомления приложения MAX и пересылает их боту Libre в Telegram.
+ */
+
 /**
  * Prizma: «Уведомления из MAX» — whatever MAX shows as a notification on this phone (any chat,
  * personal or group) arrives in Telegram from the Libre bot.

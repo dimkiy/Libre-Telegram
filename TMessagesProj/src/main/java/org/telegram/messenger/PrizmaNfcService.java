@@ -6,6 +6,11 @@ import android.os.SystemClock;
 
 import java.nio.charset.StandardCharsets;
 
+/*
+ * Libre — что это за файл:
+ * Обмен контактом касанием телефонов: телефон притворяется NFC-картой с одноразовым кодом.
+ */
+
 /**
  * Prizma: "tap phones" contact exchange. While the exchange screen is open, this phone pretends to
  * be an NFC card (Host Card Emulation) that holds a ONE-TIME contact code — a temporary Telegram

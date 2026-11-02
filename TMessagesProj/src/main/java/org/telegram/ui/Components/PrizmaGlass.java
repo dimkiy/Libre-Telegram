@@ -40,6 +40,11 @@ import org.telegram.messenger.Utilities;
 
 import java.util.Random;
 
+/*
+ * Libre — что это за файл:
+ * Эффект «матового стекла» для музыкальных экранов.
+ */
+
 /**
  * Prizma: "liquid glass" material for our music screens (equalizer, add-to-playlist).
  *

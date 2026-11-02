@@ -21,6 +21,11 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.PrizmaEqualizer;
 import org.telegram.ui.ActionBar.AlertDialog;
 
+/*
+ * Libre — что это за файл:
+ * Экран эквалайзера.
+ */
+
 /**
  * Prizma: the equalizer. Floats over a frosted copy of the player. The centre piece is a graphic EQ
  * drawn like a hardware unit — a dB scale, thin fader tracks and one clean response curve through

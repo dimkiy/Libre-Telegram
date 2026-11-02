@@ -11,6 +11,11 @@ import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.net.URL;
 
+/*
+ * Libre — что это за файл:
+ * Обычные интернет-запросы приложения (обложки, тексты песен) — через прокси Telegram, если он включён.
+ */
+
 /**
  * Prizma: plain HTTPS requests made by the client itself (album covers, lyrics).
  *

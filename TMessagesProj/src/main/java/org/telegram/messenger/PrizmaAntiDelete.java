@@ -7,6 +7,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+/*
+ * Libre — что это за файл:
+ * Антиудаление: сообщения, которые удалил собеседник, остаются в чате с пометкой «Удалено». Свои удаления не держим.
+ */
+
 /**
  * Prizma: remembers which messages the user deleted HIMSELF, so anti-delete only keeps
  * messages removed by someone else. Without it, your own deletions stayed on screen marked

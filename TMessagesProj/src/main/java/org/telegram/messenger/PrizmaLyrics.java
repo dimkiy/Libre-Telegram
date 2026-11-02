@@ -10,6 +10,11 @@ import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/*
+ * Libre — что это за файл:
+ * Тексты песен (с бесплатного сайта lrclib.net), в том числе с привязкой ко времени.
+ */
+
 /**
  * Prizma: fetches song lyrics (synced LRC when available, else plain text) from the
  * free lrclib.net API by track title + artist + duration. Mirrors the cover-art

@@ -34,6 +34,11 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
+/*
+ * Libre — что это за файл:
+ * Блок Libre в профиле: статус, анонимный номер, даты, достижения, плейлист, стена.
+ */
+
 /**
  * Prizma: the "Libre" block on a profile. One grid, one left edge (16 dp) for everything:
  *
@@ -161,6 +166,13 @@ public class PrizmaProfileCard extends LinearLayout {
         }
         if (self) PrizmaCloud.syncAchievementsSoon(account);
 
+        // ---- анонимный номер (+888): его видят все в Libre ----
+        View anonRow = anonRow(self);
+        if (anonRow != null) {
+            addView(anonRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 10));
+        }
+        if (self) org.telegram.messenger.PrizmaPresence.syncAnonNumber(account);
+
         // ---- the creator's plate: only one person has it ----
         if (PrizmaSocial.isCreator(userId)) {
             addView(creatorPlate(true), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 10));
@@ -280,6 +292,45 @@ public class PrizmaProfileCard extends LinearLayout {
             row.addView(chevron, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
             row.setOnClickListener(v -> PrizmaStatusSheet.show(ctx, account, rp, this::rebuild));
         }
+        return row;
+    }
+
+    /**
+     * «Анонимный номер +888 …» — у другого человека, если он его показывает, и у меня самого (если
+     * мой номер анонимный и показ включён в хабе). Нажатие копирует номер.
+     */
+    private View anonRow(boolean self) {
+        String digits;
+        if (self) {
+            TLRPC.User me = UserConfig.getInstance(account).getCurrentUser();
+            digits = me != null && me.phone != null ? me.phone.replaceAll("[^0-9]", "") : "";
+            if (!org.telegram.messenger.PrizmaConfig.showAnonNumber() || !org.telegram.messenger.PrizmaPresence.isAnonymous(digits)) return null;
+        } else {
+            PrizmaCloud.Remote r = PrizmaCloud.peek(userId);
+            digits = r != null ? r.anon : null;
+            if (!org.telegram.messenger.PrizmaPresence.isAnonymous(digits)) return null;
+        }
+        final String number = org.telegram.messenger.PrizmaPresence.formatAnon(digits);
+        final Context ctx = getContext();
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(VERTICAL);
+        row.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(8), AndroidUtilities.dp(12), AndroidUtilities.dp(9));
+        row.setBackground(pressableField(12));
+        TextView label = new TextView(ctx);
+        label.setText(self ? "Анонимный номер · видят все в Libre" : "Анонимный номер");
+        label.setTextColor(color(Theme.key_windowBackgroundWhiteGrayText));
+        label.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.5f);
+        row.addView(label);
+        TextView value = new TextView(ctx);
+        value.setText(number);
+        value.setTextColor(color(Theme.key_windowBackgroundWhiteBlackText));
+        value.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        value.setTypeface(AndroidUtilities.bold());
+        row.addView(value, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
+        row.setOnClickListener(v -> {
+            AndroidUtilities.addToClipboard(number);
+            android.widget.Toast.makeText(ctx, "Номер скопирован", android.widget.Toast.LENGTH_SHORT).show();
+        });
         return row;
     }
 

@@ -12,6 +12,11 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 
+/*
+ * Libre — что это за файл:
+ * «Добавить в профиль Telegram» — музыка в профиле Telegram.
+ */
+
 /**
  * Prizma: «Добавить в профиль Telegram» — the music Telegram shows on your profile. Telegram puts
  * this into its own player's menu; Libre has its own player, so the same request lives here.

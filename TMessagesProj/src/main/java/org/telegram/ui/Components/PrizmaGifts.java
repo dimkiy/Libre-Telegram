@@ -23,6 +23,11 @@ import org.telegram.ui.Stars.StarsController;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Витрина подарков в профиле и Libre-NFT: улучшение, крафт, порядок закрепления.
+ */
+
 /**
  * Prizma: client-side profile "gift showcase". Lets the user pin any gifts from
  * the public catalog onto their own profile purely for decoration (visible only

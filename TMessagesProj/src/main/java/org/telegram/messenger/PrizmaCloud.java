@@ -20,6 +20,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
+/*
+ * Libre — что это за файл:
+ * Связь с сервером Libre: вход через бота, чужие профили (баннер, «в Libre с», статус), открытый плейлист, загрузки.
+ */
+
 /**
  * Prizma: Libre Cloud client — profiles of other Libre users (banner, "в Libre с", views).
  *
@@ -128,6 +133,7 @@ public final class PrizmaCloud {
         public int status = -1;     // PrizmaSocial.STATUS_*; -1 = none shown
         public String statusText;
         public long statusUntil;    // unix seconds, 0 = until changed
+        public String anon;         // анонимный номер (+888) цифрами, null = не показывает
     }
 
     private static final HashMap<Long, Remote> remotes = new HashMap<>();
@@ -368,6 +374,10 @@ public final class PrizmaCloud {
                             remote.statusText = st.optString("text", "");
                             remote.statusUntil = st.optLong("until", 0);
                         }
+                        remote.anon = o.optString("anon", "");
+                        if (remote.anon.isEmpty()) remote.anon = null;
+                        final JSONObject profileJson = o; // статус-кружок и подарок у ника (кэш живёт в UI-потоке)
+                        AndroidUtilities.runOnUIThread(() -> PrizmaPresence.fromProfile(account, userId, profileJson));
                         JSONObject b = o.optJSONObject("banner");
                         if (b != null) {
                             remote.bannerUrl = b.getString("url");
@@ -656,8 +666,69 @@ public final class PrizmaCloud {
             if (r.code == 200) {
                 prefs().edit().putString(key, hash).apply();
                 forget(self);
+                try {
+                    org.json.JSONArray need = new JSONObject(r.body).optJSONArray("need");
+                    if (need != null && need.length() > 0) relayTracks(account, id, need);
+                } catch (Throwable ignore) {
+                }
             } else if (r.code == 413) {
                 Toast.makeText(ApplicationLoader.applicationContext, "Плейлист слишком большой для профиля — оставьте до 500 треков", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    /**
+     * Libre 1.2.1. Треки из личных чатов в моём открытом плейлисте другие люди скачать не могут —
+     * так устроен Telegram. Сервер просит переслать такие треки боту Libre ({@code need} — id файлов),
+     * бот выкладывает их в публичный канал, и оттуда трек может включить любой. Здесь: пересылаем
+     * каждый трек боту (тихо, без подписи «переслано от») и через пару секунд удаляем у себя —
+     * бот к этому времени уже забрал файл.
+     */
+    private static void relayTracks(int account, long playlistId, org.json.JSONArray need) {
+        final MessagesController mc = MessagesController.getInstance(account);
+        TLObject known = mc.getUserOrChat(bot());
+        if (known instanceof TLRPC.User) {
+            relayTracks(account, (TLRPC.User) known, playlistId, need);
+            return;
+        }
+        mc.getUserNameResolver().resolve(bot(), peerId -> {
+            TLRPC.User botUser = peerId != null && peerId > 0 ? mc.getUser(peerId) : null;
+            if (botUser != null) relayTracks(account, botUser, playlistId, need);
+        });
+    }
+
+    private static void relayTracks(int account, TLRPC.User botUser, long playlistId, org.json.JSONArray need) {
+        int delay = 0;
+        for (int i = 0; i < need.length(); i++) {
+            final long[] src = PrizmaPlaylist.sourceMessage(playlistId, need.optLong(i));
+            if (src == null || src[0] == 0 || src[1] == 0) continue;
+            AndroidUtilities.runOnUIThread(() -> forwardToBot(account, botUser, src[0], (int) src[1]), delay);
+            delay += 800; // по одному, чтобы Telegram не счёл это спамом
+        }
+    }
+
+    private static void forwardToBot(int account, TLRPC.User botUser, long dialogId, int messageId) {
+        final MessagesController mc = MessagesController.getInstance(account);
+        TLRPC.InputPeer from = mc.getInputPeer(dialogId);
+        if (from == null || from instanceof TLRPC.TL_inputPeerEmpty) return;
+        TLRPC.TL_messages_forwardMessages req = new TLRPC.TL_messages_forwardMessages();
+        req.from_peer = from;
+        req.to_peer = mc.getInputPeer(botUser);
+        req.id.add(messageId);
+        req.random_id.add(Utilities.random.nextLong());
+        req.silent = true;
+        req.drop_author = true;
+        ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> {
+            if (!(res instanceof TLRPC.Updates)) return;
+            final TLRPC.Updates updates = (TLRPC.Updates) res;
+            final ArrayList<Integer> sent = new ArrayList<>();
+            for (TLRPC.Update u : updates.updates) {
+                if (u instanceof org.telegram.tgnet.tl.TL_update.TL_updateMessageID) sent.add(((org.telegram.tgnet.tl.TL_update.TL_updateMessageID) u).id);
+            }
+            mc.processUpdates(updates, false);
+            // убираем пересланное из чата с ботом (у обоих) — это служебная пересылка, не переписка
+            if (!sent.isEmpty()) {
+                AndroidUtilities.runOnUIThread(() -> mc.deleteMessages(sent, null, null, botUser.id, 0, true, 0), 2500);
             }
         });
     }

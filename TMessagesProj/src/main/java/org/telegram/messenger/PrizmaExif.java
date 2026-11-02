@@ -8,6 +8,11 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/*
+ * Libre — что это за файл:
+ * Убирает геолокацию и другие метаданные из фото перед отправкой.
+ */
+
 /**
  * Prizma: strips location (GPS) and other identifying EXIF metadata from outgoing images
  * (camera model, software, timestamps, author, comments…) while keeping orientation so the

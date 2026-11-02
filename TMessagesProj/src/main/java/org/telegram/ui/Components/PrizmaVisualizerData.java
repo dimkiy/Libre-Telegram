@@ -2,6 +2,11 @@ package org.telegram.ui.Components;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Передаёт форму звука играющего трека в анимации.
+ */
+
 /**
  * Prizma: lightweight bridge that forwards the player's audio waveform
  * (already computed by Telegram's AudioVisualizerRenderersFactory) to UI views.

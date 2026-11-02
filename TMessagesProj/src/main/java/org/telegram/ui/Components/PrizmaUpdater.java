@@ -32,6 +32,11 @@ import java.io.FileInputStream;
 import java.security.MessageDigest;
 import java.util.Arrays;
 
+/*
+ * Libre — что это за файл:
+ * Обновления Libre внутри приложения (без канала в Telegram).
+ */
+
 /**
  * Prizma: Libre updates without the Telegram channel. Libre Cloud says which version is the newest
  * (/v1/update, written by publish-update.sh); when it's newer than ours a sheet shows what changed

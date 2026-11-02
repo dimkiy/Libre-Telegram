@@ -1,5 +1,10 @@
 package org.telegram.messenger;
 
+/*
+ * Libre — что это за файл:
+ * Таймер сна: ставит музыку на паузу через выбранное время.
+ */
+
 /**
  * Prizma: sleep timer — pauses music playback after a chosen number of minutes.
  */

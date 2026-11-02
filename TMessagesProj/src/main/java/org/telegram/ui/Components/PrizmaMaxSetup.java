@@ -10,6 +10,11 @@ import org.telegram.messenger.PrizmaMaxListener;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.ui.ActionBar.AlertDialog;
 
+/*
+ * Libre — что это за файл:
+ * Включение «Уведомлений из MAX»: доступ к уведомлениям и «Старт» у бота.
+ */
+
 /**
  * Prizma: turning on «Уведомления из MAX» — two things only the person can do: let Libre see
  * notifications (Android settings) and press Start in the Libre bot (otherwise a bot can't write).

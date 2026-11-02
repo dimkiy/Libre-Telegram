@@ -922,6 +922,44 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         }
     }
 
+    // ===== Libre: «надеть» подарок из витрины — он виден рядом с именем, как настоящий =====
+    // Telegram надевает подарок через свой сервер, а о наших подарках он не знает. Поэтому мы
+    // собираем такой же статус-подарок сами (модель, узор, цвета фона) и отдаём его серверу Libre —
+    // остальные пользователи Libre видят его у ника и в шапке профиля. Premium для этого не нужен.
+
+    private void prizmaToggleWear() {
+        final TL_stars.TL_starGiftUnique gift = getUniqueGift();
+        if (gift == null) return;
+        final boolean wearNow = org.telegram.messenger.PrizmaPresence.myWornInstance(currentAccount) != gift.id;
+        TLRPC.TL_emojiStatusCollectible wear = null;
+        if (wearNow) {
+            try {
+                wear = MessagesController.emojiStatusCollectibleFromGift(gift);
+            } catch (Throwable ignore) {
+            }
+            if (wear == null || wear.document_id == 0) {
+                getBulletinFactory().createSimpleBulletin(R.raw.error, "У этого подарка нет модели — сначала улучшите его в NFT").ignoreDetach().show();
+                return;
+            }
+        }
+        org.telegram.messenger.PrizmaPresence.setMyWear(currentAccount, wear, gift.num, gift.title, error -> {
+            if (error != null) {
+                getBulletinFactory().createSimpleBulletin(R.raw.error, error).ignoreDetach().show();
+            }
+        });
+        topView.buttons[1].set(wearNow ? R.drawable.filled_crown_off : R.drawable.filled_crown_on, getString(wearNow ? R.string.Gift2ActionWearOff : R.string.Gift2ActionWear), true);
+        if (onlyWearInfo) {
+            dismiss();
+            return;
+        }
+        final Runnable showHint = () -> showHint(AndroidUtilities.replaceTags(formatString(wearNow ? R.string.Gift2ActionWearDone : R.string.Gift2ActionWearOffDone, getGiftName())), ownerTextView, true);
+        if (currentPage.is(PAGE_INFO)) {
+            showHint.run();
+        } else {
+            switchPage(PAGE_INFO, true, showHint);
+        }
+    }
+
     // ===== Prizma: crafting for showcase NFTs — Telegram's forge screen, result decided on the device =====
 
     /** An NFT-looking copy from the user's own showcase (instance ids are negative). */
@@ -1309,6 +1347,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private ColoredImageSpan lockSpan;
     private boolean shownWearInfo;
     private void onWearPressed(View v) {
+        if (prizmaShowcaseNft()) {
+            prizmaToggleWear();
+            return;
+        }
         if (UserConfig.getInstance(currentAccount).isPremium() && (isWorn(currentAccount, getUniqueGift()) || shownWearInfo)) {
             toggleWear();
             return;
@@ -1364,6 +1406,9 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     public static boolean isWorn(int currentAccount, TL_stars.TL_starGiftUnique gift) {
         if (gift == null) return false;
+        if (gift.slug != null && gift.slug.startsWith(org.telegram.messenger.PrizmaPresence.LIBRE_SLUG)) {
+            return org.telegram.messenger.PrizmaPresence.myWornInstance(currentAccount) == gift.id; // Libre-подарок
+        }
         final long dialogId = gift.owner_id != null ? DialogObject.getPeerDialogId(gift.owner_id) : DialogObject.getPeerDialogId(gift.host_id);
         if (dialogId == 0) return false;
         if (dialogId > 0) {
@@ -1386,6 +1431,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         toggleWear(false);
     }
     public void toggleWear(boolean checkedLevel) {
+        if (prizmaShowcaseNft()) {
+            prizmaToggleWear();
+            return;
+        }
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift == null) return;
         MessagesController.getGlobalMainSettings().edit().putInt("statusgiftpage", 3).apply();
@@ -4620,7 +4669,11 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             roller = new Roller(topView);
         }
         final boolean withActions = walletTransaction == null;
-        topView.setGift(gift, withActions && isMineWithActions(currentAccount, owner_id), withActions && isMineWithActions(currentAccount, host_id), isWorn(currentAccount, getUniqueGift()), getLink() != null, rolling);
+        final boolean prizmaOwn = prizmaShowcaseNft(); // Libre: подарок из моей витрины — тоже «мой»
+        topView.setGift(gift, withActions && (isMineWithActions(currentAccount, owner_id) || prizmaOwn), withActions && isMineWithActions(currentAccount, host_id), isWorn(currentAccount, getUniqueGift()), getLink() != null, rolling);
+        if (prizmaOwn) {
+            topView.buttons[2].setVisibility(View.GONE); // Libre-подарок нельзя продать — есть только «Передать» и «Надеть»
+        }
         topView.setShowOptions(false);
         if (walletCollectible != null) {
             if (walletCardDelegate != null) {
@@ -7154,6 +7207,13 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void onTransferClick(View view) {
+        if (prizmaShowcaseNft()) {
+            // Libre: подарок из витрины передаётся через сервер Libre, Telegram о нём не знает
+            final long instId = savedStarGift.saved_id;
+            dismiss();
+            org.telegram.ui.Components.PrizmaGiftTransfer.pickAndSend(currentAccount, instId);
+            return;
+        }
         if (view.getAlpha() < 0.99f) {
             cantWithBlockchainGiftAlert(0);
             return;

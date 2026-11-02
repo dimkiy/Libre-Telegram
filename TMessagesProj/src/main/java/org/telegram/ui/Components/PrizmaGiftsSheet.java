@@ -18,6 +18,11 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Выбор подарков для витрины.
+ */
+
 /**
  * Prizma: picker for the profile gift showcase. Shows the public gift catalog;
  * tapping a gift adds/removes it from the user's own decorative showcase.

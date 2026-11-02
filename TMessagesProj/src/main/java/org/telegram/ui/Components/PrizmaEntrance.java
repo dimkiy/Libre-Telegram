@@ -13,6 +13,11 @@ import org.telegram.messenger.PrizmaConfig;
 
 import java.util.WeakHashMap;
 
+/*
+ * Libre — что это за файл:
+ * Мягкое появление строк списка (анимация).
+ */
+
 /**
  * Prizma: a soft, staggered "appear" animation for list content — rows fade in and
  * drift up one after another. Used for the chat list and the Settings list.

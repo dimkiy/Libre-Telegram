@@ -13,6 +13,11 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.Map;
 
+/*
+ * Libre — что это за файл:
+ * Свой шрифт во всём приложении.
+ */
+
 /**
  * Prizma: applies a user-chosen custom font across the whole app.
  *

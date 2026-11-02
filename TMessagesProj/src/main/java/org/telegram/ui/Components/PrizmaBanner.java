@@ -17,6 +17,11 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/*
+ * Libre — что это за файл:
+ * Баннер профиля: картинка или короткое видео.
+ */
+
 /**
  * Prizma: uploadable profile banner (image or looping muted video).
  */

@@ -27,6 +27,11 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 
+/*
+ * Libre — что это за файл:
+ * Плашка «сейчас играет» поверх экрана.
+ */
+
 /**
  * Prizma: a floating "Dynamic Island" style now-playing pill. It's much larger and easier to
  * find than Telegram's thin default now-playing bar, and tapping it jumps straight back into the

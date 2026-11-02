@@ -7,6 +7,11 @@ import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 
+/*
+ * Libre — что это за файл:
+ * Свой звук уведомлений для личных чатов.
+ */
+
 /**
  * Prizma: quick custom notification sound for private-chat messages.
  * Uses the system ringtone picker (valid, persistable URIs), stores it in the

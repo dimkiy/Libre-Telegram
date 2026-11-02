@@ -8,6 +8,11 @@ import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
 
+/*
+ * Libre — что это за файл:
+ * Анимированные полоски, которые прыгают под музыку.
+ */
+
 /**
  * Prizma: animated bar visualizer that reacts to the currently playing track.
  * Fed by {@link PrizmaVisualizerData} with amplitude values [0..5].

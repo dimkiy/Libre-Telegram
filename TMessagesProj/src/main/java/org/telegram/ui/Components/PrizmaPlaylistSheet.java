@@ -42,6 +42,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Экран моих плейлистов: список, обложки, перестановка треков.
+ */
+
 /**
  * Prizma: multi-playlist music library, styled like a modern music app — playlist cards with
  * their own covers and names, create/rename/delete, add tracks across playlists.

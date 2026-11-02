@@ -23,6 +23,11 @@ import org.telegram.ui.ChatActivity;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Плашка «Слушать вместе» над полем ввода в чате.
+ */
+
 /**
  * Prizma: the "listen together" pill above the chat input. It answers the question a guest has
  * before touching anything — is somebody playing music here right now, where are they in the

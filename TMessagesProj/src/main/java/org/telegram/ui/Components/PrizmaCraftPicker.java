@@ -27,6 +27,11 @@ import org.telegram.ui.Stars.StarsController;
 import java.util.ArrayList;
 import java.util.Set;
 
+/*
+ * Libre — что это за файл:
+ * Выбор подарков из витрины для крафта.
+ */
+
 /**
  * Prizma: picks showcase NFTs for Telegram's crafting forge. Telegram's own picker lists gifts from
  * the server, which doesn't know our showcase copies — so this glass sheet lists them instead, and

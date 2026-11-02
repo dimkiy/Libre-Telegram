@@ -23,6 +23,11 @@ import org.telegram.messenger.Utilities;
 
 import java.security.MessageDigest;
 
+/*
+ * Libre — что это за файл:
+ * PIN-код на архив чатов.
+ */
+
 /**
  * Prizma: a PIN lock for the chat archive, with a nice unlock screen — the background behind
  * blurs, and the keypad buttons appear one after another. The PIN is stored only as a SHA-256 hash.

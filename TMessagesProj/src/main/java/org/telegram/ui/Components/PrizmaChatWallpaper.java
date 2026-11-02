@@ -16,6 +16,11 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/*
+ * Libre — что это за файл:
+ * Своё фото или видео на обои чата.
+ */
+
 /**
  * Prizma: pick an own photo or video to use as the chat wallpaper.
  */

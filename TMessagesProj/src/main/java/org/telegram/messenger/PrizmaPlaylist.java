@@ -11,6 +11,11 @@ import org.telegram.tgnet.TLRPC;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Мои плейлисты: хранит треки, обложки, открытый для всех плейлист и что из него отдать серверу.
+ */
+
 /**
  * Prizma: local music library with MULTIPLE named playlists, each with its own cover.
  * The default playlist ("Мне нравится") is what the ♥ like button writes to, so the rest
@@ -80,8 +85,14 @@ public class PrizmaPlaylist {
     }
 
     /**
-     * Tracks for the open copy: title, artist and the audio message — with its caption, replies and
-     * forward header removed, so nothing from the chat it came from goes along.
+     * Tracks for the open copy: title, artist and where anyone can get the track — nothing from the
+     * chat it came from goes along.
+     *
+     * Libre 1.2.1: у каждого трека есть ещё «src» — где его может скачать ЛЮБОЙ человек
+     * («канал/номер сообщения», если трек из публичного канала). Без этого чужой трек не
+     * проигрывался: Telegram даёт скачать файл только тому, кто видит сообщение с ним. Для треков из
+     * личных чатов src нет — их пересылает в публичный канал бот Libre (см. PrizmaCloud.relayTracks),
+     * а для этого серверу нужны «doc» (id файла) и «size» (размер — по нему бот узнаёт трек).
      */
     public static JSONArray exportPublic(long id) {
         JSONArray out = new JSONArray();
@@ -94,21 +105,19 @@ public class PrizmaPlaylist {
             if (o == null) continue;
             TLRPC.Message msg = decode(o.optString("data", ""));
             if (msg == null || msg.media == null) continue;
-            msg.message = "";
-            msg.entities = new ArrayList<>();
-            msg.reply_to = null;
-            msg.fwd_from = null;
-            msg.reply_markup = null;
-            msg.reactions = null;
-            msg.replies = null;
-            msg.flags &= ~(TLRPC.MESSAGE_FLAG_REPLY | TLRPC.MESSAGE_FLAG_FWD | TLRPC.MESSAGE_FLAG_HAS_MARKUP | TLRPC.MESSAGE_FLAG_HAS_ENTITIES);
-            String data = encode(msg);
-            if (data == null) continue;
+            final String src = publicSource(msg);
+            final TLRPC.Document doc = msg.media.document;
             try {
+                // Libre 1.2.1: копию самого сообщения больше не отдаём — по ней было видно, из чьего
+                // личного чата трек (номера собеседников). Слушателю хватает названия и src.
                 JSONObject e = new JSONObject();
                 e.put("t", o.optString("t", ""));
                 e.put("a", o.optString("a", ""));
-                e.put("data", data);
+                if (src != null) e.put("src", src);
+                if (doc != null) {
+                    e.put("doc", doc.id);
+                    e.put("size", doc.size);
+                }
                 out.put(e);
             } catch (Throwable ignore) {
             }
@@ -116,15 +125,46 @@ public class PrizmaPlaylist {
         return out;
     }
 
-    /** A track of someone's open playlist, ready to play (null if it can't be read). */
-    public static MessageObject fromPublic(String data) {
-        TLRPC.Message msg = decode(data);
-        if (msg == null) return null;
-        try {
-            return new MessageObject(UserConfig.selectedAccount, msg, false, false);
-        } catch (Throwable e) {
-            return null;
+    /**
+     * Где трек может скачать любой: «username/123», если он лежит в публичном канале (или переслан
+     * оттуда), иначе null. Ссылка из личного чата никому не поможет — её мы не отдаём.
+     */
+    private static String publicSource(TLRPC.Message msg) {
+        MessagesController mc = MessagesController.getInstance(UserConfig.selectedAccount);
+        if (msg.peer_id instanceof TLRPC.TL_peerChannel) {
+            String name = ChatObject.getPublicUsername(mc.getChat(msg.peer_id.channel_id));
+            if (name != null && !name.isEmpty()) return name + "/" + msg.id;
         }
+        TLRPC.MessageFwdHeader fwd = msg.fwd_from;
+        if (fwd != null && fwd.from_id instanceof TLRPC.TL_peerChannel && fwd.channel_post != 0) {
+            String name = ChatObject.getPublicUsername(mc.getChat(fwd.from_id.channel_id));
+            if (name != null && !name.isEmpty()) return name + "/" + fwd.channel_post;
+        }
+        if (fwd != null && fwd.saved_from_peer instanceof TLRPC.TL_peerChannel && fwd.saved_from_msg_id != 0) {
+            String name = ChatObject.getPublicUsername(mc.getChat(fwd.saved_from_peer.channel_id));
+            if (name != null && !name.isEmpty()) return name + "/" + fwd.saved_from_msg_id;
+        }
+        return null;
+    }
+
+    /**
+     * Из какого чата и какого сообщения трек с файлом {@code docId} в моём плейлисте:
+     * {dialogId, messageId} или null. Нужен, чтобы переслать его боту Libre.
+     */
+    public static long[] sourceMessage(long playlistId, long docId) {
+        JSONArray a = roots();
+        int idx = indexOf(a, playlistId);
+        if (idx < 0) return null;
+        JSONArray t = tracksArr(a.optJSONObject(idx));
+        for (int i = 0; i < t.length(); i++) {
+            JSONObject o = t.optJSONObject(i);
+            if (o == null) continue;
+            TLRPC.Message msg = decode(o.optString("data", ""));
+            if (msg != null && msg.media != null && msg.media.document != null && msg.media.document.id == docId) {
+                return new long[]{o.optLong("did"), o.optInt("mid")};
+            }
+        }
+        return null;
     }
 
     /** «Сохранить себе»: a new playlist of mine with these tracks. Returns its id. */

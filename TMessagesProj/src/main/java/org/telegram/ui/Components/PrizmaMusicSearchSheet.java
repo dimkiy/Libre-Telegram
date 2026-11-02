@@ -38,6 +38,11 @@ import org.telegram.ui.ActionBar.Theme;
 import java.util.ArrayList;
 import java.util.HashSet;
 
+/*
+ * Libre — что это за файл:
+ * Поиск музыки по всему Telegram и добавление в плейлист.
+ */
+
 /**
  * Prizma: find any track across public Telegram (the same music search Telegram has in its global
  * search) and drop single tracks into a playlist. Tap a row to listen first, «+» to add.

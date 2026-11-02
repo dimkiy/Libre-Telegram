@@ -6,6 +6,11 @@ import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.Virtualizer;
 
+/*
+ * Libre — что это за файл:
+ * Эквалайзер, усиление баса и объём для музыки.
+ */
+
 /**
  * Prizma: global equalizer + bass boost manager.
  * Attaches an {@link Equalizer} to the music ExoPlayer audio session and persists settings.

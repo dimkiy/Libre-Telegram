@@ -22,6 +22,11 @@ import org.telegram.ui.LaunchActivity;
 
 import java.io.InputStream;
 
+/*
+ * Libre — что это за файл:
+ * Своя картинка на иконку приложения (ярлык на рабочем столе).
+ */
+
 /**
  * Prizma: «Своя картинка» for the app icon.
  *

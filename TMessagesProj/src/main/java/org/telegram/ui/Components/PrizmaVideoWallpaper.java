@@ -10,6 +10,11 @@ import org.telegram.messenger.UserConfig;
 
 import java.io.File;
 
+/*
+ * Libre — что это за файл:
+ * Видео на обоях чата (зацикленное, без звука).
+ */
+
 /**
  * Prizma: looping video chat wallpaper. Extends MotionBackgroundDrawable only so that
  * SizeNotifierFrameLayout gives it a parent view (setParentView / onAttached) like it

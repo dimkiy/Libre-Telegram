@@ -7146,6 +7146,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             org.telegram.ui.Components.PrizmaUpdater.maybeCheck(this);
             org.telegram.ui.Components.PrizmaGiftTransfer.checkInbox(UserConfig.selectedAccount);
             org.telegram.messenger.PrizmaSocial.myStatus(UserConfig.selectedAccount); // an expired status clears (and «не беспокоить» with it)
+            org.telegram.messenger.PrizmaPresence.syncAnonNumber(UserConfig.selectedAccount); // анонимный номер (+888) — серверу Libre
+            if (org.telegram.messenger.PrizmaPlaylist.publicId() != 0) {
+                org.telegram.messenger.PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount); // открытый плейлист: отправит только если он изменился
+            }
         }, 4000);
         pipActivityHandler.onResume();
         if (onResumeStaticCallback != null) {

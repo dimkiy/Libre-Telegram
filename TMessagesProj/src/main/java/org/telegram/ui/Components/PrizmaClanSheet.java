@@ -35,6 +35,11 @@ import org.telegram.ui.ProfileActivity;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Экран клана: участники, роли, приглашение, стена клана, рейтинг.
+ */
+
 /**
  * Prizma: clans on Libre Cloud — emblem (tag on its colour), numbers, members with roles, invite
  * link, the clan's wall and the clan rating. Head: roles, kick, disband; officers: invite, kick.

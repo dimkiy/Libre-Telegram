@@ -20,6 +20,11 @@ import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.PasscodeActivity;
 
+/*
+ * Libre — что это за файл:
+ * Хаб Libre: все настройки и переключатели в одном окне.
+ */
+
 public class PrizmaStealthSheet {
 
     private interface Toggle {
@@ -264,6 +269,12 @@ public class PrizmaStealthSheet {
                 "Что сервер знает обо мне", "всё, что хранится о вас, и выгрузка", () -> {
                     if (sheetRef[0] != null) sheetRef[0].dismiss();
                     PrizmaBackup.showWhatServerKnows(context);
+                }));
+        social.add(toggleRow(context, textColor, grayColor,
+                "Показывать анонимный номер", "номер +888 из Fragment видят в вашем профиле все в Libre; обычный номер не показывается никогда",
+                PrizmaConfig.showAnonNumber(), on -> {
+                    PrizmaConfig.setShowAnonNumber(on);
+                    org.telegram.messenger.PrizmaPresence.syncAnonNumber(org.telegram.messenger.UserConfig.selectedAccount);
                 }));
         social.add(toggleRow(context, textColor, grayColor,
                 "Уведомления из MAX", "сообщения из всех чатов MAX приходят вам от бота Libre в Telegram",

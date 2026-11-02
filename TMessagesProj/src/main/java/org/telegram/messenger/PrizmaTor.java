@@ -8,6 +8,11 @@ import android.net.Uri;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.utils.proxy.ProxySettings;
 
+/*
+ * Libre — что это за файл:
+ * Режим Tor: трафик Telegram идёт через приложение Orbot.
+ */
+
 /**
  * Prizma: "Tor mode" — routes Telegram's own traffic through a local Tor SOCKS5 proxy
  * (provided by the Orbot app at 127.0.0.1:9050). Hides the user's IP from Telegram's

@@ -5,6 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 cp server.py /opt/libre/server.py
 cp publish-update.sh /root/publish-update.sh
+cp setup-music-channel.sh /root/setup-music-channel.sh
 mkdir -p /var/lib/libre/media/app /var/lib/libre/media/w /var/lib/libre/backup
 chown libre:libre /var/lib/libre/backup && chmod 700 /var/lib/libre/backup
 chown libre:libre /var/lib/libre/media/app /var/lib/libre/media/w

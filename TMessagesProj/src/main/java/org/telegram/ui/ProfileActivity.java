@@ -1440,6 +1440,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 boolean prizmaVideo = prizmaOwn ? org.telegram.messenger.PrizmaConfig.bannerIsVideo() : prizmaRemotePath != null && prizmaRemote.bannerVideo;
                 android.graphics.Bitmap prizmaBanner = prizmaOwn ? org.telegram.ui.Components.PrizmaBanner.getBitmap()
                         : prizmaRemotePath != null && !prizmaVideo ? org.telegram.messenger.PrizmaCloud.bannerBitmap(prizmaRemotePath) : null;
+                // Libre: с баннером узор надетого подарка не рисуется — иначе он ложится поверх картинки
+                final boolean prizmaHasBanner = prizmaVideo || prizmaBanner != null;
                 if (prizmaVideo) {
                     // Prizma: uploaded video banner (played via ImageReceiver)
                     int w = getMeasuredWidth();
@@ -1538,7 +1540,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                     prizmaNameShaderSet = false;
                 }
-                if (hasEmoji) {
+                if (hasEmoji && !prizmaHasBanner) {
                     final float loadedScale = emojiLoadedT.set(isEmojiLoaded());
                     boolean shoudIgnore = openAnimationInProgress && playProfileAnimation == 2;
                     if (!shoudIgnore && loadedScale > 0 && avatarContainer != null) {
@@ -11790,6 +11792,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     nameTextView[a].setRightDrawableOnClick(v -> {
                         if (user.emoji_status instanceof TLRPC.TL_emojiStatusCollectible) {
                             TLRPC.TL_emojiStatusCollectible status = (TLRPC.TL_emojiStatusCollectible) user.emoji_status;
+                            if (org.telegram.messenger.PrizmaPresence.isLibreWear(status)) {
+                                // Libre: у Libre-подарка нет страницы t.me/nft — просто называем его
+                                BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.gift, status.title, "Подарок из Libre").show();
+                                return;
+                            }
                             if (status != null) {
                                 Browser.openUrl(getContext(), "https://" + getMessagesController().linkPrefix + "/nft/" + status.slug);
                             }
@@ -16931,7 +16938,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             collectibleHint.setRounding(16);
             collectibleHint.show();
             final String slug = status.slug;
+            final boolean prizmaLibre = org.telegram.messenger.PrizmaPresence.isLibreWear(status); // Libre: без страницы t.me/nft
             collectibleHint.setOnClickListener(v -> {
+                if (prizmaLibre) return;
                 Browser.openUrl(getContext(), "https://" + getMessagesController().linkPrefix + "/nft/" + slug);
             });
             if (extraHeight < dp(82)) {

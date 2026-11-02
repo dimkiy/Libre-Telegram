@@ -25,6 +25,11 @@ import org.telegram.ui.DialogsActivity;
 import org.telegram.ui.LaunchActivity;
 import org.telegram.ui.Stars.StarsController;
 
+/*
+ * Libre — что это за файл:
+ * Передать Libre-NFT другу через сервер Libre.
+ */
+
 /**
  * Prizma: hand an NFT from the Libre showcase to a friend. It leaves your showcase and appears in
  * theirs (Libre ↔ Libre, through Libre Cloud).

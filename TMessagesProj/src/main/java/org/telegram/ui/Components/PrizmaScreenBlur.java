@@ -14,6 +14,11 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 
+/*
+ * Libre — что это за файл:
+ * Размытие всего экрана от посторонних глаз.
+ */
+
 /**
  * Prizma: a privacy cover — blurs the whole screen so a bystander can't read the chats.
  * Tap it to reveal again.

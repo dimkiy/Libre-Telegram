@@ -5162,6 +5162,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 canvas.restore();
             }
             if (user != null && !MessagesController.isSupportUser(user) && !user.bot) {
+                org.telegram.messenger.PrizmaPresence.want(currentAccount, user.id); // Libre: статус и подарок у ника
                 boolean isOnline = isOnline();
                 wasDrawnOnline = isOnline;
                 if (isOnline || onlineProgress != 0) {
@@ -5173,10 +5174,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         left = (int) (storyParams.originalAvatarRect.right - dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? 10 : 6));
                     }
 
-                    // Prizma: bigger, more visible online dot (fixed green)
+                    // Prizma: bigger, more visible online dot. Libre: its colour follows the person's
+                    // status like in Discord — red «Не беспокоить», yellow «Нет на месте», else green
                     Theme.dialogs_onlineCirclePaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
                     canvas.drawCircle(left, top, dp(8.5f) * onlineProgress, Theme.dialogs_onlineCirclePaint);
-                    Theme.dialogs_onlineCirclePaint.setColor(0xff4dd15e);
+                    final int statusColor = org.telegram.messenger.PrizmaPresence.dotColor(currentAccount, user.id);
+                    Theme.dialogs_onlineCirclePaint.setColor(statusColor != 0 ? statusColor : 0xff4dd15e);
                     canvas.drawCircle(left, top, dp(6f) * onlineProgress, Theme.dialogs_onlineCirclePaint);
                     if (isOnline) {
                         if (onlineProgress < 1.0f) {

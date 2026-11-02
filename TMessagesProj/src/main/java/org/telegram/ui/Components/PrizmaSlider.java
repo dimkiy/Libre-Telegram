@@ -9,6 +9,11 @@ import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
 
+/*
+ * Libre — что это за файл:
+ * Ползунок для наших экранов.
+ */
+
 /**
  * Prizma: custom slider with smooth spring-like drag, a growing thumb and a soft glow.
  * Values are normalized 0..1.

@@ -67,6 +67,11 @@ import org.telegram.ui.Components.RecyclerListView;
 import java.io.File;
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Экран стены профиля: записи, комментарии, кто может писать.
+ */
+
 /**
  * Prizma: a profile's wall on Libre Cloud — any Libre user can write on it, the owner decides who
  * may write, deletes anything and can block an author. With {@code postId != 0} the same screen

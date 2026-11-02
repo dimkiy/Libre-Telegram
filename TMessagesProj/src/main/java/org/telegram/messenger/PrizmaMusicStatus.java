@@ -6,6 +6,11 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
 
+/*
+ * Libre — что это за файл:
+ * Музыкальный статус: пока играет трек, в «О себе» написано, что вы слушаете.
+ */
+
 /**
  * Prizma: music status. While a track plays, the profile's "About" shows "🎧 Artist — Title",
  * visible to everyone like a normal bio. The real bio is saved first and put back ~1.5 minutes

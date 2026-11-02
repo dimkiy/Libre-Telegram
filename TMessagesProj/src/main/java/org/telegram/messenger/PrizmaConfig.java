@@ -6,6 +6,11 @@ import android.os.SystemClock;
 
 import java.util.Map;
 
+/*
+ * Libre — что это за файл:
+ * Все переключатели Libre (приватность, оформление, звонки, MAX…). Хранятся на телефоне.
+ */
+
 /**
  * Prizma: feature flags (stealth / privacy).
  */
@@ -265,6 +270,15 @@ public class PrizmaConfig {
 
     public static void setConfirmCalls(boolean v) {
         done(edit().putBoolean("confirm_calls", v));
+    }
+
+    /** Показывать мой анонимный номер (+888) другим людям в Libre (PrizmaPresence.syncAnonNumber). */
+    public static boolean showAnonNumber() {
+        return getBool("show_anon_number", true);
+    }
+
+    public static void setShowAnonNumber(boolean v) {
+        done(edit().putBoolean("show_anon_number", v));
     }
 
     /** Do Not Disturb — locally suppress all Telegram notifications. */

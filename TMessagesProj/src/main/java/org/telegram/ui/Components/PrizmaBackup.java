@@ -35,6 +35,11 @@ import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+/*
+ * Libre — что это за файл:
+ * Облачная копия настроек Libre и экран «что сервер знает обо мне».
+ */
+
 /**
  * Prizma: the cloud copy of Libre (settings, themes, playlists, the showcase) and the
  * «что сервер знает обо мне» screen. Sessions and anything from Telegram never go into the copy.

@@ -3,6 +3,11 @@ package org.telegram.ui.Components;
 import org.telegram.messenger.PrizmaConfig;
 import org.telegram.messenger.Utilities;
 
+/*
+ * Libre — что это за файл:
+ * Свои обои чатов: живой градиент, фото или видео.
+ */
+
 /**
  * Prizma: chat wallpapers of our own — the living (continuously shifting) gradient built on
  * {@link MotionBackgroundDrawable}, and a custom photo / video picked by the user.

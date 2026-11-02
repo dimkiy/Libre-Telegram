@@ -14,6 +14,11 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.HashMap;
 
+/*
+ * Libre — что это за файл:
+ * Цветные метки чатов (полоска слева в списке).
+ */
+
 /**
  * Prizma: user color tags for chats. Lets the user highlight important chats with a colour;
  * a small colored stripe is drawn on the chat cell.

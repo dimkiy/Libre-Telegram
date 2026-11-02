@@ -23,6 +23,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 
+/*
+ * Libre — что это за файл:
+ * Профиль Libre: достижения, «в Telegram с» / «в Libre с», статусы, команда Libre.
+ */
+
 /**
  * Prizma: the social layer of Libre profiles — achievements, "в Libre с", profile views, clans and
  * the wall. There is no Libre server yet, so this class is the whole "backend" for now:

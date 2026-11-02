@@ -55,6 +55,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Random;
 
+/*
+ * Libre — что это за файл:
+ * Экран обмена контактом касанием телефонов.
+ */
+
 /**
  * Prizma: "tap phones" contact exchange (like Apple's NameDrop).
  *

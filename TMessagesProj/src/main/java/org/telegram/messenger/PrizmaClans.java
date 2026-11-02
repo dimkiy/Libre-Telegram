@@ -6,6 +6,11 @@ import org.telegram.tgnet.TLRPC;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Кланы: создать, вступить по ссылке, роли (глава, офицеры, участники). Данные живут на сервере Libre.
+ */
+
 /**
  * Prizma: clans on Libre Cloud — create one with a tag and colour, invite by link, roles (head,
  * officers, members), a clan wall and a rating. One clan per person.

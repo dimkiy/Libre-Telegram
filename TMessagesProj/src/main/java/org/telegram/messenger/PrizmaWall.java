@@ -13,6 +13,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
+/*
+ * Libre — что это за файл:
+ * Стены профилей: записи, комментарии, лайки (на сервере Libre).
+ */
+
 /**
  * Prizma: profile walls on Libre Cloud — what one person writes, everyone with Libre sees.
  *

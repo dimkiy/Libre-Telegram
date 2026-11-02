@@ -43,6 +43,11 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
+/*
+ * Libre — что это за файл:
+ * Большой плеер на весь экран: обложка, текст песни, очередь, «Слушать вместе».
+ */
+
 /**
  * Prizma: immersive full-screen music player, Apple Music styled.
  * Background is a soft blurred version of the album art; a thin capsule seek bar;
@@ -89,13 +94,16 @@ public class PrizmaFullPlayer extends Dialog {
     private LinearLayout editBar;
 
     private boolean userSeeking;
-    private int loadedMsgId = Integer.MIN_VALUE;
-    private int lyricsForMsgId = Integer.MIN_VALUE;
+    // Libre: трек узнаём по чату И номеру сообщения — в плейлисте из разных чатов номера совпадают,
+    // и раньше плеер оставлял обложку и текст от предыдущего трека
+    private long loadedMsgId = Long.MIN_VALUE;
+    private long lyricsForMsgId = Long.MIN_VALUE;
     private boolean running;
 
     private Bitmap blurBg;
     private Bitmap blurSrcRef;
-    private int blurForMsgId = Integer.MIN_VALUE;
+    private long blurForMsgId = Long.MIN_VALUE;
+    private boolean coverWaiting; // на обложке пока заглушка — ждём картинку из самого файла
     private final Paint bgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final Paint scrimPaint = new Paint();
     private int scrimForHeight = -1;
@@ -656,13 +664,14 @@ public class PrizmaFullPlayer extends Dialog {
         try {
             String artworkUrl = mo.getArtworkUrl(true);
             ImageLocation thumbLoc = thumbLocation(mo);
+            // заглушка под картинкой: если обложка не загрузится, будет она, а не чёрный квадрат
+            GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a2d3a, 0xff15161c});
+            ph.setCornerRadius(AndroidUtilities.dp(8));
             if (artworkUrl != null && !artworkUrl.isEmpty()) {
-                iv.setImage(ImageLocation.getForPath(artworkUrl), "40_40", thumbLoc, null, null, 0, 1, mo);
+                iv.setImage(ImageLocation.getForPath(artworkUrl), "40_40", thumbLoc, null, ph, null, 0, 1, mo);
             } else if (thumbLoc != null) {
-                iv.setImage(null, null, thumbLoc, null, null, 0, 1, mo);
+                iv.setImage(null, null, thumbLoc, null, ph, null, 0, 1, mo);
             } else {
-                GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a2d3a, 0xff15161c});
-                ph.setCornerRadius(AndroidUtilities.dp(8));
                 iv.setImageDrawable(ph);
             }
         } catch (Throwable ignore) {}
@@ -1090,9 +1099,9 @@ public class PrizmaFullPlayer extends Dialog {
             dismiss();
             return;
         }
-        if (force || mo.getId() != loadedMsgId) {
-            boolean animate = !force && loadedMsgId != Integer.MIN_VALUE;
-            loadedMsgId = mo.getId();
+        if (force || trackKey(mo) != loadedMsgId) {
+            boolean animate = !force && loadedMsgId != Long.MIN_VALUE;
+            loadedMsgId = trackKey(mo);
             if (animate) {
                 animateTrackChange(mo);
             } else {
@@ -1100,6 +1109,7 @@ public class PrizmaFullPlayer extends Dialog {
             }
             updateNextBar();
         }
+        checkLateCover();
         tryBuildBlur(mo);
         updateTogetherBar();
 
@@ -1598,16 +1608,16 @@ public class PrizmaFullPlayer extends Dialog {
     }
 
     private void loadLyrics(MessageObject mo) {
-        if (mo.getId() == lyricsForMsgId) {
+        if (trackKey(mo) == lyricsForMsgId) {
             return;
         }
-        lyricsForMsgId = mo.getId();
+        lyricsForMsgId = trackKey(mo);
         currentLyrics = null;
         lyricsPanel.setLoading();
-        final int reqId = mo.getId();
+        final long reqId = trackKey(mo);
         PrizmaLyrics.fetch(mo.getMusicTitle(), mo.getMusicAuthor(), (int) mo.getDuration(), result -> {
             MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-            if (cur == null || cur.getId() != reqId || !running) {
+            if (cur == null || trackKey(cur) != reqId || !running) {
                 return;
             }
             currentLyrics = result;
@@ -1615,32 +1625,82 @@ public class PrizmaFullPlayer extends Dialog {
         });
     }
 
+    /**
+     * Обложка трека. Откуда берём, по порядку:
+     * 1) картинка, вшитая в сам аудиофайл (когда файл уже скачан);
+     * 2) обложка из iTunes по названию и исполнителю;
+     * 3) маленькая картинка, которую Telegram хранит у файла.
+     * Libre: раньше, если ничего из этого не загрузилось (iTunes недоступен, файл ещё качается),
+     * оставался чёрный квадрат. Теперь под картинкой всегда заглушка с нотой, а когда файл докачается,
+     * checkLateCover() подставит вшитую обложку.
+     */
     private void loadCover(MessageObject mo) {
-        Bitmap bmp = null;
-        try {
-            if (MediaController.getInstance().getAudioInfo() != null) {
-                bmp = MediaController.getInstance().getAudioInfo().getCover();
-            }
-        } catch (Throwable ignore) {}
+        Bitmap bmp = audioInfoCover();
         if (bmp != null) {
+            coverWaiting = false;
             cover.setImageBitmap(bmp);
             return;
         }
+        coverWaiting = true;
         String artworkUrl = mo.getArtworkUrl(false);
         ImageLocation thumbLoc = thumbLocation(mo);
+        android.graphics.drawable.Drawable placeholder = coverPlaceholder(mo);
         if (artworkUrl != null && !artworkUrl.isEmpty()) {
-            cover.setImage(ImageLocation.getForPath(artworkUrl), null, thumbLoc, null, null, 0, 1, mo);
+            cover.setImage(ImageLocation.getForPath(artworkUrl), null, thumbLoc, null, placeholder, null, 0, 1, mo);
         } else if (thumbLoc != null) {
-            cover.setImage(null, null, thumbLoc, null, null, 0, 1, mo);
+            cover.setImage(null, null, thumbLoc, null, placeholder, null, 0, 1, mo);
         } else {
-            GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a2d3a, 0xff15161c});
-            ph.setCornerRadius(AndroidUtilities.dp(16));
-            cover.setImageDrawable(ph);
+            cover.setImageDrawable(placeholder);
         }
     }
 
+    /** Обложка ещё не загрузилась, а файл уже скачан — берём картинку, вшитую в файл. */
+    private void checkLateCover() {
+        if (!coverWaiting || cover == null) return;
+        if (cover.getImageReceiver() != null && cover.getImageReceiver().hasImageLoaded() && cover.getImageReceiver().getBitmap() != null) {
+            coverWaiting = false; // iTunes или Telegram успели — всё хорошо
+            return;
+        }
+        Bitmap bmp = audioInfoCover();
+        if (bmp != null) {
+            coverWaiting = false;
+            cover.setImageBitmap(bmp);
+        }
+    }
+
+    private static Bitmap audioInfoCover() {
+        try {
+            if (MediaController.getInstance().getAudioInfo() != null) {
+                Bitmap b = MediaController.getInstance().getAudioInfo().getCover();
+                return b != null && !b.isRecycled() ? b : null;
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
+
+    /** Заглушка вместо обложки: спокойный цвет (свой у каждого исполнителя) и нота посередине. */
+    private android.graphics.drawable.Drawable coverPlaceholder(MessageObject mo) {
+        String key = mo.getMusicAuthor() == null ? "" : mo.getMusicAuthor();
+        int[][] tones = {{0xff2f3a52, 0xff1b2130}, {0xff3d2f4f, 0xff221a2e}, {0xff2c4440, 0xff182624}, {0xff4a3a2a, 0xff2a2018}};
+        int[] tone = tones[Math.abs(key.hashCode()) % tones.length];
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, tone);
+        bg.setCornerRadius(AndroidUtilities.dp(16));
+        android.graphics.drawable.Drawable note = cover.getContext().getResources().getDrawable(org.telegram.messenger.R.drawable.msg_played).mutate();
+        note.setColorFilter(new android.graphics.PorterDuffColorFilter(0x66ffffff, android.graphics.PorterDuff.Mode.SRC_IN));
+        android.graphics.drawable.LayerDrawable layers = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{bg, note});
+        int inset = AndroidUtilities.dp(56);
+        layers.setLayerInset(1, inset, inset, inset, inset);
+        return layers;
+    }
+
+    /** Один трек = чат + номер сообщения (одних номеров мало: в разных чатах они повторяются). */
+    private static long trackKey(MessageObject mo) {
+        return mo.getDialogId() * 1_000_003L + mo.getId();
+    }
+
     private void tryBuildBlur(MessageObject mo) {
-        if (blurForMsgId == mo.getId() && blurBg != null) {
+        if (blurForMsgId == trackKey(mo) && blurBg != null) {
             return; // already built for this track
         }
         // Prefer the bitmap actually shown by the cover view; it reflects the NEW track.
@@ -1665,7 +1725,7 @@ public class PrizmaFullPlayer extends Dialog {
             Bitmap old = blurBg;
             blurBg = small;
             blurSrcRef = src;
-            blurForMsgId = mo.getId();
+            blurForMsgId = trackKey(mo);
             if (old != null && !old.isRecycled()) {
                 old.recycle();
             }

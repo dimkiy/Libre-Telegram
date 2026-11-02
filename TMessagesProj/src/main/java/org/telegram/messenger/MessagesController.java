@@ -926,7 +926,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isPremiumUser(TLRPC.User currentUser) {
-        return currentUser != null && currentUser.premium && !isSupportUser(currentUser);
+        // Libre: тот, кто надел Libre-подарок, показывается с ним у ника и без Premium
+        // (везде здесь речь только о том, что рисовать рядом с именем)
+        return currentUser != null && (currentUser.premium || PrizmaPresence.isLibreWear(currentUser.emoji_status)) && !isSupportUser(currentUser);
     }
 
     public boolean didPressTranscribeButtonEnough() {
@@ -2571,6 +2573,9 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void updateEmojiStatus(long dialogId, TLRPC.EmojiStatus newStatus, TL_stars.StarGift gift) {
         final boolean myself = dialogId == 0 || dialogId == getUserConfig().getClientUserId();
+        if (myself && PrizmaPresence.myWear(currentAccount) != null) {
+            PrizmaPresence.setMyWear(currentAccount, null, 0, null, null); // Libre: новый статус Telegram снимает надетый Libre-подарок
+        }
         TLRPC.EmojiStatus new_emoji_status = newStatus;
         if (new_emoji_status instanceof TLRPC.TL_inputEmojiStatusCollectible && gift instanceof TL_stars.TL_starGiftUnique) {
             new_emoji_status = emojiStatusCollectibleFromGift((TL_stars.TL_starGiftUnique) gift);
@@ -6856,6 +6861,7 @@ public class MessagesController extends BaseController implements NotificationCe
         if (PrizmaSocial.isCreator(user.id) || PrizmaSocial.isTeam(user.id)) {
             user.verified = true; // Libre: the check next to the name for the creator and the Libre team, seen only in Libre
         }
+        PrizmaPresence.decorate(currentAccount, user); // Libre: подарок из Libre, надетый к нику, — как настоящий
         fromCache = fromCache && user.id / 1000 != 333 && user.id != 777000;
         TLRPC.User oldUser = users.get(user.id);
         if (oldUser == user && !force) {
