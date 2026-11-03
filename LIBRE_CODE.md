@@ -1,6 +1,6 @@
 # Карта кода Libre
 
-В проекте около 14 000 файлов Telegram, а наших из них немного. Все новые классы называются `Prizma*` (так раньше назывался форк). В начале каждого такого файла есть короткое описание по-русски: «Libre — что это за файл». В коде Telegram наши вставки помечены комментарием `Prizma:` или `Libre:`, их удобно искать поиском по проекту (Ctrl+Shift+F).
+В проекте около 14 000 файлов Telegram, а наших из них немного. Все новые классы называются `Prizma*` (так раньше назывался форк). Наши вставки в код Telegram легко найти поиском по проекту (Ctrl+Shift+F) по слову `Prizma`.
 
 Пути ниже даны от `TMessagesProj/src/main/java/org/telegram/`.
 
@@ -63,7 +63,7 @@
 
 ## Правки в коде Telegram
 
-Наши вставки есть, например, в этих файлах (искать по `Prizma` или `Libre`, полный список даёт история git):
+Наши вставки есть, например, в этих файлах (искать по `Prizma`, полный список даёт история git):
 `ChatActivity`, `ProfileActivity`, `DialogsActivity`, `LaunchActivity`, `SettingsActivity`, `MessagesController`, `MediaController`, `NotificationsController`, `ChatMessageCell`, `DialogCell`, `StarGiftSheet`, `VoIPHelper`, `LauncherIconController`, `AndroidManifest.xml`, `strings.xml`.
 
 `BuildVars.java` берёт `api_id`/`api_hash` из `local.properties`, а настройки сборки `armLibre` лежат в `TMessagesProj_App/build.gradle`.

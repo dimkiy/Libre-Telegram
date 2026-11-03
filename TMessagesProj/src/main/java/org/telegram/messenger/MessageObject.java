@@ -197,7 +197,7 @@ public class MessageObject {
     public TLRPC.VideoSize emojiMarkup;
     private boolean emojiAnimatedStickerLoading;
     public String emojiAnimatedStickerColor;
-    public boolean prizmaDeleted; // Prizma: marked as deleted (anti-delete)
+    public boolean prizmaDeleted;
     public CharSequence messageText;
     public CharSequence messageTextShort;
     public CharSequence messageTextForReply;
@@ -1916,7 +1916,6 @@ public class MessageObject {
 
     public MessageObject(int accountNum, TLRPC.Message message, MessageObject replyToMessage, AbstractMap<Long, TLRPC.User> users, AbstractMap<Long, TLRPC.Chat> chats, LongSparseArray<TLRPC.User> sUsers, LongSparseArray<TLRPC.Chat> sChats, boolean generateLayout, boolean checkMediaExists, long eid, boolean isRepostPreview, boolean isRepostVideoPreview, boolean isSavedMessages, int searchType) {
         Theme.createCommonMessageResources();
-        // Libre: a handed-over NFT is drawn as Telegram's gift card (in memory only)
         message = org.telegram.ui.Components.PrizmaGiftCard.convert(accountNum, message);
 
         this.isRepostPreview = isRepostPreview;

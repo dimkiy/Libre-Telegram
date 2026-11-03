@@ -11,23 +11,10 @@ import org.telegram.tgnet.TLRPC;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Мои плейлисты: хранит треки, обложки, открытый для всех плейлист и что из него отдать серверу.
- */
-
-/**
- * Prizma: local music library with MULTIPLE named playlists, each with its own cover.
- * The default playlist ("Мне нравится") is what the ♥ like button writes to, so the rest
- * of the app keeps working unchanged. Tracks store full serialized audio messages so they
- * can be replayed later via MediaController, independent of the source chat.
- */
 public class PrizmaPlaylist {
-
     public static final long DEFAULT_ID = 1L;
     private static final String DEFAULT_NAME = "Мне нравится";
 
-    /** Live cache of real MessageObjects liked this session (reliable playback). Key: did_mid. */
     private static final java.util.HashMap<String, MessageObject> liveCache = new java.util.HashMap<>();
 
     public static class Playlist {
@@ -52,8 +39,6 @@ public class PrizmaPlaylist {
         return ApplicationLoader.applicationContext.getSharedPreferences("prizma_playlist", Context.MODE_PRIVATE);
     }
 
-    // ---- root array of playlists ----
-
     private static JSONArray roots() {
         ensureInit();
         try {
@@ -69,12 +54,9 @@ public class PrizmaPlaylist {
     private static void saveRoots(JSONArray a) {
         countCache.clear();
         prefs().edit().putString("playlists", a.toString()).apply();
-        if (publicId() != 0) PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount); // the open copy follows
+        if (publicId() != 0) PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount);
     }
 
-    // ---- the playlist shown on my Libre profile ----
-
-    /** The playlist other Libre users see in my profile (0 = none). */
     public static long publicId() {
         return prefs().getLong("public_pl", 0);
     }
@@ -84,16 +66,6 @@ public class PrizmaPlaylist {
         PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount);
     }
 
-    /**
-     * Tracks for the open copy: title, artist and where anyone can get the track — nothing from the
-     * chat it came from goes along.
-     *
-     * Libre 1.2.1: у каждого трека есть ещё «src» — где его может скачать ЛЮБОЙ человек
-     * («канал/номер сообщения», если трек из публичного канала). Без этого чужой трек не
-     * проигрывался: Telegram даёт скачать файл только тому, кто видит сообщение с ним. Для треков из
-     * личных чатов src нет — их пересылает в публичный канал бот Libre (см. PrizmaCloud.relayTracks),
-     * а для этого серверу нужны «doc» (id файла) и «size» (размер — по нему бот узнаёт трек).
-     */
     public static JSONArray exportPublic(long id) {
         JSONArray out = new JSONArray();
         JSONArray a = roots();
@@ -108,8 +80,6 @@ public class PrizmaPlaylist {
             final String src = publicSource(msg);
             final TLRPC.Document doc = msg.media.document;
             try {
-                // Libre 1.2.1: копию самого сообщения больше не отдаём — по ней было видно, из чьего
-                // личного чата трек (номера собеседников). Слушателю хватает названия и src.
                 JSONObject e = new JSONObject();
                 e.put("t", o.optString("t", ""));
                 e.put("a", o.optString("a", ""));
@@ -125,10 +95,6 @@ public class PrizmaPlaylist {
         return out;
     }
 
-    /**
-     * Где трек может скачать любой: «username/123», если он лежит в публичном канале (или переслан
-     * оттуда), иначе null. Ссылка из личного чата никому не поможет — её мы не отдаём.
-     */
     private static String publicSource(TLRPC.Message msg) {
         MessagesController mc = MessagesController.getInstance(UserConfig.selectedAccount);
         if (msg.peer_id instanceof TLRPC.TL_peerChannel) {
@@ -147,10 +113,6 @@ public class PrizmaPlaylist {
         return null;
     }
 
-    /**
-     * Из какого чата и какого сообщения трек с файлом {@code docId} в моём плейлисте:
-     * {dialogId, messageId} или null. Нужен, чтобы переслать его боту Libre.
-     */
     public static long[] sourceMessage(long playlistId, long docId) {
         JSONArray a = roots();
         int idx = indexOf(a, playlistId);
@@ -167,18 +129,14 @@ public class PrizmaPlaylist {
         return null;
     }
 
-    /** «Сохранить себе»: a new playlist of mine with these tracks. Returns its id. */
     public static long importTracks(String name, ArrayList<MessageObject> list) {
         long id = createPlaylist(name, "");
         for (MessageObject mo : list) addTo(id, mo);
         return id;
     }
 
-    // track counts are asked for often (profile achievements, hub) — parsing every saved track for
-    // that was hundreds of KB of JSON on the UI thread; every write goes through saveRoots()
     private static final java.util.HashMap<Long, Integer> countCache = new java.util.HashMap<>();
 
-    /** First-run: build the playlists root, migrating the old flat "tracks" list into the default playlist. */
     private static void ensureInit() {
         try {
             String s = prefs().getString("playlists", "");
@@ -219,8 +177,6 @@ public class PrizmaPlaylist {
         JSONArray t = playlist.optJSONArray("tracks");
         return t == null ? new JSONArray() : t;
     }
-
-    // ---- playlist management ----
 
     public static ArrayList<Playlist> playlists() {
         ArrayList<Playlist> out = new ArrayList<>();
@@ -299,8 +255,8 @@ public class PrizmaPlaylist {
     }
 
     public static void deletePlaylist(long id) {
-        if (id == publicId()) setPublic(0); // nothing left to show
-        if (id == DEFAULT_ID) return; // keep the default liked list
+        if (id == publicId()) setPublic(0);
+        if (id == DEFAULT_ID) return;
         JSONArray a = roots();
         JSONArray out = new JSONArray();
         for (int i = 0; i < a.length(); i++) {
@@ -310,8 +266,6 @@ public class PrizmaPlaylist {
         }
         saveRoots(out);
     }
-
-    // ---- tracks ----
 
     public static int countIn(long id) {
         Integer cached = countCache.get(id);
@@ -359,7 +313,6 @@ public class PrizmaPlaylist {
         return false;
     }
 
-    /** Adds the track to the playlist (no-op if already there). Returns true on success. */
     public static boolean addTo(long id, MessageObject mo) {
         if (mo == null || mo.messageOwner == null) return false;
         if (containsIn(id, mo)) return true;
@@ -430,7 +383,6 @@ public class PrizmaPlaylist {
         }
     }
 
-    /** Moves a track from one position to another within the playlist (preserves full entries). */
     public static void moveTrack(long id, int from, int to) {
         JSONArray a = roots();
         int idx = indexOf(a, id);
@@ -470,7 +422,6 @@ public class PrizmaPlaylist {
         }
     }
 
-    /** Toggles membership; returns true if the track is now in the playlist. */
     public static boolean toggleIn(long id, MessageObject mo) {
         if (containsIn(id, mo)) {
             removeFrom(id, mo);
@@ -479,7 +430,6 @@ public class PrizmaPlaylist {
         return addTo(id, mo);
     }
 
-    /** Rebuilds playable MessageObjects for the whole playlist (order preserved). */
     public static ArrayList<MessageObject> buildMessages(long id) {
         ArrayList<MessageObject> out = new ArrayList<>();
         JSONArray a = roots();
@@ -507,9 +457,6 @@ public class PrizmaPlaylist {
         return out;
     }
 
-    // ---- legacy API (operates on the default "liked" playlist) ----
-
-    /** True if the track is in at least one of the user's playlists. */
     public static boolean inAny(MessageObject mo) {
         if (mo == null) return false;
         for (Playlist p : playlists()) {
@@ -533,8 +480,6 @@ public class PrizmaPlaylist {
     public static ArrayList<MessageObject> buildMessages() {
         return buildMessages(DEFAULT_ID);
     }
-
-    // ---- serialization ----
 
     private static String encode(TLRPC.Message msg) {
         try {

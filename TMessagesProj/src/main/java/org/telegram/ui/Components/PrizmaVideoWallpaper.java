@@ -10,22 +10,7 @@ import org.telegram.messenger.UserConfig;
 
 import java.io.File;
 
-/*
- * Libre — что это за файл:
- * Видео на обоях чата (зацикленное, без звука).
- */
-
-/**
- * Prizma: looping video chat wallpaper. Extends MotionBackgroundDrawable only so that
- * SizeNotifierFrameLayout gives it a parent view (setParentView / onAttached) like it
- * does for motion backgrounds; the actual frames are driven by an ImageReceiver playing
- * an AnimatedFileDrawable, which invalidates the parent each frame.
- *
- * The decoder (native ffmpeg context + several full-size frame bitmaps) is released as soon as
- * the chat leaves the screen. It used to live forever, so every opened chat leaked tens of MB.
- */
 public class PrizmaVideoWallpaper extends MotionBackgroundDrawable {
-
     private static final int PLACEHOLDER_COLOR = 0xff0e0e12;
 
     private final String path;
@@ -37,19 +22,15 @@ public class PrizmaVideoWallpaper extends MotionBackgroundDrawable {
     public PrizmaVideoWallpaper(String path) {
         super();
         this.path = path;
-        // The base MotionBackgroundDrawable defaults to a yellow/green gradient. We draw the video
-        // ourselves, but the action-bar / input blur samples this gradient — which showed up as a
-        // yellow glow at the top and bottom. Force a neutral dark gradient so no colour bleeds.
         try {
             setColors(0xff0e0e12, 0xff121318, 0xff0e0e12, 0xff15161c);
         } catch (Throwable ignore) {
         }
     }
 
-    /** Creates the looping decoder: half the screen resolution and at most 30 fps is plenty for a background. */
     public static AnimatedFileDrawable createLooping(String path) {
         try {
-            int w = AndroidUtilities.displaySize.x / 2; // 0 (display not measured yet) = original size
+            int w = AndroidUtilities.displaySize.x / 2;
             int h = AndroidUtilities.displaySize.y / 2;
             AnimatedFileDrawable d = new AnimatedFileDrawable(new File(path), true, 0, 0, null, null, null, 0, UserConfig.selectedAccount, false, w, h, null);
             d.setLimitFps(true);
@@ -109,7 +90,7 @@ public class PrizmaVideoWallpaper extends MotionBackgroundDrawable {
     public void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         attached = false;
-        release(); // recreated on the next attach / draw
+        release();
     }
 
     @Override
@@ -121,7 +102,7 @@ public class PrizmaVideoWallpaper extends MotionBackgroundDrawable {
         }
         ensure();
         if (animation == null || !animation.hasBitmap()) {
-            canvas.drawColor(PLACEHOLDER_COLOR); // decoder warming up — no black/transparent flash
+            canvas.drawColor(PLACEHOLDER_COLOR);
         }
         if (receiver == null) {
             return;

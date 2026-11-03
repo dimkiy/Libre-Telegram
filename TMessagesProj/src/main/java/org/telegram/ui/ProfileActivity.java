@@ -605,8 +605,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final static int delete_group = 45;
     private final static int enable_no_forwards = 46;
     private final static int disable_no_forwards = 47;
-    private final static int prizma_banner = 4810;        // Prizma: set/change profile banner
-    private final static int prizma_banner_remove = 4811; // Prizma: remove profile banner
+    private final static int prizma_banner = 4810;
+    private final static int prizma_banner_remove = 4811;
     private final static int send_money = 48;
 
     private Rect rect = new Rect();
@@ -666,7 +666,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int channelInfoRow;
     private int usernameRow;
     private int prizmaIdRow;
-    private int prizmaLibreRow;        // Libre: achievements, clan, wall
+    private int prizmaLibreRow;
     private int prizmaLibreSectionRow;
     private int prizmaSettingsRow;
     private int notificationsDividerRow;
@@ -1152,7 +1152,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 blurView.draw(canvas, this, thisWidth - inset * 2f, thisHeight - inset * 2f, true, fraction, alpha);
             }
 
-            // Prizma: iridescent glow ring around the avatar (rotates only when heavy effects are allowed)
             if (r > 0 && alpha > 0 && org.telegram.messenger.PrizmaConfig.iridescentName()) {
                 if (prizmaGlowPaint == null) {
                     prizmaGlowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -1161,7 +1160,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 float cx = thisWidth / 2f;
                 float cy = thisHeight / 2f;
                 float rad = Math.min(thisWidth, thisHeight) / 2f - inset;
-                // one shader per size (it used to be re-created on every frame)
                 if (prizmaGlowShader == null || prizmaGlowCx != cx || prizmaGlowCy != cy) {
                     prizmaGlowShader = new android.graphics.SweepGradient(cx, cy, new int[]{0xff5b8cff, 0xffa66bff, 0xffff6bd0, 0xff5be1e6, 0xff5b8cff}, null);
                     prizmaGlowCx = cx;
@@ -1345,8 +1343,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             prizmaReleaseBannerVideo();
         }
 
-        // Prizma: the video banner decoder (native ffmpeg + frame bitmaps) must be freed when the
-        // profile closes - it used to leak on every opening of the own profile
         private void prizmaReleaseBannerVideo() {
             if (prizmaBannerReceiver != null) {
                 prizmaBannerReceiver.onDetachedFromWindow();
@@ -1434,16 +1430,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     canvas.drawRect(0, 0, getMeasuredWidth(), y1, backgroundPaint);
                 }
                 boolean prizmaOwn = userId == getUserConfig().clientUserId;
-                // Libre: other Libre users' banners come from Libre Cloud (downloaded once, cached)
                 org.telegram.messenger.PrizmaCloud.Remote prizmaRemote = prizmaOwn || userId == 0 ? null : org.telegram.messenger.PrizmaCloud.remote(currentAccount, userId);
                 String prizmaRemotePath = prizmaRemote != null ? prizmaRemote.bannerPath : null;
                 boolean prizmaVideo = prizmaOwn ? org.telegram.messenger.PrizmaConfig.bannerIsVideo() : prizmaRemotePath != null && prizmaRemote.bannerVideo;
                 android.graphics.Bitmap prizmaBanner = prizmaOwn ? org.telegram.ui.Components.PrizmaBanner.getBitmap()
                         : prizmaRemotePath != null && !prizmaVideo ? org.telegram.messenger.PrizmaCloud.bannerBitmap(prizmaRemotePath) : null;
-                // Libre: с баннером узор надетого подарка не рисуется — иначе он ложится поверх картинки
                 final boolean prizmaHasBanner = prizmaVideo || prizmaBanner != null;
                 if (prizmaVideo) {
-                    // Prizma: uploaded video banner (played via ImageReceiver)
                     int w = getMeasuredWidth();
                     if (prizmaBannerReceiver == null) {
                         prizmaBannerReceiver = new org.telegram.messenger.ImageReceiver(this);
@@ -1466,10 +1459,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     canvas.save();
                     canvas.clipRect(0, 0, w, y1);
                     prizmaBannerReceiver.setImageCoords(0, 0, w, y1);
-                    prizmaBannerReceiver.draw(canvas); // the video drawable invalidates us on every new frame
+                    prizmaBannerReceiver.draw(canvas);
                     canvas.restore();
                 } else if (prizmaBanner != null) {
-                    // Prizma: uploaded banner image in the profile header
                     int w = getMeasuredWidth();
                     float scale = Math.max(w / (float) prizmaBanner.getWidth(), y1 / (float) prizmaBanner.getHeight());
                     float bw = prizmaBanner.getWidth() * scale;
@@ -1481,9 +1473,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     canvas.restore();
                 } else if (prizmaOwn && org.telegram.ui.Components.PrizmaBanner.isLoading()
                         || !prizmaOwn && userId != 0 && (org.telegram.messenger.PrizmaCloud.isPending(userId) || org.telegram.messenger.PrizmaCloud.bitmapPending(prizmaRemotePath))) {
-                    postInvalidateDelayed(150); // the banner is downloaded / decoded in the background - pick it up when ready
+                    postInvalidateDelayed(150);
                 } else if (prizmaOwn && org.telegram.messenger.PrizmaConfig.iridescentProfile()) {
-                    // Prizma: animated iridescent banner — cached gradient, animated via matrix (no per-frame alloc)
                     if (prizmaPaint == null) {
                         prizmaPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     }
@@ -1494,8 +1485,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         prizmaBannerShaderW = w;
                         prizmaPaint.setShader(prizmaBannerShader);
                     }
-                    // hold still during the open transition so it doesn't jank the entrance;
-                    // a static gradient in Lite mode / on weak devices / in battery saver
                     final boolean prizmaAnimate = !openAnimationInProgress && org.telegram.messenger.PrizmaConfig.fancyEffects();
                     float t = prizmaAnimate ? (System.currentTimeMillis() % 6000L) / 6000f : 0f;
                     prizmaBannerMatrix.setTranslate(-w + t * w * 2f, 0);
@@ -1505,7 +1494,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         org.telegram.messenger.PrizmaConfig.nextDecorFrame(this);
                     }
                 }
-                // Prizma: iridescent gradient on the profile name (animated only when heavy effects are allowed)
                 if (org.telegram.messenger.PrizmaConfig.iridescentName()) {
                     final boolean prizmaAnimateName = !openAnimationInProgress && org.telegram.messenger.PrizmaConfig.fancyEffects();
                     float tt = prizmaAnimateName ? (System.currentTimeMillis() % 4000L) / 4000f : 0f;
@@ -1580,7 +1568,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         private String prizmaBannerLoaded;
         private final android.graphics.RectF prizmaBannerDst = new android.graphics.RectF();
         private final android.graphics.Paint prizmaBannerPaint = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
-        // Prizma: cached iridescent gradients (avoid allocating a new shader every frame)
         private android.graphics.LinearGradient prizmaBannerShader;
         private int prizmaBannerShaderW;
         private final android.graphics.Matrix prizmaBannerMatrix = new android.graphics.Matrix();
@@ -10975,7 +10962,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
-                prizmaIdRow = rowCount++; // Prizma: show user id on profile
+                prizmaIdRow = rowCount++;
                 if (userInfo != null) {
                     if (userInfo.birthday != null) {
                         birthdayRow = rowCount++;
@@ -11139,7 +11126,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (ChatObject.isPublic(currentChat)) {
                     usernameRow = rowCount++;
                 }
-                prizmaIdRow = rowCount++; // Prizma: show chat id on profile
+                prizmaIdRow = rowCount++;
             }
             if (emptyRow < 0 && emptyRow2 < 0) {
                 if (hasMusic || hasBalance || peerColor != null || actionsView == null) {
@@ -11793,7 +11780,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         if (user.emoji_status instanceof TLRPC.TL_emojiStatusCollectible) {
                             TLRPC.TL_emojiStatusCollectible status = (TLRPC.TL_emojiStatusCollectible) user.emoji_status;
                             if (org.telegram.messenger.PrizmaPresence.isLibreWear(status)) {
-                                // Libre: у Libre-подарка нет страницы t.me/nft — просто называем его
                                 BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.gift, status.title, "Подарок из Libre").show();
                                 return;
                             }
@@ -12621,7 +12607,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (selfUser && !myProfile) {
             otherItem.addSubItem(logout, R.drawable.msg_leave, LocaleController.getString(R.string.LogOut));
         }
-        // Prizma: banner controls on the user's own profile
         if (selfUser || myProfile) {
             otherItem.addSubItem(prizma_banner, R.drawable.msg_photo_settings,
                     org.telegram.ui.Components.PrizmaBanner.hasBanner() ? "Сменить баннер" : "Добавить баннер");
@@ -13787,7 +13772,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             phoneNumber = vcardPhone;
                         } else if (user != null && !TextUtils.isEmpty(user.phone)) {
                             if (myProfile && userId == getUserConfig().getClientUserId()) {
-                                // Prizma: show the anonymous +888 number on your own profile too
                                 text = org.telegram.messenger.PrizmaConfig.displayPhone(user.phone);
                             } else {
                                 text = PhoneFormat.getInstance().format("+" + user.phone);
@@ -16938,7 +16922,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             collectibleHint.setRounding(16);
             collectibleHint.show();
             final String slug = status.slug;
-            final boolean prizmaLibre = org.telegram.messenger.PrizmaPresence.isLibreWear(status); // Libre: без страницы t.me/nft
+            final boolean prizmaLibre = org.telegram.messenger.PrizmaPresence.isLibreWear(status);
             collectibleHint.setOnClickListener(v -> {
                 if (prizmaLibre) return;
                 Browser.openUrl(getContext(), "https://" + getMessagesController().linkPrefix + "/nft/" + slug);

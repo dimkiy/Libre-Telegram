@@ -6,17 +6,7 @@ import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.Virtualizer;
 
-/*
- * Libre — что это за файл:
- * Эквалайзер, усиление баса и объём для музыки.
- */
-
-/**
- * Prizma: global equalizer + bass boost manager.
- * Attaches an {@link Equalizer} to the music ExoPlayer audio session and persists settings.
- */
 public class PrizmaEqualizer {
-
     private static volatile PrizmaEqualizer instance;
 
     public static PrizmaEqualizer getInstance() {
@@ -59,7 +49,6 @@ public class PrizmaEqualizer {
         prefsLoaded = true;
     }
 
-    /** Attach to a (new) audio session; safe to call repeatedly. */
     public void attach(int newSessionId) {
         loadPrefs();
         if (newSessionId == 0 || newSessionId == -1) {
@@ -67,7 +56,7 @@ public class PrizmaEqualizer {
         }
         try {
             if (equalizer != null && sessionId == newSessionId) {
-                return; // already attached to this track (STATE_READY fires again after every buffering)
+                return;
             }
             release();
             sessionId = newSessionId;
@@ -98,8 +87,6 @@ public class PrizmaEqualizer {
     }
 
     private void apply() {
-        // levels / strengths first, THEN switch the effect on — enabling first made the sound jump
-        // through the default curve before the user's settings arrived
         try {
             if (equalizer != null) {
                 if (enabled && bandLevels != null) {
@@ -271,8 +258,6 @@ public class PrizmaEqualizer {
         }
     }
 
-    // ===== custom (user) presets =====
-
     private org.json.JSONArray customArray() {
         try {
             String s = prefs().getString("custom_presets", "");
@@ -300,7 +285,6 @@ public class PrizmaEqualizer {
         }
     }
 
-    /** Saves the current band/bass/virt settings as a new named preset. */
     public void saveCustomPreset(String name) {
         try {
             org.json.JSONObject obj = new org.json.JSONObject();

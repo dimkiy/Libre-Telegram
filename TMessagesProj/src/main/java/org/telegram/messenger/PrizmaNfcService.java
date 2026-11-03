@@ -6,23 +6,7 @@ import android.os.SystemClock;
 
 import java.nio.charset.StandardCharsets;
 
-/*
- * Libre — что это за файл:
- * Обмен контактом касанием телефонов: телефон притворяется NFC-картой с одноразовым кодом.
- */
-
-/**
- * Prizma: "tap phones" contact exchange. While the exchange screen is open, this phone pretends to
- * be an NFC card (Host Card Emulation) that holds a ONE-TIME contact code — a temporary Telegram
- * contact token, not the phone number or the username. Another Libre phone in reader mode selects
- * our private AID and receives "LIBRE1:<token>".
- *
- * Android Beam (real phone-to-phone NFC) was removed in Android 10; card emulation is what's left.
- * Nothing is answered unless the exchange screen armed a code, and each code goes to one tap only.
- */
 public class PrizmaNfcService extends HostApduService {
-
-    /** Private application id: F0 (proprietary) + "LIBRE". */
     public static final byte[] AID = {(byte) 0xF0, 0x4C, 0x49, 0x42, 0x52, 0x45};
     public static final String PREFIX = "LIBRE1:";
 
@@ -30,11 +14,9 @@ public class PrizmaNfcService extends HostApduService {
     private static final byte[] SW_NOT_FOUND = {(byte) 0x6A, (byte) 0x82};
     private static final byte[] SW_UNKNOWN = {(byte) 0x6D, 0x00};
 
-    /** How long a handed-out code is still answered (the reader may retry within the same tap). */
     private static final long GRACE_MS = 2000;
 
     public interface Listener {
-        /** Runs on the UI thread when our code was read by another phone. */
         void onCodeSent();
     }
 
@@ -43,7 +25,6 @@ public class PrizmaNfcService extends HostApduService {
     private static volatile boolean sent;
     private static volatile Listener listener;
 
-    /** Arms a fresh one-time code (valid until {@code untilElapsed}, SystemClock.elapsedRealtime). */
     public static void arm(String token, long untilElapsed, Listener l) {
         payload = (PREFIX + token).getBytes(StandardCharsets.UTF_8);
         payloadUntil = untilElapsed;
@@ -57,7 +38,6 @@ public class PrizmaNfcService extends HostApduService {
         listener = null;
     }
 
-    /** SELECT by AID: 00 A4 04 00 Lc AID [Le]. */
     public static byte[] selectApdu() {
         byte[] cmd = new byte[6 + AID.length];
         cmd[0] = 0x00;
@@ -87,10 +67,9 @@ public class PrizmaNfcService extends HostApduService {
         final byte[] p = payload;
         final long now = SystemClock.elapsedRealtime();
         if (p == null || now > payloadUntil) {
-            return SW_NOT_FOUND; // the exchange screen isn't open, or the code was already used
+            return SW_NOT_FOUND;
         }
         if (!sent) {
-            // one tap = one code: it stays answerable only for this tap, then the screen arms a new one
             sent = true;
             payloadUntil = Math.min(payloadUntil, now + GRACE_MS);
             final Listener l = listener;

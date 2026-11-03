@@ -6,21 +6,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
 
-/*
- * Libre — что это за файл:
- * Музыкальный статус: пока играет трек, в «О себе» написано, что вы слушаете.
- */
-
-/**
- * Prizma: music status. While a track plays, the profile's "About" shows "🎧 Artist — Title",
- * visible to everyone like a normal bio. The real bio is saved first and put back ~1.5 minutes
- * after the music stops (also after a crash or restart — the saved bio survives).
- *
- * Telegram limits how often a profile can change, so updates are debounced (skipping through
- * tracks doesn't fire a request per track) and spaced at least 30 seconds apart.
- */
 public final class PrizmaMusicStatus implements NotificationCenter.NotificationCenterDelegate {
-
     private static final String MARK = "🎧 ";
     private static final long DEBOUNCE_MS = 4_000L;
     private static final long MIN_INTERVAL_MS = 30_000L;
@@ -49,11 +35,9 @@ public final class PrizmaMusicStatus implements NotificationCenter.NotificationC
             nc.addObserver(instance, NotificationCenter.messagePlayingPlayStateChanged);
             nc.addObserver(instance, NotificationCenter.messagePlayingDidReset);
         }
-        // a status left over from a crash / killed app gets cleaned up shortly after start
         AndroidUtilities.runOnUIThread(instance::evaluate, 8_000);
     }
 
-    /** The toggle in Libre settings changed. */
     public static void onToggle() {
         if (instance != null) instance.evaluate();
     }
@@ -102,20 +86,18 @@ public final class PrizmaMusicStatus implements NotificationCenter.NotificationC
         if (self == null) return;
         TLRPC.UserFull full = MessagesController.getInstance(account).getUserFull(self.id);
         if (PrizmaConfig.musicStatusOriginalBio(account) == null) {
-            // never overwrite the bio before we know (and saved) what it was
             if (full == null) {
                 MessagesController.getInstance(account).loadFullUser(self, 0, true, f -> AndroidUtilities.runOnUIThread(this::evaluate));
                 return;
             }
             PrizmaConfig.setMusicStatusOriginalBio(account, full.about == null ? "" : full.about);
         } else if (full != null && full.about != null && !full.about.startsWith(MARK)) {
-            // the user wrote a new bio while music was playing — that's the one to bring back later
             PrizmaConfig.setMusicStatusOriginalBio(account, full.about);
         }
         lastSent[account] = text;
         lastSentAt[account] = now;
         sendBio(account, text, null, () -> {
-            if (text.equals(lastSent[account])) lastSent[account] = null; // let the next try send it again
+            if (text.equals(lastSent[account])) lastSent[account] = null;
         });
     }
 
@@ -131,7 +113,6 @@ public final class PrizmaMusicStatus implements NotificationCenter.NotificationC
             }
             TLRPC.UserFull full = MessagesController.getInstance(account).getUserFull(UserConfig.getInstance(account).getClientUserId());
             if (full != null && full.about != null && !full.about.startsWith(MARK)) {
-                // the user wrote a new bio by hand meanwhile — keep theirs, forget the old one
                 PrizmaConfig.setMusicStatusOriginalBio(account, null);
                 continue;
             }
@@ -144,7 +125,7 @@ public final class PrizmaMusicStatus implements NotificationCenter.NotificationC
         req.about = about;
         req.flags |= 4;
         ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
-            if (err != null) { // e.g. FLOOD_WAIT — the next track change / restore tries again
+            if (err != null) {
                 if (onError != null) onError.run();
                 return;
             }
@@ -165,7 +146,7 @@ public final class PrizmaMusicStatus implements NotificationCenter.NotificationC
         int limit = UserConfig.getInstance(account).isPremium() ? 140 : 70;
         if (s.length() > limit) {
             int cut = limit - 1;
-            if (Character.isHighSurrogate(s.charAt(cut - 1))) cut--; // don't split an emoji in half
+            if (Character.isHighSurrogate(s.charAt(cut - 1))) cut--;
             s = s.substring(0, cut) + "…";
         }
         return s;

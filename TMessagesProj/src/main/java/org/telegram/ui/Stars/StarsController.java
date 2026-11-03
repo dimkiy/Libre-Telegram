@@ -3726,8 +3726,6 @@ public class StarsController {
                     totalCount = rez.count;
                     chat_notifications_enabled = (rez.flags & 2) != 0 ? rez.chat_notifications_enabled : null;
                     endReached = gifts.size() > totalCount || lastOffset == null;
-                    // Prizma: showcase copies only on the profile — not in Telegram's crafting picker
-                    // (dialogId 0 there too), where the server would reject them
                     if (first && !isCollection && craftingGiftId == 0) {
                         totalCount += org.telegram.ui.Components.PrizmaGifts.injectShowcase(currentAccount, dialogId, gifts);
                     }
@@ -3918,8 +3916,6 @@ public class StarsController {
                 final TL_stars.toggleStarGiftsPinnedToTop req = new TL_stars.toggleStarGiftsPinnedToTop();
                 req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
                 final ArrayList<TL_stars.SavedStarGift> pinnedNow = getPinned();
-                // Prizma: Libre's showcase copies are pinned on this phone only — Telegram would
-                // reject the whole request if it saw them (and then nothing stayed pinned)
                 final long self = UserConfig.getInstance(currentAccount).getClientUserId();
                 if (dialogId == 0 || dialogId == self) {
                     org.telegram.ui.Components.PrizmaGifts.savePinOrder(pinnedNow);

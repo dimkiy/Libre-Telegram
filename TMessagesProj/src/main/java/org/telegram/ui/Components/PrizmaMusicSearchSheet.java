@@ -38,17 +38,7 @@ import org.telegram.ui.ActionBar.Theme;
 import java.util.ArrayList;
 import java.util.HashSet;
 
-/*
- * Libre — что это за файл:
- * Поиск музыки по всему Telegram и добавление в плейлист.
- */
-
-/**
- * Prizma: find any track across public Telegram (the same music search Telegram has in its global
- * search) and drop single tracks into a playlist. Tap a row to listen first, «+» to add.
- */
 public class PrizmaMusicSearchSheet {
-
     private PrizmaMusicSearchSheet() {}
 
     public static void show(Context context, long playlistId, Runnable onClose) {
@@ -85,7 +75,7 @@ public class PrizmaMusicSearchSheet {
             this.context = context;
             this.playlistId = playlistId;
             sheet = new BottomSheet(context, true);
-            sheet.setCanDismissWithSwipe(false); // the results list scrolls; the sheet follows only its overscroll
+            sheet.setCanDismissWithSwipe(false);
             sheet.setOnDismissListener(d -> {
                 AndroidUtilities.cancelRunOnUIThread(searchLater);
                 if (requestId != 0) ConnectionsManager.getInstance(account).cancelRequest(requestId, true);
@@ -106,7 +96,6 @@ public class PrizmaMusicSearchSheet {
             title.setEllipsize(TextUtils.TruncateAt.END);
             root.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 4, 0, 4, 12));
 
-            // search field in a soft pill
             LinearLayout box = new LinearLayout(context);
             box.setOrientation(LinearLayout.HORIZONTAL);
             box.setGravity(Gravity.CENTER_VERTICAL);
@@ -249,7 +238,6 @@ public class PrizmaMusicSearchSheet {
                     MessageObject mo = new MessageObject(account, m, false, true);
                     if (!mo.isMusic()) continue;
                     String key = mo.getDialogId() + "_" + mo.getId();
-                    // the same upload reposted by many channels — keep one
                     TLRPC.Document doc = mo.getDocument();
                     String fileKey = doc != null ? "d" + doc.id : key;
                     if (!seen.add(key) || !seen.add(fileKey)) continue;
@@ -261,13 +249,12 @@ public class PrizmaMusicSearchSheet {
                     nextRate = r.next_rate;
                     lastPeer = mc.getInputPeer(MessageObject.getDialogId(last));
                 }
-                // a plain messages_messages means everything came at once; a slice ends when it runs dry
                 endReached = r.messages.isEmpty() || r instanceof TLRPC.TL_messages_messages;
                 if (results.size() > before) {
                     emptyPages = 0;
                     list.getAdapter().notifyItemRangeInserted(before, results.size() - before);
                 } else if (!endReached && ++emptyPages < 3) {
-                    loadMore(); // a page of reposts we already have — look a bit further
+                    loadMore();
                     return;
                 }
                 if (results.isEmpty()) {

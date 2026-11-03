@@ -76,7 +76,6 @@ public class VoIPHelper {
 	private static boolean prizmaCallConfirmed;
 
 	public static void startCall(TLRPC.User user, boolean videoCall, boolean canVideoCall, final Activity activity, TLRPC.UserFull userFull, AccountInstance accountInstance) {
-		// Libre: tap «call», then confirm — a stray tap on the call button no longer rings someone
 		if (!prizmaCallConfirmed && user != null && activity != null && org.telegram.messenger.PrizmaConfig.confirmCalls()) {
 			try {
 				new AlertDialog.Builder(activity)
@@ -94,7 +93,7 @@ public class VoIPHelper {
 						.show();
 				return;
 			} catch (Exception e) {
-				FileLog.e(e); // no window to ask in — call as before
+				FileLog.e(e);
 			}
 		}
 		if (accountInstance == null ? MessagesController.getInstance(UserConfig.selectedAccount).isFrozen() : accountInstance.getMessagesController().isFrozen()) {

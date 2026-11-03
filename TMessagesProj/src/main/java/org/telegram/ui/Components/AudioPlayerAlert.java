@@ -508,15 +508,10 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 
         final ActionBarMenu menu = actionBar.createMenu();
         menu.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.FILL));
-        // Prizma: "jump to current track" button
         menu.addItem(100, R.drawable.msg_played).setContentDescription("К текущему треку");
-        // Prizma: equalizer button
         menu.addItem(101, R.drawable.media_settings).setContentDescription("Эквалайзер");
-        // Prizma: sleep timer button
         menu.addItem(102, R.drawable.msg_autodelete).setContentDescription("Таймер сна");
-        // Prizma: lyrics button
         menu.addItem(103, R.drawable.msg_text_outlined).setContentDescription("Текст песни");
-        // Prizma: fullscreen player button
         menu.addItem(104, R.drawable.ic_gofullscreen).setContentDescription("На весь экран");
         actionBarBackground = new View(context);
         actionBarBackground.setBackgroundColor(getThemedColor(Theme.key_dialogBackground));
@@ -595,7 +590,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         };
         playerLayout.addView(coverContainer, LayoutHelper.createFrame(170, 170, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 20, 0, 0));
 
-        // Prizma: audio visualizer bars over the lower part of the cover
         PrizmaWaveBars waveBars = new PrizmaWaveBars(context);
         waveBars.setClickable(false);
         playerLayout.addView(waveBars, LayoutHelper.createFrame(150, 44, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 140, 0, 0));
@@ -989,7 +983,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         playButton.setScaleType(ImageView.ScaleType.CENTER);
         playButton.setImageDrawable(playPauseDrawable = new PlayPauseDrawable(28));
         playPauseDrawable.setPause(!MediaController.getInstance().isMessagePaused(), false);
-        // Prizma: filled accent play button (white glyph on a blue circle)
         playButton.setColorFilter(new PorterDuffColorFilter(0xffffffff, PorterDuff.Mode.SRC_IN));
         playButton.setBackgroundDrawable(Theme.createSimpleSelectorCircleDrawable(dp(48), 0xff3f6bf5, 0xff2f5be0));
         bottomView.addView(playButton, LayoutHelper.createFrame(48, 48, Gravity.LEFT | Gravity.TOP));
@@ -2345,7 +2338,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             titleTextView.setText(title);
             authorTextView.setText(author);
 
-            // Prizma: show "N tracks · total duration" in the player action bar
             if (playlist != null && playlist.size() > 1) {
                 long totalSec = 0;
                 for (int i = 0; i < playlist.size(); i++) {
@@ -2403,7 +2395,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             } else if (thumbImageLocation != null) {
                 imageView.setImage(null, null, thumbImageLocation, null, null, 0, 1, messageObject);
             } else {
-                // Prizma: gradient placeholder cover when the track has no artwork
                 android.graphics.drawable.GradientDrawable ph = new android.graphics.drawable.GradientDrawable(
                         android.graphics.drawable.GradientDrawable.Orientation.TL_BR, new int[]{0xff3f6bf5, 0xff8a5cf0});
                 ph.setCornerRadius(dp(4));
@@ -2414,16 +2405,12 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         }
     }
 
-    // Prizma: look up an album cover online (iTunes) for tracks without embedded artwork.
-    // Accessed from the UI thread and the network queue → synchronized.
     private static final java.util.HashMap<String, String> prizmaCoverCache = new java.util.HashMap<>();
 
     private void fetchCoverArt(MessageObject messageObject) {
         if (messageObject == null) {
             return;
         }
-        // the cover image is loaded by Telegram's plain HTTP loader — with a proxy / Tor on that would
-        // bypass the proxy and reveal the real IP, so covers are only fetched without a proxy
         if (!org.telegram.messenger.PrizmaNet.directLoadAllowed()) {
             return;
         }
@@ -2467,7 +2454,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             } catch (Exception ignore) {
             }
             final String result = found;
-            if (answered) { // a network error is not "no cover" — try again next time
+            if (answered) {
                 synchronized (prizmaCoverCache) {
                     prizmaCoverCache.put(query, result);
                 }
@@ -3049,7 +3036,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             o.dismiss();
             onSubItemClick(7);
         });
-        // Prizma: quick access to our player features
         o.addGap();
         o.add(R.drawable.media_settings, "Эквалайзер", () -> {
             o.dismiss();

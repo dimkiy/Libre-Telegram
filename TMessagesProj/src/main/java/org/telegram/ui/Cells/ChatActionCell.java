@@ -1712,7 +1712,6 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
                 .show();
         } else if (currentMessageObject.messageOwner.action instanceof TLRPC.TL_messageActionStarGiftUnique) {
             final TLRPC.TL_messageActionStarGiftUnique action = (TLRPC.TL_messageActionStarGiftUnique) currentMessageObject.messageOwner.action;
-            // Libre: the gift lives only in Libre — show it from the card itself, don't ask Telegram
             if (org.telegram.ui.Components.PrizmaGiftCard.isCard(currentMessageObject)) {
                 new StarGiftSheet(getContext(), currentAccount, currentMessageObject.getDialogId(), themeDelegate)
                     .set(action.gift.slug, (TL_stars.TL_starGiftUnique) action.gift, null)

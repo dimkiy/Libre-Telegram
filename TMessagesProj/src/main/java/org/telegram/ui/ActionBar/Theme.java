@@ -8024,7 +8024,6 @@ public class Theme {
                 chat_ephemeralPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
             }
 
-            // Prizma: user-adjustable big-emoji size
             float prizmaEmojiScale = 1f;
             try { prizmaEmojiScale = org.telegram.messenger.PrizmaConfig.emojiScale(); } catch (Throwable ignore) {}
             final float[] emojiSizePercents = new float[] {.68f, .46f, .34f, .28f, .22f, .19f};

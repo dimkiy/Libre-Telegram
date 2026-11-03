@@ -25,41 +25,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Random;
 
-/*
- * Libre — что это за файл:
- * «Слушать вместе»: музыка синхронно у нескольких людей.
- */
-
-/**
- * Prizma: "Listen together" (Libre ↔ Libre).
- *
- * The host sends the track to a chat as an ordinary audio message. Its caption says what is going
- * on in plain words ("🎧 Слушаем вместе в Libre · ▶ в эфире") and carries the playback state hidden
- * in zero-width characters: session id, position, the server time of that position (ms) and a flag.
- * Pausing or seeking edits that caption; the next track is sent as a new message and the previous
- * one is marked "следующий трек ниже". Plain Telegram just shows an audio message with that text.
- *
- * A friend's Libre shows a pill above the input while the session is live ({@link PrizmaTogetherBar}):
- * who is listening, where they are right now, and one button to join from the same second. Pressing
- * ▶ on the message itself joins too. Once joined, the friend's player follows every pause, seek and
- * track change; pausing or seeking by hand means "I'm on my own now" and leaves the session.
- *
- * Timing uses Telegram's server clock (both phones agree on it), so the drift is a fraction of a
- * second, not the phones' own clock difference.
- */
 public final class PrizmaTogether implements NotificationCenter.NotificationCenterDelegate {
-
     private static final String HEAD_LIVE = "🎧 Слушаем вместе в Libre";
     private static final String HEAD_OVER = "🎧 Слушали вместе в Libre";
     private static final String PROTO = "LT1;";
-    private static final char BIT0 = '‌', BIT1 = '‍'; // zero-width non-joiner / joiner
+    private static final char BIT0 = '‌', BIT1 = '‍';
     private static final long EDIT_SPACING_MS = 1200;
     private static final long RESYNC_THRESHOLD_MS = 1500;
 
     public static final int FLAG_PAUSED = 0;
     public static final int FLAG_PLAYING = 1;
     public static final int FLAG_ENDED = 2;
-    /** This track is over, the session goes on in a newer message. */
     public static final int FLAG_NEXT = 3;
 
     private static PrizmaTogether instance;
@@ -69,7 +45,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return instance;
     }
 
-    /** Called once from LaunchActivity: start watching playback and chats. */
     public static void init() {
         PrizmaTogether t = get();
         if (t.inited) return;
@@ -90,18 +65,16 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
     private final Random random = new Random();
     private final ArrayList<Runnable> listeners = new ArrayList<>();
 
-    // ---- host ----
     private boolean hosting;
     private int hostAccount;
     private long hostDialog;
     private long hostSid;
-    private int hostMsgId;          // server id of the message carrying the current state
-    private int prevMsgToClose;     // the previous track's message, marked "next track below" once the new one lands
+    private int hostMsgId;
+    private int prevMsgToClose;
     private long hostDocId;
     private boolean editPending;
     private long lastEditAt;
 
-    // ---- guest ----
     private boolean following;
     private int guestAccount;
     private long guestDialog;
@@ -109,10 +82,8 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
     private int guestMsgId;
     private String guestHostName = "";
     private long guestHostId;
-    private long guestEndsAt = Long.MAX_VALUE; // elapsedRealtime when the followed track should run out
-    private long selfActionUntil;              // our own play/pause/seek — not the user's
-
-    // ===================== state for the UI =====================
+    private long guestEndsAt = Long.MAX_VALUE;
+    private long selfActionUntil;
 
     public boolean isHosting() {
         return hosting;
@@ -138,12 +109,10 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return guestMsgId;
     }
 
-    /** Who we're listening with (first name, or the chat's title for a channel). */
     public String getGuestHostName() {
         return guestHostName;
     }
 
-    /** Where our session goes: the friend's first name or the group's title. */
     public String getHostChatName() {
         if (!hosting) return "";
         MessagesController mc = MessagesController.getInstance(hostAccount);
@@ -156,7 +125,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return c != null ? c.title : "";
     }
 
-    /** UI listeners: run when hosting / following starts or stops. */
     public void addListener(Runnable r) {
         if (!listeners.contains(r)) listeners.add(r);
     }
@@ -174,26 +142,21 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         }
     }
 
-    /** The session state hidden in a Libre "listen together" message, or null. */
     public static State stateOf(MessageObject m) {
         if (m == null || !m.isMusic() || m.messageOwner == null) return null;
         return State.parse(m.messageOwner.message);
     }
 
-    /** Is this message's session still going on right now (not ended, not abandoned)? */
     public static boolean isLive(MessageObject m, State s) {
         if (m == null || s == null || (s.flag != FLAG_PLAYING && s.flag != FLAG_PAUSED)) return false;
         long now = ConnectionsManager.getInstance(m.currentAccount).getCurrentTimeMillis();
         if (s.flag == FLAG_PLAYING) {
-            // a few seconds after the track should have ended there must be a newer message —
-            // if there isn't, the host's phone went away without saying goodbye
             long durMs = (long) (m.getDuration() * 1000);
             return durMs <= 0 || s.posMs + (now - s.atMs) < durMs + 20_000;
         }
-        return now - s.atMs < 30 * 60_000L; // paused for half an hour = over
+        return now - s.atMs < 30 * 60_000L;
     }
 
-    /** Where the host is in the track right now, ms. */
     public static long hostPositionMs(MessageObject m, State s) {
         if (s == null) return 0;
         long pos = s.posMs;
@@ -204,7 +167,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return durMs > 0 ? Math.min(pos, durMs) : pos;
     }
 
-    /** First name of a message's sender (or the channel's title). */
     public static String senderName(MessageObject m) {
         long from = m.getFromChatId();
         MessagesController mc = MessagesController.getInstance(m.currentAccount);
@@ -216,9 +178,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return c != null ? c.title : "";
     }
 
-    // ===================== host =====================
-
-    /** Player menu → "Слушать вместе…": pick a chat, then the current track goes there. */
     public static void pickChatAndStart(Context context) {
         final MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
         if (mo == null || !mo.isMusic() || !(mo.getDocument() instanceof TLRPC.TL_document)) {
@@ -226,7 +185,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
             return;
         }
         if (mo.getDocument().id == 0 || mo.getDocument().access_hash == 0) {
-            // a file that only lives on this phone — there's nothing on Telegram's servers to point to
             Toast.makeText(context, "Этот трек есть только на телефоне — включите трек из Telegram", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -274,7 +232,7 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
     public void stopHosting() {
         if (!hosting) return;
         AndroidUtilities.cancelRunOnUIThread(editRunnable);
-        edit(hostMsgId, FLAG_ENDED);      // tell the guests it's over
+        edit(hostMsgId, FLAG_ENDED);
         edit(prevMsgToClose, FLAG_ENDED);
         hosting = false;
         hostMsgId = 0;
@@ -304,7 +262,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
                 ? FLAG_PLAYING : FLAG_PAUSED;
     }
 
-    /** "LT1;sid;positionMs;serverTimeMs;flag". */
     private String stateString(int flag) {
         long pos = 0;
         if (flag == FLAG_PLAYING || flag == FLAG_PAUSED) {
@@ -315,7 +272,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return PROTO + hostSid + ";" + pos + ";" + now + ";" + flag;
     }
 
-    /** What everyone sees under the track — plain words; the state rides along invisibly. */
     private static String caption(String state, int flag) {
         String hidden = hide(state);
         switch (flag) {
@@ -340,7 +296,7 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
     private void scheduleEdit() {
         if (!hosting) return;
         if (hostMsgId == 0) {
-            editPending = true; // the message isn't on the server yet — edit right after it lands
+            editPending = true;
             return;
         }
         AndroidUtilities.cancelRunOnUIThread(editRunnable);
@@ -354,7 +310,7 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         req.peer = MessagesController.getInstance(hostAccount).getInputPeer(hostDialog);
         req.id = msgId;
         req.message = caption(stateString(flag), flag);
-        req.flags |= 2048; // message
+        req.flags |= 2048;
         final int account = hostAccount;
         ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> {
             if (res instanceof TLRPC.Updates) {
@@ -363,20 +319,14 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         });
     }
 
-    // ===================== who's listening (Libre Cloud) =====================
-    // A listener's Libre says "I'm here" every 15 s; the host's Libre asks who's here. The server
-    // keeps it in memory only. Without the server everything else still works — just no names.
-
     private static final long PRESENCE_EVERY = 15_000;
     private final ArrayList<Long> audience = new ArrayList<>();
     private final Runnable presenceTick = this::presenceTick;
 
-    /** Other Libre users in the same session right now (not counting yourself). */
     public ArrayList<Long> getAudience() {
         return audience;
     }
 
-    /** "Аня, Макс и ещё 2" — or "" when nobody (or unknown). */
     public String audienceNames() {
         if (audience.isEmpty()) return "";
         int account = hosting ? hostAccount : guestAccount;
@@ -413,7 +363,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         if (host <= 0) return;
         String path = "/v1/together/" + host + "/" + sid + (asHost ? "" : "/here");
         org.telegram.messenger.PrizmaCloud.call(account, asHost ? "GET" : "POST", path, null, r -> {
-            // the session may have ended or changed while we were asking
             boolean same = asHost ? hosting && hostSid == sid : following && guestSid == sid;
             if (!same) return;
             if (r.code == 200 && r.body != null) {
@@ -435,21 +384,15 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         });
     }
 
-    // ===================== guest =====================
-
-    /** The pill's "Слушать": start this track from where the host is right now. */
     public void join(MessageObject m) {
         State s = stateOf(m);
         if (s == null || !isLive(m, s)) {
             toast("Эфир уже закончился");
             return;
         }
-        // can't lead one session and follow another: otherwise the friend's track would be
-        // re-broadcast into our own chat as "the host's next track"
         if (hosting) stopHosting();
         MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
         if (cur != null && cur.getId() == m.getId() && cur.getDialogId() == m.getDialogId()) {
-            // the track is already loaded (e.g. left a minute ago) — just catch up
             follow(cur, s, 0);
             return;
         }
@@ -457,14 +400,13 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         double durMs = m.getDuration() * 1000.0;
         long target = hostPositionMs(m, s);
         if (durMs > 0 && target > 0) {
-            m.forceSeekTo = (float) Math.min(0.995, target / durMs); // start right there, no audible jump
+            m.forceSeekTo = (float) Math.min(0.995, target / durMs);
         }
         ArrayList<MessageObject> one = new ArrayList<>();
         one.add(m);
         MediaController.getInstance().setPlaylist(one, m, 0, false, null);
     }
 
-    /** Opens the host's track in our player, starting right where the host is. */
     private void playFromHost(MessageObject m, State s) {
         guestMsgId = m.getId();
         selfActionUntil = SystemClock.elapsedRealtime() + 2500;
@@ -478,7 +420,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         MediaController.getInstance().setPlaylist(one, m, 0, false, null);
     }
 
-    /** "Выйти": stop following and stop the music. */
     public void leave() {
         if (!following) return;
         int msgId = guestMsgId;
@@ -510,7 +451,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
                     ? "Вы в эфире — синхронно, с " + formatTime(pos)
                     : "Слушаете вместе: " + guestHostName + " — синхронно, с " + formatTime(pos));
         }
-        // give the player a moment to open the track, then jump to where the host is
         if (delay <= 0) {
             apply(s);
         } else {
@@ -522,7 +462,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
     public void stopFollowing(boolean notify) {
         if (!following) return;
         following = false;
-        // tell the room we're gone, so the host's list is right at once
         if (org.telegram.messenger.PrizmaCloud.configured() && guestHostId > 0) {
             org.telegram.messenger.PrizmaCloud.call(guestAccount, "DELETE", "/v1/together/" + guestHostId + "/" + guestSid + "/here", null, r -> {});
         }
@@ -533,12 +472,10 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         notifyChanged();
     }
 
-    /** The guest's track ran out a moment before the host's — the player shouldn't decide what comes next. */
     private boolean followedTrackJustEnded() {
         return SystemClock.elapsedRealtime() >= guestEndsAt - 3000;
     }
 
-    /** Pause whatever the player started on its own and wait for the host's next track. */
     private void holdForHost(MessageObject started) {
         guestEndsAt = Long.MAX_VALUE;
         AndroidUtilities.runOnUIThread(() -> {
@@ -552,7 +489,7 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
 
     private void apply(State s) {
         if (!following) return;
-        if (s.flag == FLAG_NEXT) return; // the next track's message is on its way and takes over
+        if (s.flag == FLAG_NEXT) return;
         MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
         if (mo == null || mo.getId() != guestMsgId || mo.getDialogId() != guestDialog) return;
         if (s.flag == FLAG_ENDED) {
@@ -563,7 +500,7 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         double durationMs = mo.getDuration() * 1000.0;
         if (durationMs <= 0) return;
         long target = hostPositionMs(mo, s);
-        if (target >= durationMs - 500) return; // the host is already past this track
+        if (target >= durationMs - 500) return;
         selfActionUntil = SystemClock.elapsedRealtime() + 1500;
         double currentMs = mo.audioProgress * durationMs;
         if (Math.abs(currentMs - target) > RESYNC_THRESHOLD_MS) {
@@ -578,26 +515,21 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         guestEndsAt = s.flag == FLAG_PLAYING ? SystemClock.elapsedRealtime() + (long) (durationMs - target) : Long.MAX_VALUE;
     }
 
-    // ===================== events =====================
-
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.messagePlayingDidStart) {
             MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
             if (mo == null) return;
             if (hosting && account == hostAccount) {
-                // the host moved to another track → it goes to the chat as the next message
                 if (mo.isMusic() && mo.getDocument() != null && mo.getDocument().id != hostDocId && mo.getDialogId() != hostDialog) {
                     if (hostMsgId != 0) prevMsgToClose = hostMsgId;
                     sendTrack(mo);
                 } else if (mo.getDocument() != null && mo.getDocument().id == hostDocId) {
-                    scheduleEdit(); // the same track started over (repeat) — guests jump back too
+                    scheduleEdit();
                 }
                 return;
             }
             if (following && mo.getId() != guestMsgId && followedTrackJustEnded()) {
-                // the track ran out a moment before the host's next one arrived and the player
-                // jumped to some other song of the chat — wait for the host instead
                 holdForHost(mo);
                 return;
             }
@@ -606,14 +538,13 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
                 follow(mo, s, 700);
             } else {
                 if (following && mo.getId() != guestMsgId) {
-                    stopFollowing(true); // the guest picked something else
+                    stopFollowing(true);
                 }
                 if (s != null && ConnectionsManager.getInstance(account).getCurrentTimeMillis() - s.atMs < 6 * 3600_000L) {
                     toast(s.flag == FLAG_NEXT ? "Это прошлый трек эфира — играет как обычный" : "Эфир уже закончился — трек играет как обычный");
                 }
             }
         } else if (id == NotificationCenter.messagePlayingDidReset) {
-            // the player was closed (switching tracks doesn't send this)
             if (hosting && account == hostAccount) {
                 stopHosting();
             } else if (following && account == guestAccount && !followedTrackJustEnded()) {
@@ -627,7 +558,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
                     scheduleEdit();
                 }
             } else if (following && account == guestAccount && mo.getId() == guestMsgId) {
-                // the guest paused or seeked by hand: they're on their own now
                 if (SystemClock.elapsedRealtime() < selfActionUntil || followedTrackJustEnded() || mo.audioProgress >= 0.98f) return;
                 if (id == NotificationCenter.messagePlayingDidSeek || MediaController.getInstance().isMessagePaused()) {
                     stopFollowing(false);
@@ -642,7 +572,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
                 hostMsgId = m.id;
                 lastEditAt = SystemClock.elapsedRealtime();
                 if (prevMsgToClose != 0 && prevMsgToClose != hostMsgId) {
-                    // the guests have the new track by now — the old message says where to look
                     final int prev = prevMsgToClose;
                     prevMsgToClose = 0;
                     AndroidUtilities.runOnUIThread(() -> edit(prev, FLAG_NEXT), 1500);
@@ -661,7 +590,7 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
                     State s = State.parse(m.messageOwner != null ? m.messageOwner.message : null);
                     if (s == null || s.sid != guestSid) continue;
                     if (s.flag == FLAG_PLAYING && MediaController.getInstance().getPlayingMessageObject() == null) {
-                        playFromHost(m, s); // our player already stopped at the end — the host started it over
+                        playFromHost(m, s);
                     } else {
                         apply(s);
                     }
@@ -669,13 +598,12 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
             }
         } else if (id == NotificationCenter.didReceiveNewMessages) {
             if (!following || account != guestAccount || !(args[0] instanceof Long) || (Long) args[0] != guestDialog) return;
-            if (args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2]) return; // scheduled
+            if (args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2]) return;
             @SuppressWarnings("unchecked") ArrayList<MessageObject> list = (ArrayList<MessageObject>) args[1];
             for (MessageObject m : list) {
                 if (m == null || m.isOut() || !m.isMusic()) continue;
                 State s = State.parse(m.messageOwner != null ? m.messageOwner.message : null);
                 if (s != null && s.sid == guestSid) {
-                    // the host went to the next track — follow it, from where the host already is
                     playFromHost(m, s);
                     notifyChanged();
                     break;
@@ -683,8 +611,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
             }
         }
     }
-
-    // ===================== protocol =====================
 
     public static class State {
         public long sid, posMs, atMs;
@@ -708,7 +634,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         }
     }
 
-    /** Text → invisible characters (each byte as 8 zero-width "bits"). */
     private static String hide(String text) {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
         StringBuilder sb = new StringBuilder(bytes.length * 8);
@@ -720,7 +645,6 @@ public final class PrizmaTogether implements NotificationCenter.NotificationCent
         return sb.toString();
     }
 
-    /** Finds the hidden run in a caption and decodes it; null when this isn't a Libre session. */
     private static String reveal(String caption) {
         if (caption == null || caption.indexOf(BIT0) < 0) return null;
         int bestStart = -1, bestLen = 0;

@@ -18,17 +18,7 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Экран текста песни.
- */
-
-/**
- * Prizma: song lyrics screen. Shows synced (karaoke-style, auto-scrolling, tap-to-seek)
- * lyrics when lrclib.net has them, otherwise plain scrollable text.
- */
 public class PrizmaLyricsSheet {
-
     public static void show(Context context) {
         final MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
         if (mo == null) {

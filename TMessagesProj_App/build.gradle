@@ -21,12 +21,6 @@ dependencies {
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
 }
 
-// Libre: our OWN signing key. It lives OUTSIDE the project, in C:/Users/<you>/libre-key/:
-//   libre.jks         — the key itself (back it up! without it there are no more updates)
-//   libre.properties  — storeFile=libre.jks, storePassword=..., keyAlias=libre, keyPassword=...
-// Nothing secret is in the project, so it can't leak with the sources.
-// The public repo key (config/release.keystore, password "android") must not sign published builds:
-// anyone has it and could sign a fake "update" that installs over Libre with the user's session.
 def libreKeyDir = new File(System.getProperty("user.home"), "libre-key")
 def libreProps = new Properties()
 def librePropsFile = new File(libreKeyDir, "libre.properties")
@@ -100,7 +94,6 @@ android {
         debug {
             debuggable true
             jniDebuggable true
-            // same key as the channel build → "Run" installs over the published Libre without losing data
             signingConfig libreKeyConfigured ? signingConfigs.libre : signingConfigs.debug
             applicationIdSuffix ".beta"
             minifyEnabled false
@@ -133,11 +126,6 @@ android {
             ndk.debugSymbolLevel = 'FULL'
         }
 
-        // Libre: the build that is published in the channel (variant "armLibre").
-        // Optimised like release: not debuggable (ART compiles it fully), optimised native code,
-        // R8, no debug logging. Keeps the ".beta" package and the debug manifest. Signed with our
-        // own key from libre-key/; without it the APK stays unsigned on purpose, so a
-        // publicly-signed build can't be published by mistake.
         libre {
             initWith release
             matchingFallbacks = ['release']
@@ -192,8 +180,6 @@ android {
             }
             buildConfigField "boolean", "BUNDLE", "false"
         }
-        // Libre: phones only (arm64 + armv7). afat also packs x86/x86_64 libraries, which no phone
-        // needs — this APK is about half the size. Same versionCode scheme as afat (…9).
         arm {
             ndk {
                 abiFilters "armeabi-v7a", "arm64-v8a"
@@ -217,7 +203,6 @@ android {
     variantFilter { variant ->
         def names = variant.flavors*.name
         if (variant.buildType.name == "libre") {
-            // Libre channel builds: armLibre (recommended) and afatLibre
             if (!names.contains("arm") && !names.contains("afat")) {
                 setIgnore(true)
             }

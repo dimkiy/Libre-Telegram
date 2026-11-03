@@ -34,29 +34,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
-/*
- * Libre — что это за файл:
- * Блок Libre в профиле: статус, анонимный номер, даты, достижения, плейлист, стена.
- */
-
-/**
- * Prizma: the "Libre" block on a profile. One grid, one left edge (16 dp) for everything:
- *
- *   Libre                                   демо
- *   ┌ В Telegram с ┐ ┌ В Libre с    ┐
- *   │ ≈ 2015       │ │ 24 окт 2026  │      facts: equal tiles, label above value
- *   ┌ Клан         ┐ ┌ Просмотры    ┐
- *   Достижения · 5
- *   (◎) (◎) (◎) …                          tiles: same width, titles always two lines
- *   Стена · 3 записи
- *   ┌ (ава) Аня: текст последней записи   › ┐
- *
- * Built from {@link PrizmaSocial} (local + Libre Cloud). The list around it draws the rounded
- * section background. It rebuilds only when the data actually changed.
- */
 public class PrizmaProfileCard extends LinearLayout {
-
-    private static final int EDGE = 16; // the one left/right edge of the card, dp
+    private static final int EDGE = 16;
 
     private final BaseFragment fragment;
     private final Theme.ResourcesProvider rp;
@@ -86,11 +65,9 @@ public class PrizmaProfileCard extends LinearLayout {
         this.account = account;
         this.userId = userId;
         if (other) {
-            // fresh data from Libre Cloud (banner, since, views) + one view a day
             PrizmaCloud.remote(account, userId);
             PrizmaCloud.markView(account, userId);
         } else if (builtVersion == dataVersion() && telegramSignature().equals(builtSignature)) {
-            // the profile list rebinds on every small update (online status…) — nothing here changed
             return;
         }
         rebuild();
@@ -98,7 +75,6 @@ public class PrizmaProfileCard extends LinearLayout {
 
     private String builtSignature = "";
 
-    /** What the card takes from Telegram itself (Premium, gifts, channel…) — rebuild when it changes. */
     private String telegramSignature() {
         MessagesController mc = MessagesController.getInstance(account);
         TLRPC.User u = mc.getUser(userId);
@@ -113,9 +89,8 @@ public class PrizmaProfileCard extends LinearLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         PrizmaCloud.addListener(cloudChanged);
-        // back from the wall / clan screen: rebuild only if something changed meanwhile
         if (userId != 0 && builtVersion != dataVersion()) {
-            post(this::rebuild); // not in the middle of the list's layout pass
+            post(this::rebuild);
         }
     }
 
@@ -138,7 +113,6 @@ public class PrizmaProfileCard extends LinearLayout {
         final PrizmaSocial.Profile prof = PrizmaSocial.profile(account, userId);
         final ArrayList<PrizmaSocial.Achievement> ach = PrizmaSocial.achievements(account, userId, false);
 
-        // ---- header ----
         LinearLayout head = new LinearLayout(ctx);
         head.setOrientation(HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -159,28 +133,24 @@ public class PrizmaProfileCard extends LinearLayout {
         }
         addView(head, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 24, EDGE, 0, EDGE, 10));
 
-        // ---- status (like Discord): mine is editable, others' shows when set ----
         View statusRow = statusRow(self);
         if (statusRow != null) {
             addView(statusRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 10));
         }
         if (self) PrizmaCloud.syncAchievementsSoon(account);
 
-        // ---- анонимный номер (+888): его видят все в Libre ----
         View anonRow = anonRow(self);
         if (anonRow != null) {
             addView(anonRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 10));
         }
         if (self) org.telegram.messenger.PrizmaPresence.syncAnonNumber(account);
 
-        // ---- the creator's plate: only one person has it ----
         if (PrizmaSocial.isCreator(userId)) {
             addView(creatorPlate(true), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 10));
         } else if (PrizmaSocial.isTeam(userId)) {
             addView(creatorPlate(false), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 10));
         }
 
-        // ---- facts: an even 2-column grid ----
         ArrayList<View> facts = new ArrayList<>();
         int year = PrizmaSocial.telegramYear(userId);
         if (year > 0) facts.add(fact("В Telegram с", "≈ " + year, 0, null));
@@ -204,12 +174,11 @@ public class PrizmaProfileCard extends LinearLayout {
             if (i + 1 < facts.size()) {
                 row.addView(facts.get(i + 1), LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, 4, 0, 0, 0));
             } else {
-                row.addView(new View(ctx), LayoutHelper.createLinear(0, 1, 1f, 4, 0, 0, 0)); // keep the grid even
+                row.addView(new View(ctx), LayoutHelper.createLinear(0, 1, 1f, 4, 0, 0, 0));
             }
             addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, i == 0 ? 0 : 8, EDGE, 0));
         }
 
-        // ---- achievements ----
         if (!ach.isEmpty() || self) {
             addView(sectionLabel(ach.isEmpty() ? "Достижения" : "Достижения · " + ach.size()),
                     LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 16, EDGE, 4));
@@ -225,7 +194,6 @@ public class PrizmaProfileCard extends LinearLayout {
             scroll.setOverScrollMode(OVER_SCROLL_NEVER);
             LinearLayout row = new LinearLayout(ctx);
             row.setOrientation(HORIZONTAL);
-            // tiles are 72 dp with a 48 dp badge in the middle → 4 dp padding puts the first badge on the 16 dp edge
             row.setPadding(AndroidUtilities.dp(EDGE - 12), 0, AndroidUtilities.dp(EDGE - 12), 0);
             for (PrizmaSocial.Achievement a : ach) {
                 row.addView(tile(a), LayoutHelper.createLinear(72, LayoutHelper.WRAP_CONTENT));
@@ -237,14 +205,12 @@ public class PrizmaProfileCard extends LinearLayout {
             addView(scroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 6, 0, 0));
         }
 
-        // ---- an open playlist ----
         PrizmaCloud.Remote remote = PrizmaCloud.peek(userId);
         if (remote != null && remote.playlistName != null) {
             addView(sectionLabel("Плейлист"), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 14, EDGE, 8));
             addView(playlistRow(remote), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 0));
         }
 
-        // ---- wall ----
         PrizmaWall.Wall wall = PrizmaCloud.enabled() ? PrizmaWall.get(account, userId) : null;
         int total = wall != null && wall.loaded ? wall.total : 0;
         String wallLabel = total == 0 ? "Стена" : "Стена · " + total + " " + PrizmaSocial.plural(total, "запись", "записи", "записей");
@@ -252,9 +218,6 @@ public class PrizmaProfileCard extends LinearLayout {
         addView(wallPreview(self, wall), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, EDGE, 0, EDGE, 0));
     }
 
-    // ===================== pieces =====================
-
-    /** «● Не беспокоить · текст». Null for others with no status set. */
     private View statusRow(boolean self) {
         int s;
         String text;
@@ -295,10 +258,6 @@ public class PrizmaProfileCard extends LinearLayout {
         return row;
     }
 
-    /**
-     * «Анонимный номер +888 …» — у другого человека, если он его показывает, и у меня самого (если
-     * мой номер анонимный и показ включён в хабе). Нажатие копирует номер.
-     */
     private View anonRow(boolean self) {
         String digits;
         if (self) {
@@ -334,7 +293,6 @@ public class PrizmaProfileCard extends LinearLayout {
         return row;
     }
 
-    /** {@code creator}: the one blue check; otherwise the «Команда Libre» plate in sage green. */
     private View creatorPlate(boolean creator) {
         final Context ctx = getContext();
         LinearLayout plate = new LinearLayout(ctx);
@@ -347,7 +305,6 @@ public class PrizmaProfileCard extends LinearLayout {
         bg.setColor(Theme.multAlpha(accent, 0.12f));
         plate.setBackground(bg);
 
-        // Telegram's own verified badge: the blue rosette with a white check
         FrameLayout badge = new FrameLayout(ctx);
         ImageView area = new ImageView(ctx);
         area.setImageResource(R.drawable.verified_area);
@@ -376,7 +333,6 @@ public class PrizmaProfileCard extends LinearLayout {
         return plate;
     }
 
-    /** The soft field every tile sits on — a few percent of the text colour, so it works in any theme. */
     private GradientDrawable field(int radiusDp) {
         GradientDrawable d = new GradientDrawable();
         d.setCornerRadius(AndroidUtilities.dp(radiusDp));
@@ -384,7 +340,6 @@ public class PrizmaProfileCard extends LinearLayout {
         return d;
     }
 
-    /** The field plus a press ripple on top (View.setForeground needs Android 6, we support 5). */
     private android.graphics.drawable.Drawable pressableField(int radiusDp) {
         return new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{
                 field(radiusDp), Theme.createRadSelectorDrawable(color(Theme.key_listSelector), radiusDp, radiusDp)});
@@ -438,7 +393,7 @@ public class PrizmaProfileCard extends LinearLayout {
         name.setTextColor(color(Theme.key_windowBackgroundWhiteBlackText));
         name.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11.5f);
         name.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.TOP);
-        name.setLines(2); // every tile the same height, one-line titles included
+        name.setLines(2);
         name.setEllipsize(TextUtils.TruncateAt.END);
         t.addView(name, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 2, 6, 2, 0));
         t.setBackground(Theme.createRadSelectorDrawable(color(Theme.key_listSelector), 12, 12));
@@ -474,7 +429,6 @@ public class PrizmaProfileCard extends LinearLayout {
         return t;
     }
 
-    /** A soft colour field with a line icon on it — the look of every achievement. */
     static FrameLayout badge(Context ctx, int icon, int tint, int sizeDp, int iconDp) {
         FrameLayout f = new FrameLayout(ctx);
         GradientDrawable bg = new GradientDrawable();
@@ -627,8 +581,6 @@ public class PrizmaProfileCard extends LinearLayout {
         return out.toString();
     }
 
-    // ===================== achievement sheets =====================
-
     private void showAchievement(PrizmaSocial.Achievement a) {
         final Context ctx = getContext();
         LinearLayout v = new LinearLayout(ctx);
@@ -661,7 +613,6 @@ public class PrizmaProfileCard extends LinearLayout {
         ref[0].show();
     }
 
-    /** Own profile: everything there is, earned first, locked ones with what's left. */
     private void showAll() {
         final Context ctx = getContext();
         ArrayList<PrizmaSocial.Achievement> all = PrizmaSocial.achievements(account, userId, true);

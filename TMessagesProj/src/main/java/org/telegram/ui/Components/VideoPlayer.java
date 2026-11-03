@@ -264,8 +264,6 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             }
             player = builder.build();
 
-            // Prizma: pin a fixed audio session id BEFORE prepare so the equalizer, attached to this
-            // session, affects playback from the very first sample (previously it only worked after a seek).
             try {
                 android.media.AudioManager am = (android.media.AudioManager) ApplicationLoader.applicationContext.getSystemService(android.content.Context.AUDIO_SERVICE);
                 if (am != null) {
@@ -315,7 +313,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     public int getAudioSessionId() {
         if (prizmaAudioSessionId != 0) {
-            return prizmaAudioSessionId; // our fixed session (set before prepare)
+            return prizmaAudioSessionId;
         }
         try {
             if (player != null) {

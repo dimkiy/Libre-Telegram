@@ -28,34 +28,16 @@ import org.telegram.ui.ActionBar.Theme;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-/*
- * Libre — что это за файл:
- * Чужой открытый плейлист: послушать или сохранить себе.
- */
-
-/**
- * Prizma: a playlist someone opened in their Libre profile — listen to it, or keep a copy.
- *
- * Libre 1.2.1 — почему раньше чужой плейлист не играл и как теперь.
- * Telegram даёт скачать файл только тому, кто видит сообщение с этим файлом. Мы же получали от
- * сервера копию сообщения из чата ВЛАДЕЛЬЦА плейлиста, а этот чат слушателю недоступен — трек не
- * загружался. Теперь у каждого трека есть «src» — место, где его видит любой: сообщение в публичном
- * канале («канал/номер»). Откуда src: если трек из публичного канала, это сам канал; если из
- * личного чата — бот Libre выложил его в свой публичный канал (см. server.py, «tracks for open
- * playlists»). Здесь мы по src загружаем настоящие сообщения из каналов (своим аккаунтом) и играем их.
- */
 public final class PrizmaPublicPlaylistSheet {
-
     private PrizmaPublicPlaylistSheet() {}
 
-    /** Один трек чужого плейлиста. */
     private static class Entry {
         String title, author;
-        String channel;      // публичный канал, где лежит трек (null — такого места нет)
-        int messageId;       // номер сообщения в этом канале
-        MessageObject track; // настоящее сообщение с треком, когда загрузили (null — ещё нет / не вышло)
-        boolean done;        // загрузку уже пробовали
-        TextView subtitle;   // строка под названием — там пишем «недоступен»
+        String channel;
+        int messageId;
+        MessageObject track;
+        boolean done;
+        TextView subtitle;
     }
 
     public static void show(Context ctx, int account, long userId) {
@@ -190,12 +172,6 @@ public final class PrizmaPublicPlaylistSheet {
         loadTracks(account, entries);
     }
 
-    // ===================== загрузка треков из публичных каналов =====================
-
-    /**
-     * Для каждого канала: узнаём его по имени (@username), потом одним запросом берём все нужные
-     * сообщения. Готовые треки кладём в {@link Entry#track}; что не вышло — помечаем «недоступен».
-     */
     private static void loadTracks(int account, ArrayList<Entry> entries) {
         HashMap<String, ArrayList<Entry>> byChannel = new HashMap<>();
         for (Entry e : entries) {
@@ -256,8 +232,6 @@ public final class PrizmaPublicPlaylistSheet {
         }
     }
 
-    // ===================== проигрывание =====================
-
     private static ArrayList<MessageObject> playable(ArrayList<Entry> entries) {
         ArrayList<MessageObject> out = new ArrayList<>();
         for (Entry e : entries) if (e.track != null) out.add(e.track);
@@ -274,10 +248,6 @@ public final class PrizmaPublicPlaylistSheet {
         return 0;
     }
 
-    /**
-     * Играет плейлист (только загруженные треки), начиная с трека {@code index}.
-     * Возвращает true, если музыка пошла. Чужой трек может пропасть — это сообщение, а не вылет.
-     */
     private static boolean playFrom(Context ctx, ArrayList<Entry> entries, int index) {
         if (index < 0 || index >= entries.size()) return false;
         Entry chosen = entries.get(index);

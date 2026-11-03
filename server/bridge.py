@@ -1,20 +1,3 @@
-"""
-Libre ↔ MAX — a bridge between the Libre Telegram bot and a bot in MAX.
-
-A person in Telegram writes /max to the Libre bot and gets an invite link to the MAX bot. Whoever
-opens it in MAX (a friend, or the same person on their own MAX) is paired with them. From then on:
-  * what the Telegram person writes to the Libre bot arrives in MAX from the MAX bot;
-  * what the MAX person writes to the MAX bot arrives in Telegram from the Libre bot — and the
-    Telegram person answers simply by replying to it.
-Text and photos go both ways. One Telegram person can have several pairs: /chats picks who gets the
-next messages (or just reply to their message).
-
-What is kept (bridge.db): pairs (Telegram id, MAX id, display names), invite codes for a day, and
-"this Telegram message came from that pair" (ids only, 30 days) so replies find their way. Message
-texts and photos are never stored — they only pass through.
-
-Config: /etc/libre.env (BOT_TOKEN — the Libre bot) and /etc/libre-bridge.env (MAX_TOKEN, MAX_BOT_LINK).
-"""
 import asyncio
 import io
 import json
@@ -30,9 +13,9 @@ import aiohttp
 TG_TOKEN = os.environ["BOT_TOKEN"]
 MAX_TOKEN = os.environ["MAX_TOKEN"]
 MAX_API = os.environ.get("MAX_API", "https://platform-api.max.ru").rstrip("/")
-MAX_BOT_LINK = os.environ.get("MAX_BOT_LINK", "").rstrip("/")  # e.g. https://max.ru/libre_bot
+MAX_BOT_LINK = os.environ.get("MAX_BOT_LINK", "").rstrip("/")
 DATA = os.environ.get("LIBRE_DATA", "/var/lib/libre")
-TG_API = os.environ.get("TG_API", "https://api.telegram.org").rstrip("/")  # overridable for tests
+TG_API = os.environ.get("TG_API", "https://api.telegram.org").rstrip("/")
 TG = f"{TG_API}/bot{TG_TOKEN}"
 TG_FILE = f"{TG_API}/file/bot{TG_TOKEN}"
 CODE_TTL = 86400
@@ -100,8 +83,6 @@ def touch(pid):
     db.execute("UPDATE pairs SET last=? WHERE id=?", (now(), pid))
 
 
-# ---------------------------------------------------------------- API calls
-
 class Api:
     def __init__(self, session):
         self.s = session
@@ -151,7 +132,6 @@ class Api:
             log.warning("download: %s", e)
             return None
 
-    # -- MAX: send text / photo to a user
     async def max_send(self, max_id, text, photo=None):
         body = {"text": text[:MAX_TEXT] if text else None}
         if photo:
@@ -179,8 +159,6 @@ class Api:
             log.warning("max upload: %s", e)
             return None
 
-
-# ---------------------------------------------------------------- pairing
 
 def new_code(tg_id, tg_name):
     db.execute("DELETE FROM codes WHERE created < ?", (now() - CODE_TTL,))
@@ -223,8 +201,6 @@ async def unlink(api, pid, by_tg):
     else:
         await api.tg("sendMessage", {"chat_id": p[1], "text": f"{p[4]} отключил связь с MAX."})
 
-
-# ---------------------------------------------------------------- Telegram side
 
 HELP = ("Мост Libre ↔ MAX: переписка с человеком из MAX прямо здесь.\n\n"
         "/max — ссылка-приглашение для друга в MAX (или для себя — чтобы получать сообщения в своём MAX)\n"
@@ -274,7 +250,6 @@ async def tg_message(api, m):
     if cmd == "/help":
         await api.tg("sendMessage", {"chat_id": tg_id, "text": HELP})
         return
-    # which pair: the message they reply to, else the chosen one, else the only one
     pid = None
     reply = m.get("reply_to_message")
     if reply:
@@ -348,8 +323,6 @@ async def tg_loop(api):
             except Exception as e:
                 log.exception("tg update: %s", e)
 
-
-# ---------------------------------------------------------------- MAX side
 
 CODE_RE = re.compile(r"^[A-Z0-9]{8}$")
 

@@ -16,18 +16,7 @@ import org.telegram.messenger.PrizmaSocial;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 
-/*
- * Libre — что это за файл:
- * Выбор статуса: в сети, нет на месте, не беспокоить, невидимка, свой текст.
- */
-
-/**
- * Prizma: statuses like in Discord — В сети, Нет на месте, Не беспокоить, Невидимка — plus a short
- * text of your own and when it should clear. Other Libre users see it in the Libre block of your
- * profile; «Не беспокоить» also silences notifications here, «Невидимка» hides «в сети».
- */
 public final class PrizmaStatusSheet {
-
     private PrizmaStatusSheet() {}
 
     private static final String[] SUBTITLES = {
@@ -38,7 +27,6 @@ public final class PrizmaStatusSheet {
     };
     private static final String[] DURATIONS = {"Не сбрасывать", "30 минут", "1 час", "4 часа", "Сегодня"};
 
-    /** A status dot, the way Discord draws it. */
     static View dot(Context ctx, int status, int sizeDp) {
         View v = new View(ctx);
         GradientDrawable d = new GradientDrawable();
@@ -195,7 +183,6 @@ public final class PrizmaStatusSheet {
         sheet.show();
     }
 
-    /** Unix seconds when the status clears, 0 = never. */
     private static long untilFor(int i) {
         long now = System.currentTimeMillis() / 1000;
         switch (i) {

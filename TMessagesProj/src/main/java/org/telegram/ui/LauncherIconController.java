@@ -35,7 +35,6 @@ public class LauncherIconController {
 
     public enum LauncherIcon {
         DEFAULT("DefaultIcon", R.drawable.icon_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconDefault),
-        // Libre: our own icons
         LIBRE_SOFT("LibreSoftIcon", R.drawable.libre_icon_1_background, R.mipmap.libre_icon_1_foreground, R.string.AppIconLibreSoft),
         LIBRE_GLASS("LibreGlassIcon", R.drawable.libre_icon_2_background, R.mipmap.libre_icon_2_foreground, R.string.AppIconLibreGlass),
         LIBRE_REDO("LibreRedoIcon", R.drawable.libre_icon_3_background, R.mipmap.libre_icon_3_foreground, R.string.AppIconLibreRedo),

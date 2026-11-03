@@ -1,7 +1,5 @@
 #!/bin/bash
-# Libre Cloud — installation on a clean Ubuntu 24.04 server.
-# Run as root:  bash install.sh
-# Asks for the domain and the bot token (the token is typed here, never sent anywhere else).
+
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -115,7 +113,6 @@ certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-w
 
 echo "== ежедневный бэкап базы (хранятся 7 дней)"
 cat > /etc/cron.daily/libre-backup <<'EOF'
-#!/bin/sh
 sqlite3 /var/lib/libre/db/libre.db ".backup '/var/backups/libre/libre-$(date +%F).db'"
 find /var/backups/libre -name 'libre-*.db' -mtime +7 -delete
 EOF

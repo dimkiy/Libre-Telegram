@@ -10,7 +10,7 @@
     {
       "label": "Libre: найти все наши вставки в коде Telegram",
       "type": "shell",
-      "command": "git grep -n -E \"Prizma:|Libre:\" -- TMessagesProj/src ':!*Prizma*.java'",
+      "command": "git grep -n Prizma -- TMessagesProj/src ':!*Prizma*.java'",
       "problemMatcher": []
     }
   ]

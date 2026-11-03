@@ -1670,7 +1670,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         if (currentDialogCommunityId != 0) {
                             messageString = formatCommunityDialogNames();
                         } else if (currentDialogFolderId != 0) {
-                            // Prizma: hide the archived chat names preview when the toggle is on (or archive PIN-locked)
                             if (org.telegram.messenger.PrizmaConfig.archiveHideNames() || org.telegram.ui.Components.PrizmaArchiveLock.isLocked()) {
                                 messageString = "•••••  ••••••••  •••••  •••••••";
                             } else {
@@ -2405,7 +2404,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (nameString instanceof String) {
                 nameString = ((String) nameString).replace('\n', ' ');
             }
-            // Prizma: hide names of archived chats when the toggle is on (or archive PIN-locked)
             if (folderId != 0 && currentDialogFolderId == 0 && prizmaHideArchive()) {
                 nameString = "•••••••••";
             }
@@ -2778,7 +2776,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             FileLog.e(e);
         }
 
-        // Prizma: hide the message preview of archived chats when the toggle is on (or archive PIN-locked)
         if (folderId != 0 && currentDialogFolderId == 0 && prizmaHideArchive()) {
             messageString = "••••••  ••••••••";
         }
@@ -3829,7 +3826,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             return;
         }
 
-        // Prizma: color tag stripe on the left edge
         if (currentDialogFolderId == 0 && currentDialogId != 0) {
             int prizmaColor = org.telegram.ui.Components.PrizmaDialogColors.color(currentDialogId);
             if (prizmaColor != 0) {
@@ -4826,7 +4822,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             }
         }
 
-        // Prizma: cover the avatar of archived chats when hiding is on
         if (folderId != 0 && currentDialogFolderId == 0 && prizmaHideArchive() && storyParams != null && storyParams.originalAvatarRect != null && storyParams.originalAvatarRect.width() > 0) {
             if (prizmaArchiveCoverPaint == null) {
                 prizmaArchiveCoverPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -5162,7 +5157,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 canvas.restore();
             }
             if (user != null && !MessagesController.isSupportUser(user) && !user.bot) {
-                org.telegram.messenger.PrizmaPresence.want(currentAccount, user.id); // Libre: статус и подарок у ника
+                org.telegram.messenger.PrizmaPresence.want(currentAccount, user.id);
                 boolean isOnline = isOnline();
                 wasDrawnOnline = isOnline;
                 if (isOnline || onlineProgress != 0) {
@@ -5174,8 +5169,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         left = (int) (storyParams.originalAvatarRect.right - dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? 10 : 6));
                     }
 
-                    // Prizma: bigger, more visible online dot. Libre: its colour follows the person's
-                    // status like in Discord — red «Не беспокоить», yellow «Нет на месте», else green
                     Theme.dialogs_onlineCirclePaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
                     canvas.drawCircle(left, top, dp(8.5f) * onlineProgress, Theme.dialogs_onlineCirclePaint);
                     final int statusColor = org.telegram.messenger.PrizmaPresence.dotColor(currentAccount, user.id);

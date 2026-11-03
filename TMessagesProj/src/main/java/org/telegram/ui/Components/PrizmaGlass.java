@@ -40,31 +40,14 @@ import org.telegram.messenger.Utilities;
 
 import java.util.Random;
 
-/*
- * Libre — что это за файл:
- * Эффект «матового стекла» для музыкальных экранов.
- */
-
-/**
- * Prizma: "liquid glass" material for our music screens (equalizer, add-to-playlist).
- *
- * Android before 12 can't blur what is behind a window, so the frost is made by hand: a downscaled,
- * blurred and slightly over-saturated snapshot of the screen behind fills the dialog, and the panels
- * on top are dark translucent glass with a lit rim, a top sheen and a faint grain (no banding).
- * On weak devices / Lite mode / battery saver the panels become solid and the motion shorter.
- */
 public final class PrizmaGlass {
-
     public static final int TEXT = 0xffffffff;
-    public static final int TEXT_2 = 0x99ffffff;   // secondary, 60%
-    public static final int TEXT_3 = 0x5cffffff;   // hints, 36%
-    public static final int DEFAULT_ACCENT = 0xffFF4D6D; // Libre music pink
+    public static final int TEXT_2 = 0x99ffffff;
+    public static final int TEXT_3 = 0x5cffffff;
+    public static final int DEFAULT_ACCENT = 0xffFF4D6D;
 
     private PrizmaGlass() {}
 
-    // ===================== frost =====================
-
-    /** Downscaled + blurred copy of what is on screen behind; null if it can't be taken. */
     public static Bitmap snapshot(View source) {
         if (source == null || source.getWidth() <= 0 || source.getHeight() <= 0) {
             return null;
@@ -84,7 +67,6 @@ public final class PrizmaGlass {
         }
     }
 
-    /** Full-screen frosted backdrop: the blurred snapshot, saturated, under a dark scrim for legibility. */
     public static class Backdrop extends View {
         private final Bitmap bitmap;
         private final Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
@@ -94,7 +76,7 @@ public final class PrizmaGlass {
             super(context);
             this.bitmap = bitmap;
             ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(1.25f); // keep the cover colours alive through the blur, without going candy
+            cm.setSaturation(1.25f);
             paint.setColorFilter(new ColorMatrixColorFilter(cm));
         }
 
@@ -106,11 +88,9 @@ public final class PrizmaGlass {
             } else {
                 canvas.drawColor(0xff15161c);
             }
-            canvas.drawColor(0x5c000000); // scrim: white text stays readable even over a white album cover
+            canvas.drawColor(0x5c000000);
         }
     }
-
-    // ===================== glass surface =====================
 
     private static Bitmap grainBitmap;
 
@@ -128,11 +108,6 @@ public final class PrizmaGlass {
         return grainBitmap;
     }
 
-    /**
-     * Dark glass: translucent fill, a sheen fading down from the top, a rim that is brightest at the
-     * top-left (where the light comes from) and dim at the bottom-right, plus faint grain.
-     * {@link #setTint} turns it into coloured glass (selected chip, primary button).
-     */
     public static class GlassDrawable extends Drawable {
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint sheen = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -151,7 +126,7 @@ public final class PrizmaGlass {
             rim.setStrokeWidth(Math.max(1f, AndroidUtilities.dpf2(1f)));
             if (!solid) {
                 grainPaint.setShader(new BitmapShader(grain(), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT));
-                grainPaint.setAlpha(9); // ≈ 3.5% — breaks gradient banding, invisible as texture
+                grainPaint.setAlpha(9);
             }
         }
 
@@ -200,9 +175,6 @@ public final class PrizmaGlass {
         }
     }
 
-    // ===================== small pieces =====================
-
-    /** Small caps section label. */
     public static TextView label(Context context, String text) {
         TextView t = new TextView(context);
         t.setText(text.toUpperCase());
@@ -213,7 +185,6 @@ public final class PrizmaGlass {
         return t;
     }
 
-    /** Glass capsule; selected = filled with the accent. */
     public static TextView chip(Context context, String text, boolean selected, int accent) {
         TextView t = new TextView(context);
         t.setText(text);
@@ -236,7 +207,6 @@ public final class PrizmaGlass {
         chip.setBackground(g);
     }
 
-    /** Soft press: the element sinks a little and springs back. */
     public static void pressable(View v) {
         v.setOnTouchListener((view, e) -> {
             switch (e.getActionMasked()) {
@@ -250,11 +220,10 @@ public final class PrizmaGlass {
                             .setInterpolator(new android.view.animation.OvershootInterpolator(2.2f)).start();
                     break;
             }
-            return false; // the click itself is handled by the normal click listener
+            return false;
         });
     }
 
-    /** iOS-style glass switch. */
     public static class Toggle extends View {
         private boolean checked;
         private float progress;
@@ -321,7 +290,6 @@ public final class PrizmaGlass {
         }
     }
 
-    /** Round check: an empty ring, or a filled disc with a tick that draws itself. */
     public static class Check extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final android.graphics.Path tick = new android.graphics.Path();
@@ -399,12 +367,6 @@ public final class PrizmaGlass {
                 | ((int) (ag + (bg - ag) * t) << 8) | (int) (ab + (bb - ab) * t);
     }
 
-    // ===================== the sheet =====================
-
-    /**
-     * Full-screen dialog: frosted copy of the screen behind + one floating glass panel at the bottom
-     * holding {@code content} (scrolls if taller than ~88% of the screen). Tap outside / back closes it.
-     */
     public static class Sheet extends Dialog {
         private final Bitmap frost;
         private final View content;
@@ -432,7 +394,7 @@ public final class PrizmaGlass {
 
             panel = new FrameLayout(ctx);
             panel.setBackground(new GlassDrawable(AndroidUtilities.dp(30)));
-            panel.setClickable(true); // taps on the panel don't fall through to the backdrop
+            panel.setClickable(true);
             final int maxH = (int) (AndroidUtilities.displaySize.y * 0.88f);
             ScrollView scroll = new ScrollView(ctx) {
                 @Override
@@ -468,7 +430,6 @@ public final class PrizmaGlass {
                 }
             }
 
-            // entrance: the frost fades in while the panel rises into place
             final boolean fancy = PrizmaConfig.fancyEffects();
             backdrop.setAlpha(0f);
             backdrop.animate().alpha(1f).setDuration(fancy ? 220 : 120).start();

@@ -12,20 +12,9 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 
-/*
- * Libre — что это за файл:
- * «Добавить в профиль Telegram» — музыка в профиле Telegram.
- */
-
-/**
- * Prizma: «Добавить в профиль Telegram» — the music Telegram shows on your profile. Telegram puts
- * this into its own player's menu; Libre has its own player, so the same request lives here.
- */
 public final class PrizmaProfileMusic {
-
     private PrizmaProfileMusic() {}
 
-    /** Is this track already on my Telegram profile? */
     public static boolean isSaved(int account, MessageObject mo) {
         TLRPC.Document doc = mo != null ? mo.getDocument() : null;
         if (doc == null) return false;
@@ -34,7 +23,6 @@ public final class PrizmaProfileMusic {
         return ids.ids.contains(doc.id);
     }
 
-    /** Adds or removes; {@code done} gets the text to show (success or the error). UI thread. */
     public static void toggle(int account, MessageObject mo, Utilities.Callback<String> done) {
         boolean save = !isSaved(account, mo);
         save(account, mo, save, err -> done.run(err != null ? err
@@ -55,7 +43,6 @@ public final class PrizmaProfileMusic {
         req.id.file_reference = document.file_reference != null ? document.file_reference : new byte[0];
         ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
             if (err != null && FileRefController.isFileRefError(err.text) && !triedFileRef && mo.getId() > 0) {
-                // the file reference went stale — take a fresh copy of the message and try once more
                 refresh(account, mo, fresh -> {
                     if (fresh == null) done.run("Не удалось обновить трек — откройте его в чате и попробуйте снова");
                     else save(account, fresh, save, done, true);

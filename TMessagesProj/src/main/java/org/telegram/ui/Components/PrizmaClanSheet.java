@@ -35,17 +35,7 @@ import org.telegram.ui.ProfileActivity;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Экран клана: участники, роли, приглашение, стена клана, рейтинг.
- */
-
-/**
- * Prizma: clans on Libre Cloud — emblem (tag on its colour), numbers, members with roles, invite
- * link, the clan's wall and the clan rating. Head: roles, kick, disband; officers: invite, kick.
- */
 public final class PrizmaClanSheet {
-
     private PrizmaClanSheet() {}
 
     private static void toast(String text) {
@@ -58,7 +48,6 @@ public final class PrizmaClanSheet {
         return false;
     }
 
-    /** The profile card's «Клан» and the hub's «Мой клан». */
     public static void show(BaseFragment fragment, int account, long userId, Runnable onChanged) {
         if (fragment == null || fragment.getParentActivity() == null || !serverReady()) return;
         boolean self = userId == UserConfig.getInstance(account).getClientUserId();
@@ -72,7 +61,6 @@ public final class PrizmaClanSheet {
                 if (mine != null) {
                     showClan(fragment, account, mine.id, onChanged);
                 } else if (err != null) {
-                    // no answer from the server — not the same as "you have no clan"
                     toast(err);
                 } else {
                     showNoClan(fragment, account, onChanged);
@@ -87,8 +75,6 @@ public final class PrizmaClanSheet {
             toast("Клан ещё загружается — попробуйте через секунду");
         }
     }
-
-    // ===================== no clan yet =====================
 
     private static void showNoClan(BaseFragment fragment, int account, Runnable onChanged) {
         final Context ctx = fragment.getParentActivity();
@@ -127,7 +113,6 @@ public final class PrizmaClanSheet {
         });
     }
 
-    /** Links «https://<server>/c/<code>» open the join dialog right in Libre. */
     public static boolean handleInviteLink(Uri uri) {
         if (uri == null || !PrizmaCloud.configured()) return false;
         String code = PrizmaClans.codeOf(uri.toString());
@@ -164,8 +149,6 @@ public final class PrizmaClanSheet {
                     .show();
         });
     }
-
-    // ===================== a clan =====================
 
     private static void showClan(BaseFragment fragment, int account, long clanId, Runnable onChanged) {
         PrizmaClans.load(account, clanId, (clan, err) -> {
@@ -215,7 +198,6 @@ public final class PrizmaClanSheet {
         addStat(ctx, rp, stats, String.valueOf(clan.members), PrizmaSocial.plural(clan.members, "участник", "участника", "участников"), false);
         v.addView(stats, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 12, 18, 12, 6));
 
-        // wall + rating
         LinearLayout links = new LinearLayout(ctx);
         links.setOrientation(LinearLayout.HORIZONTAL);
         TextView wall = button(ctx, "Стена клана", false, rp);
@@ -277,7 +259,6 @@ public final class PrizmaClanSheet {
                 args.putLong("user_id", m.userId);
                 fragment.presentFragment(new ProfileActivity(args));
             });
-            // the head manages everyone, officers can remove members
             boolean canManage = m.userId != me && (clan.myRole == PrizmaSocial.ROLE_HEAD
                     || clan.myRole == PrizmaSocial.ROLE_OFFICER && m.roleId == PrizmaSocial.ROLE_MEMBER);
             if (canManage) {
@@ -361,7 +342,7 @@ public final class PrizmaClanSheet {
         BottomSheet.Builder b = new BottomSheet.Builder(ctx, false, rp);
         b.setCustomView(sv);
         ref[0] = b.create();
-        ref[0].setCanDismissWithSwipe(false); // a fast fling through the members must not close it
+        ref[0].setCanDismissWithSwipe(false);
         ref[0].show();
     }
 
@@ -397,8 +378,6 @@ public final class PrizmaClanSheet {
         if (err != null) toast(err);
         else reopen.run();
     }
-
-    // ===================== rating =====================
 
     private static void showTop(BaseFragment fragment, int account, Runnable onChanged) {
         PrizmaClans.top(account, (list, err) -> {
@@ -490,8 +469,6 @@ public final class PrizmaClanSheet {
         });
     }
 
-    // ===================== create =====================
-
     private static void showCreate(BaseFragment fragment, int account, Runnable onChanged) {
         final Context ctx = fragment.getParentActivity();
         final Theme.ResourcesProvider rp = fragment.getResourceProvider();
@@ -577,8 +554,6 @@ public final class PrizmaClanSheet {
             });
         }
     }
-
-    // ===================== helpers =====================
 
     static FrameLayout emblem(Context ctx, String tag, int color, int sizeDp) {
         FrameLayout f = new FrameLayout(ctx);

@@ -1,7 +1,5 @@
 #!/bin/bash
-# Мост Libre ↔ MAX. Запуск от root на сервере Libre (после update-server.sh):
-#   bash /root/libre-server/install-bridge.sh
-# Спросит токен бота MAX (с business.max.ru) и ссылку на него. Токен вводите здесь — больше нигде.
+
 set -euo pipefail
 cd "$(dirname "$0")"
 [ "$(id -u)" = "0" ] || { echo "Запустите от root"; exit 1; }

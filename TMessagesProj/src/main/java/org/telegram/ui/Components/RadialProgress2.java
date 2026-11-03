@@ -128,7 +128,6 @@ public class RadialProgress2 {
         overlayImageView.setRoundRadius(drawOverlaySquare ? AndroidUtilities.dp(6) : circleRadius);
     }
 
-    // Prizma: draw the cover as a rounded square instead of a circle
     public void setDrawOverlaySquare(boolean value, int roundRadius) {
         drawOverlaySquare = value;
         overlayImageView.setRoundRadius(value ? roundRadius : circleRadius);

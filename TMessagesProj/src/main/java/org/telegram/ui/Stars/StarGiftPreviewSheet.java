@@ -888,12 +888,10 @@ public class StarGiftPreviewSheet extends BottomSheetWithRecyclerListView {
         }
     }
 
-    // ===== Prizma: "build your own" — pick any model, backdrop and symbol of the collection and apply them =====
 
     private TextView prizmaApplyButton;
     private int prizmaExtraBottom;
 
-    /** Turns the preview into a picker: a button above the tabs hands the selected combination to {@code onApply}. */
     public StarGiftPreviewSheet setApplyButton(CharSequence text, Utilities.Callback<Attributes> onApply) {
         if (prizmaApplyButton != null || onApply == null) return this;
         final TextView button = new TextView(getContext());

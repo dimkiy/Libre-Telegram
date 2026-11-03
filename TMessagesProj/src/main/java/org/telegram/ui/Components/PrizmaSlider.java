@@ -9,25 +9,15 @@ import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
 
-/*
- * Libre — что это за файл:
- * Ползунок для наших экранов.
- */
-
-/**
- * Prizma: custom slider with smooth spring-like drag, a growing thumb and a soft glow.
- * Values are normalized 0..1.
- */
 public class PrizmaSlider extends View {
-
     public interface OnChange {
         void onChange(float value, boolean fromUser);
     }
 
     private OnChange onChange;
-    private float value;      // committed value 0..1
-    private float display;    // animated value 0..1
-    private float thumbProg;  // 0..1 press animation
+    private float value;
+    private float display;
+    private float thumbProg;
     private boolean pressed;
 
     private int accent = 0xff3f6bf5;
@@ -131,23 +121,19 @@ public class PrizmaSlider extends View {
         float trackH = AndroidUtilities.dp(4);
         float fx = p + w * display;
 
-        // background track
         paint.setColor(trackColor);
         rect.set(p, cy - trackH / 2, p + w, cy + trackH / 2);
         canvas.drawRoundRect(rect, trackH / 2, trackH / 2, paint);
 
-        // accent fill
         paint.setColor(accent);
         rect.set(p, cy - trackH / 2, fx, cy + trackH / 2);
         canvas.drawRoundRect(rect, trackH / 2, trackH / 2, paint);
 
-        // glow on press
         if (thumbProg > 0.01f) {
             paint.setColor((accent & 0x00ffffff) | (((int) (0x3a * thumbProg)) << 24));
             canvas.drawCircle(fx, cy, AndroidUtilities.dp(10) + AndroidUtilities.dp(9) * thumbProg, paint);
         }
 
-        // thumb
         float rad = AndroidUtilities.dp(7) + AndroidUtilities.dp(3) * thumbProg;
         paint.setColor(accent);
         canvas.drawCircle(fx, cy, rad, paint);

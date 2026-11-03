@@ -106,7 +106,7 @@ public class AudioPlayerCell extends FrameLayout implements DownloadController.F
 
         radialProgress = new RadialProgress2(this, resourcesProvider);
         radialProgress.setColorKeys(Theme.key_chat_inLoader, Theme.key_chat_inLoaderSelected, Theme.key_chat_inMediaIcon, Theme.key_chat_inMediaIconSelected);
-        radialProgress.setDrawOverlaySquare(true, dp(6)); // Prizma: Spotify-style square covers
+        radialProgress.setDrawOverlaySquare(true, dp(6));
         TAG = DownloadController.getInstance(currentAccount).generateObserverTag();
         setFocusable(true);
 

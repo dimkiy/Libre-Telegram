@@ -922,10 +922,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         }
     }
 
-    // ===== Libre: «надеть» подарок из витрины — он виден рядом с именем, как настоящий =====
-    // Telegram надевает подарок через свой сервер, а о наших подарках он не знает. Поэтому мы
-    // собираем такой же статус-подарок сами (модель, узор, цвета фона) и отдаём его серверу Libre —
-    // остальные пользователи Libre видят его у ника и в шапке профиля. Premium для этого не нужен.
 
     private void prizmaToggleWear() {
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
@@ -960,9 +956,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         }
     }
 
-    // ===== Prizma: crafting for showcase NFTs — Telegram's forge screen, result decided on the device =====
 
-    /** An NFT-looking copy from the user's own showcase (instance ids are negative). */
     private boolean prizmaShowcaseNft() {
         return myProfile && savedStarGift != null && savedStarGift.saved_id < 0
             && savedStarGift.gift instanceof TL_stars.TL_starGiftUnique
@@ -984,18 +978,16 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         }
         topView.craftTopView.setOnCraft((gifts, whenDone, onError) -> {
             if (org.telegram.ui.Components.PrizmaGifts.find(giftUnique.gift_id) == null) {
-                // the gift catalog hasn't loaded yet — don't burn anything, let the person try again
                 onError.run();
                 getBulletinFactory().createSimpleBulletin(R.raw.error, "Каталог подарков ещё загружается — попробуйте через пару секунд").ignoreDetach().show();
                 return;
             }
-            // the collection's full list of models decides what the forge can produce
             GiftAuctionController.getInstance(currentAccount).requestAuctionUpgrades(giftUnique.gift_id, attrs -> {
-                if (!isShowing()) return; // closed while waiting — nothing has burned yet
+                if (!isShowing()) return;
                 final TL_stars.TL_starGiftUnique result = org.telegram.ui.Components.PrizmaGifts.craft(gifts, attrs);
                 final StarsController.GiftsList profileGifts = StarsController.getInstance(currentAccount).getProfileGiftsList(getDialogId(), false);
                 if (profileGifts != null) {
-                    profileGifts.processCrafting(gifts, null); // the burned copies leave the profile right away
+                    profileGifts.processCrafting(gifts, null);
                 }
                 if (result == null) {
                     whenDone.run(null, null);
@@ -1013,7 +1005,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                         fireworksOverlay.start(true);
                     }
                     if (profileGifts != null) {
-                        profileGifts.invalidate(true); // brings the new gift into the profile
+                        profileGifts.invalidate(true);
                     }
                 });
             });
@@ -1188,10 +1180,9 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private void onMenuPressed(View btn) {
         final String link = getLink();
         final TL_stars.TL_starGiftUnique giftUnique = getUniqueGift();
-        // Prizma: a visual "upgrade to NFT" for gifts added via our own showcase
         long prizmaScIdTmp = 0;
         if (savedStarGift != null && org.telegram.ui.Components.PrizmaGifts.isInstance(savedStarGift.saved_id)) {
-            prizmaScIdTmp = savedStarGift.saved_id; // per-copy instance id
+            prizmaScIdTmp = savedStarGift.saved_id;
         }
         final long prizmaScId = prizmaScIdTmp;
         final boolean prizmaIsShowcase = prizmaScId != 0;
@@ -1206,12 +1197,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                 StarsController.getInstance(currentAccount).getProfileGiftsList(getDialogId()).invalidate(true);
                 dismiss();
             })
-            // Libre: hand it to a friend's showcase (through Libre Cloud)
             .addIf(prizmaIsShowcase && prizmaUpgraded, R.drawable.msg_share, "Передать другу", () -> {
                 dismiss();
                 org.telegram.ui.Components.PrizmaGiftTransfer.pickAndSend(currentAccount, prizmaScId);
             })
-            // Prizma: gone for good — the NFT look and the gift itself leave the showcase
             .addIf(prizmaIsShowcase && prizmaUpgraded, R.drawable.msg_delete, "Удалить NFT", true, () -> {
                 new AlertDialog.Builder(getContext(), resourcesProvider)
                     .setTitle("Удалить NFT?")
@@ -1407,7 +1396,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     public static boolean isWorn(int currentAccount, TL_stars.TL_starGiftUnique gift) {
         if (gift == null) return false;
         if (gift.slug != null && gift.slug.startsWith(org.telegram.messenger.PrizmaPresence.LIBRE_SLUG)) {
-            return org.telegram.messenger.PrizmaPresence.myWornInstance(currentAccount) == gift.id; // Libre-подарок
+            return org.telegram.messenger.PrizmaPresence.myWornInstance(currentAccount) == gift.id;
         }
         final long dialogId = gift.owner_id != null ? DialogObject.getPeerDialogId(gift.owner_id) : DialogObject.getPeerDialogId(gift.host_id);
         if (dialogId == 0) return false;
@@ -4669,10 +4658,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             roller = new Roller(topView);
         }
         final boolean withActions = walletTransaction == null;
-        final boolean prizmaOwn = prizmaShowcaseNft(); // Libre: подарок из моей витрины — тоже «мой»
+        final boolean prizmaOwn = prizmaShowcaseNft();
         topView.setGift(gift, withActions && (isMineWithActions(currentAccount, owner_id) || prizmaOwn), withActions && isMineWithActions(currentAccount, host_id), isWorn(currentAccount, getUniqueGift()), getLink() != null, rolling);
         if (prizmaOwn) {
-            topView.buttons[2].setVisibility(View.GONE); // Libre-подарок нельзя продать — есть только «Передать» и «Надеть»
+            topView.buttons[2].setVisibility(View.GONE);
         }
         topView.setShowOptions(false);
         if (walletCollectible != null) {
@@ -5302,7 +5291,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                 if (myProfile
                         && org.telegram.ui.Components.PrizmaGifts.isInstance(prizmaInst)
                         && !org.telegram.ui.Components.PrizmaGifts.isUpgraded(prizmaInst)) {
-                    // Prizma: free "upgrade to NFT" for showcase gifts — the same button as Telegram's own
                     SpannableStringBuilder sb = new SpannableStringBuilder("^  ");
                     if (upgradeIconSpan == null) {
                         upgradeIconSpan = new ColoredImageSpan(new UpgradeIcon(button, Theme.getColor(Theme.key_featuredStickers_addButton, resourcesProvider)));
@@ -5905,7 +5893,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     private String getLink() {
         final TL_stars.StarGift starGift = getGift();
-        // Libre NFTs exist only in Libre — a t.me/nft/ link to them leads nowhere
         if (starGift instanceof TL_stars.TL_starGiftUnique && starGift.slug != null && !starGift.slug.matches("libre\\d+")) {
             return MessagesController.getInstance(currentAccount).linkPrefix + "/nft/" + starGift.slug;
         }
@@ -6422,10 +6409,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private boolean requesting_upgrade_form;
     private TLRPC.PaymentForm upgrade_form;
 
-    // ===== Prizma: free, client-side "upgrade to NFT" for showcase gifts =====
-    // Uses Telegram's own upgrade page (rotating sample models / backdrops / symbols) and, on
-    // confirm, the same slot-machine roll + fireworks as a real upgrade. Nothing is sent to the
-    // server: the rolled attributes are stored locally (PrizmaGifts) and only visible in Libre.
 
     private long prizmaSamplesGiftId;
 
@@ -6453,11 +6436,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         StarsController.getInstance(currentAccount).getStarGiftPreview(gift.id, preview -> {
             button.setLoading(false);
             if (savedStarGift == null || savedStarGift.gift != gift) {
-                return; // the user swiped to another gift meanwhile
+                return;
             }
             ArrayList<TL_stars.StarGiftAttribute> attrs = preview != null ? preview.sample_attributes : null;
             if (!org.telegram.ui.Components.PrizmaGifts.isCompleteSample(attrs)) {
-                // this gift has no NFT version on Telegram — roll our own palette with its sticker
                 attrs = org.telegram.ui.Components.PrizmaGifts.fallbackSampleAttributes(gift);
             }
             if (attrs == null || attrs.isEmpty()) {
@@ -6486,7 +6468,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         button.setText(getString(R.string.Gift2UpgradeButtonFree), true);
         button.setOnClickListener(v -> prizmaDoUpgrade());
 
-        // "or build it yourself": any model, backdrop and symbol of this collection
         underButtonContainer.setVisibility(View.VISIBLE);
         underButtonLinkTextView.setText(AndroidUtilities.replaceArrows(AndroidUtilities.replaceSingleTag("**Выбрать модель и фон вручную >**", () -> prizmaOpenConstructor(true)), false, dp(2 / 3f), dp(.66f)));
         updateUnderButtonContainer();
@@ -6500,11 +6481,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         AndroidUtilities.runOnUIThread(() -> switchPage(PAGE_UPGRADE, true));
     }
 
-    /**
-     * Constructor: Telegram's own "all variants" sheet with EVERY model, backdrop and symbol of the
-     * collection (not just the few preview samples) plus an "Apply" button.
-     * fromUpgradePage = true → applying plays the same roll as a real upgrade and lands on the choice.
-     */
     private void prizmaOpenConstructor(boolean fromUpgradePage) {
         if (savedStarGift == null || !myProfile || button.isLoading()) return;
         final long instId = savedStarGift.saved_id;
@@ -6538,7 +6514,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             return;
         }
         if (roll && currentPage.to(PAGE_UPGRADE) && roller != null) {
-            // same as a real upgrade: the slot machine spins and stops on what was picked
             rolling = true;
             savedStarGift.gift = unique;
             set(savedStarGift, giftsList);
@@ -6567,8 +6542,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             getBulletinFactory().createSimpleBulletin(R.raw.error, "Не удалось улучшить подарок").ignoreDetach().show();
             return;
         }
-        // exactly what Telegram does after a paid upgrade (applyNewGiftFromUpdates): put the unique
-        // gift into the sheet while `rolling` — set() then starts the roll from the preview attributes
         rolling = true;
         savedStarGift.gift = unique;
         set(savedStarGift, giftsList);
@@ -7208,7 +7181,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     public void onTransferClick(View view) {
         if (prizmaShowcaseNft()) {
-            // Libre: подарок из витрины передаётся через сервер Libre, Telegram о нём не знает
             final long instId = savedStarGift.saved_id;
             dismiss();
             org.telegram.ui.Components.PrizmaGiftTransfer.pickAndSend(currentAccount, instId);
@@ -7226,7 +7198,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             currentHintView.hide();
             currentHintView = null;
         }
-        // Libre: showcase NFTs travel through Libre Cloud, not Telegram's transfer
         if (savedStarGift != null && org.telegram.ui.Components.PrizmaGifts.isInstance(savedStarGift.saved_id)) {
             final long instId = savedStarGift.saved_id;
             dismiss();
@@ -10267,7 +10238,6 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
             final long giftId = gift_id;
             GiftAuctionController.getInstance(currentAccount).requestAuctionUpgrades(gift_id, attrs -> {
-                // Libre: gifts without an NFT version (showcase copies) get no variants — Telegram's code crashed on null here
                 if (giftId != this.giftId || attrs == null) return;
                 previewAttributes = attrs;
                 variantsButton.animate()

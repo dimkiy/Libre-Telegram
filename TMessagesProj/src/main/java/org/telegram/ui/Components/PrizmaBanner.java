@@ -17,16 +17,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-/*
- * Libre — что это за файл:
- * Баннер профиля: картинка или короткое видео.
- */
-
-/**
- * Prizma: uploadable profile banner (image or looping muted video).
- */
 public class PrizmaBanner {
-
     public static final int REQUEST = 48210;
 
     private static Bitmap cached;
@@ -50,7 +41,6 @@ public class PrizmaBanner {
         if (activity == null || uri == null) {
             return;
         }
-        // copying a picked video (can be hundreds of MB) on the UI thread froze the app ("not responding")
         final android.content.ContentResolver resolver = activity.getContentResolver();
         final android.content.Context appContext = activity.getApplicationContext();
         Utilities.globalQueue.postRunnable(() -> {
@@ -66,7 +56,6 @@ public class PrizmaBanner {
                 os.close();
                 in.close();
 
-                // determine if it is a video: trust mime, else probe (not a decodable image => video)
                 String mime = resolver.getType(uri);
                 boolean isVideo;
                 if (mime != null) {
@@ -78,11 +67,9 @@ public class PrizmaBanner {
                     isVideo = opt.outWidth <= 0;
                 }
 
-                // a new file name each time: open chats / the profile cache the drawable by path, so
-                // re-using one name kept showing the previous video after picking a new one
                 File dst = new File(ApplicationLoader.getFilesDirFixed(), (isVideo ? "prizma_banner.mp4" : "prizma_banner.jpg").replace(".", "_" + System.currentTimeMillis() + "."));
                 if (!tmp.renameTo(dst)) {
-                    dst = tmp; // fallback: use the temp file as-is
+                    dst = tmp;
                 }
                 final String path = dst.getAbsolutePath();
                 final boolean video = isVideo;
@@ -97,7 +84,6 @@ public class PrizmaBanner {
                     if (old != null && old.length() > 0 && !old.equals(path)) {
                         new File(old).delete();
                     }
-                    // Libre: other Libre users see it too
                     org.telegram.messenger.PrizmaCloud.syncOwnBanner(org.telegram.messenger.UserConfig.selectedAccount);
                     android.widget.Toast.makeText(appContext, "Баннер профиля установлен", android.widget.Toast.LENGTH_SHORT).show();
                 });
@@ -107,10 +93,6 @@ public class PrizmaBanner {
         });
     }
 
-    /**
-     * Called from the profile header's onDraw() on every frame: returns the cached bitmap and never
-     * decodes on the UI thread — the decode runs in the background and the header picks it up.
-     */
     public static Bitmap getBitmap() {
         if (PrizmaConfig.bannerIsVideo()) {
             return null;
@@ -130,9 +112,8 @@ public class PrizmaBanner {
     }
 
     private static volatile boolean decoding;
-    private static String failedPath; // don't retry a file that can't be decoded on every frame
+    private static String failedPath;
 
-    /** Decodes the image banner off the UI thread (sized to the screen width, not the photo's full size). */
     public static void preload() {
         if (decoding || PrizmaConfig.bannerIsVideo()) {
             return;
@@ -150,7 +131,7 @@ public class PrizmaBanner {
                 BitmapFactory.decodeFile(path, bounds);
                 int target = Math.min(AndroidUtilities.displaySize.x, AndroidUtilities.displaySize.y);
                 if (target <= 0) {
-                    target = 1080; // display size not measured yet
+                    target = 1080;
                 }
                 int sample = 1;
                 while (bounds.outWidth / (sample * 2) >= target) {
@@ -168,19 +149,17 @@ public class PrizmaBanner {
                 if (decoded == null) {
                     failedPath = path;
                 } else if (path.equals(PrizmaConfig.bannerPath())) {
-                    cached = decoded; // the profile header polls getBitmap() until it is ready
+                    cached = decoded;
                     cachedPath = path;
                 }
             });
         });
     }
 
-    /** True while an image banner is set but its bitmap is still being decoded. */
     public static boolean isLoading() {
         return !PrizmaConfig.bannerIsVideo() && hasBanner() && cached == null && !PrizmaConfig.bannerPath().equals(failedPath);
     }
 
-    /** Creates a fresh animated drawable for the video banner (managed by an ImageReceiver; the caller recycles it). */
     public static AnimatedFileDrawable createAnimated() {
         if (!PrizmaConfig.bannerIsVideo()) {
             return null;

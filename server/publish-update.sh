@@ -1,7 +1,5 @@
 #!/bin/bash
-# Выложить новую версию Libre для встроенного обновления.
-#   bash publish-update.sh /root/Libre-1.0.7.apk 1.0.7
-# Спросит, что нового (пункты через «;»). Libre у людей покажет плашку «Доступно обновление».
+
 set -euo pipefail
 
 APK="${1:-}"
@@ -40,7 +38,6 @@ PY
 chmod 644 "$DIR/latest.json"
 chown -R libre:libre "$DIR"
 
-# старые версии больше не нужны (оставляем текущую и одну предыдущую)
 ls -1t "$DIR"/Libre-*.apk 2>/dev/null | tail -n +3 | xargs -r rm -f
 
 echo "Готово: Libre $VERSION выложен ($((SIZE / 1024 / 1024)) МБ)"

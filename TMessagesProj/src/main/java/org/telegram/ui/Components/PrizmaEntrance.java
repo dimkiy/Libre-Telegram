@@ -13,40 +13,20 @@ import org.telegram.messenger.PrizmaConfig;
 
 import java.util.WeakHashMap;
 
-/*
- * Libre — что это за файл:
- * Мягкое появление строк списка (анимация).
- */
-
-/**
- * Prizma: a soft, staggered "appear" animation for list content — rows fade in and
- * drift up one after another. Used for the chat list and the Settings list.
- *
- * It animates the currently-attached rows directly (no LayoutAnimationController and no
- * requestLayout), so it never fights the fragment-open transition or the blur capture —
- * which previously caused a full-opacity flash and shaking/artifacts. Rows are hidden
- * synchronously the instant we start, so the cascade plays from the very first frame.
- *
- * Disabled in Lite mode, on weak devices and while the battery saver is on.
- */
 public final class PrizmaEntrance {
-
     private static final long ROW_DURATION = 430;
-    private static final long ROW_STAGGER = 55;   // ms between consecutive rows
-    private static final int MAX_STAGGERED = 14;  // cap so lower rows don't wait too long
+    private static final long ROW_STAGGER = 55;
+    private static final int MAX_STAGGERED = 14;
 
-    // generation per list so a later play() cancels an earlier one's safety reset
     private static final WeakHashMap<RecyclerView, Integer> GEN = new WeakHashMap<>();
     private static final WeakHashMap<RecyclerView, Boolean> DETACH_HOOKED = new WeakHashMap<>();
 
     private PrizmaEntrance() {}
 
-    /** Hide rows now and cascade them in. No-op in Lite mode. */
     public static void play(RecyclerView rv) {
         play(rv, false, 0);
     }
 
-    /** Same, but the stagger starts from the bottom row (natural for chat message lists). */
     public static void play(RecyclerView rv, boolean fromBottom) {
         play(rv, fromBottom, 0);
     }
@@ -55,11 +35,11 @@ public final class PrizmaEntrance {
         if (rv == null) {
             return;
         }
-        if (!PrizmaConfig.fancyEffects()) { // Lite mode, weak device or battery saver
+        if (!PrizmaConfig.fancyEffects()) {
             reset(rv);
             return;
         }
-        hookDetachReset(rv); // recycled/detached rows always snap back to visible → never stuck invisible
+        hookDetachReset(rv);
         int n = rv.getChildCount();
         if (n == 0) {
             if (attempt < 8) {
@@ -82,7 +62,6 @@ public final class PrizmaEntrance {
             child.setTranslationY(startOffset);
             int order = fromBottom ? (n - 1 - i) : i;
             long delay = (long) Math.min(order, MAX_STAGGERED) * ROW_STAGGER;
-            // reset on BOTH normal end and cancel so a row is never left invisible
             final AnimatorListenerAdapter resetter = new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
@@ -97,11 +76,10 @@ public final class PrizmaEntrance {
                     .setDuration(ROW_DURATION)
                     .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
                     .setListener(resetter)
-                    .withLayer() // fade through a hardware layer instead of an offscreen pass every frame
+                    .withLayer()
                     .start();
         }
 
-        // safety: once the cascade should be done, force everything visible (unless a newer play took over)
         long total = ROW_DURATION + (long) Math.min(n, MAX_STAGGERED + 1) * ROW_STAGGER + 300;
         AndroidUtilities.runOnUIThread(() -> {
             Integer cur = GEN.get(rv);
@@ -133,7 +111,6 @@ public final class PrizmaEntrance {
 
             @Override
             public void onChildViewDetachedFromWindow(@NonNull View view) {
-                // never recycle a row while it is still hidden/offset
                 view.animate().cancel();
                 view.setAlpha(1f);
                 view.setTranslationY(0f);
@@ -141,11 +118,6 @@ public final class PrizmaEntrance {
         });
     }
 
-    /**
-     * Hook the very first draw: hide rows and cascade them in BEFORE the frame is committed,
-     * so there is no cold-start flash of the fully-formed list. Waits (a short budget) for the
-     * list to be populated, then plays once.
-     */
     public static void playOnFirstDraw(RecyclerView rv) {
         if (rv == null || !PrizmaConfig.fancyEffects()) {
             return;
@@ -159,7 +131,7 @@ public final class PrizmaEntrance {
                 if (!PrizmaConfig.fancyEffects() || System.currentTimeMillis() > deadline) {
                     done = true;
                 } else if (rv.getChildCount() > 0) {
-                    play(rv);           // hides rows synchronously before this draw commits
+                    play(rv);
                     done = true;
                 }
                 if (done) {
@@ -168,12 +140,11 @@ public final class PrizmaEntrance {
                         obs.removeOnPreDrawListener(this);
                     }
                 }
-                return true; // let the frame draw (rows are already hidden when we played)
+                return true;
             }
         });
     }
 
-    /** Snap all rows back to their resting state (called when leaving the screen). */
     public static void reset(RecyclerView rv) {
         if (rv == null) {
             return;

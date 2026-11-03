@@ -32,22 +32,7 @@ import java.io.FileInputStream;
 import java.security.MessageDigest;
 import java.util.Arrays;
 
-/*
- * Libre — что это за файл:
- * Обновления Libre внутри приложения (без канала в Telegram).
- */
-
-/**
- * Prizma: Libre updates without the Telegram channel. Libre Cloud says which version is the newest
- * (/v1/update, written by publish-update.sh); when it's newer than ours a sheet shows what changed
- * and one button downloads the APK through the same proxy as Telegram and opens Android's installer.
- *
- * Before installing, the file is checked twice: its SHA-256 must match what the server announced,
- * and it must be signed with the SAME key as the installed Libre — a swapped file can't get in.
- * Android always asks the person to confirm an install; settings, chats and playlists stay.
- */
 public final class PrizmaUpdater {
-
     private static final long CHECK_EVERY = 3 * 3600_000L;
     private static final long SNOOZE = 24 * 3600_000L;
     private static final DispatchQueue queue = new DispatchQueue("prizmaUpdate");
@@ -60,18 +45,15 @@ public final class PrizmaUpdater {
         return ApplicationLoader.applicationContext.getSharedPreferences("prizma_update", Context.MODE_PRIVATE);
     }
 
-    /** LaunchActivity.onResume: look for a new version now and then. */
     public static void maybeCheck(Activity activity) {
         if (System.currentTimeMillis() - prefs().getLong("checked_at", 0) < CHECK_EVERY) return;
         check(activity, false);
     }
 
-    /** Hub → «Проверить обновления». */
     public static void checkNow(Activity activity) {
         check(activity, true);
     }
 
-    /** The person allowed updates to go around their MTProto proxy (this session only). */
     private static boolean direct;
 
     private static void check(Activity activity, boolean manual) {
@@ -113,7 +95,6 @@ public final class PrizmaUpdater {
         });
     }
 
-    /** An MTProto proxy can't carry the update — explain it and offer to go around it, once. */
     private static void askDirect(Activity activity) {
         if (activity == null || activity.isFinishing()) return;
         new org.telegram.ui.ActionBar.AlertDialog.Builder(activity)
@@ -129,7 +110,6 @@ public final class PrizmaUpdater {
                 .show();
     }
 
-    /** "1.0.10" vs "1.0.9" → positive. Non-numbers count as 0. */
     static int compare(String a, String b) {
         String[] x = a == null ? new String[0] : a.split("\\.");
         String[] y = b == null ? new String[0] : b.split("\\.");
@@ -147,8 +127,6 @@ public final class PrizmaUpdater {
             return 0;
         }
     }
-
-    // ===================== the sheet =====================
 
     private static void show(Activity activity, JSONObject info) {
         showing = true;
@@ -194,7 +172,6 @@ public final class PrizmaUpdater {
             }
         }
 
-        // progress track (hidden until the download starts)
         final FrameLayout track = new FrameLayout(ctx);
         GradientDrawable tb = new GradientDrawable();
         tb.setCornerRadius(AndroidUtilities.dp(2));
@@ -286,9 +263,6 @@ public final class PrizmaUpdater {
         }
     }
 
-    // ===================== checks =====================
-
-    /** null when the file is the announced one and signed like this Libre; otherwise what's wrong. */
     private static String verify(File apk, String sha256) {
         try {
             if (sha256 != null && !sha256.isEmpty() && !sha256.equalsIgnoreCase(sha256Of(apk))) {

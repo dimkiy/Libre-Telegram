@@ -14,28 +14,17 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.HashMap;
 
-/*
- * Libre — что это за файл:
- * Цветные метки чатов (полоска слева в списке).
- */
-
-/**
- * Prizma: user color tags for chats. Lets the user highlight important chats with a colour;
- * a small colored stripe is drawn on the chat cell.
- */
 public class PrizmaDialogColors {
-
-    // index 0 = none; 1..8 = colors
     public static final int[] COLORS = {
             0x00000000,
-            0xffE8534B, // red
-            0xffF5A623, // orange
-            0xffF7D038, // yellow
-            0xff4CC764, // green
-            0xff34C6D6, // cyan
-            0xff4E8CFF, // blue
-            0xffA66BFF, // purple
-            0xffFF6FB0, // pink
+            0xffE8534B,
+            0xffF5A623,
+            0xffF7D038,
+            0xff4CC764,
+            0xff34C6D6,
+            0xff4E8CFF,
+            0xffA66BFF,
+            0xffFF6FB0,
     };
 
     public static final String[] NAMES = {
@@ -44,8 +33,6 @@ public class PrizmaDialogColors {
 
     private PrizmaDialogColors() {}
 
-    // Cached parsed map — color() is called from DialogCell.onDraw for every cell every frame,
-    // so we must NOT read prefs / allocate / split on each call. Rebuilt only when a tag changes.
     private static volatile HashMap<Long, Integer> cached;
     private static volatile boolean dirty = true;
 
@@ -71,14 +58,12 @@ public class PrizmaDialogColors {
         return m;
     }
 
-    /** 0 = none; otherwise an index into COLORS. */
     public static int index(long dialogId) {
         Integer v = map().get(dialogId);
         if (v == null || v <= 0 || v >= COLORS.length) return 0;
         return v;
     }
 
-    /** The ARGB color for a chat, or 0 if none. */
     public static int color(long dialogId) {
         int i = index(dialogId);
         return i == 0 ? 0 : COLORS[i];
@@ -99,10 +84,9 @@ public class PrizmaDialogColors {
             first = false;
         }
         PrizmaConfig.setDialogColors(sb.toString());
-        dirty = true; // invalidate the draw-path cache
+        dirty = true;
     }
 
-    /** Small sheet of color swatches to tag a chat. */
     public static void showPicker(Context ctx, long dialogId, Runnable onChanged) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
 

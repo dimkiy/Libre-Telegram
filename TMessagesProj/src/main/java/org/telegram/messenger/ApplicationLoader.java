@@ -274,9 +274,6 @@ public class ApplicationLoader extends Application {
         }
         BillingController.getInstance().startConnection();
 
-        // Prizma: Libre up to 1.0.3 was published as a DEBUG build, which wrote every network
-        // request/response (message texts included) into log files on the phone. Release builds
-        // don't log — wipe what the old versions left behind, once.
         if (!BuildVars.LOGS_ENABLED) {
             Utilities.globalQueue.postRunnable(ApplicationLoader::prizmaWipeOldDebugLogs, 5000);
         }
@@ -317,7 +314,6 @@ public class ApplicationLoader extends Application {
 
         super.onCreate();
 
-        // Prizma: apply the user's custom font globally as early as possible
         try {
             PrizmaFonts.applyGlobal();
         } catch (Throwable ignore) {}

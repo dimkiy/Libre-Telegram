@@ -44,18 +44,7 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 
-/*
- * Libre — что это за файл:
- * «Новый плеер (бета)»: спокойный плеер-карточка с размытой обложкой на фоне.
- */
-
-/**
- * Prizma: «Новый плеер (бета)» — a calm card player: the cover blurred behind everything, one
- * frosted card with the big cover, title, a thin progress line, three controls, volume and the
- * output device. Switched on (and off) from the full player's menu.
- */
 public class PrizmaCardPlayer extends Dialog {
-
     private static boolean open;
 
     public static boolean isOpen() {
@@ -80,9 +69,9 @@ public class PrizmaCardPlayer extends Dialog {
     private PlayPauseDrawable playDrawable;
     private AudioManager audio;
 
-    private Bitmap backdrop;          // the cover, small and blurred
+    private Bitmap backdrop;
     private long backdropFor = Long.MIN_VALUE;
-    private int tint = 0xff1b2a4a;    // the cover's mood, for the card and the background
+    private int tint = 0xff1b2a4a;
     private long loadedId = Long.MIN_VALUE;
     private boolean running;
     private final Paint bgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
@@ -106,7 +95,6 @@ public class PrizmaCardPlayer extends Dialog {
                 int w = getWidth(), h = getHeight();
                 canvas.drawColor(0xff0b0f1c);
                 if (backdrop != null && !backdrop.isRecycled()) {
-                    // centre-crop the blurred cover over the whole screen
                     float s = Math.max(w / (float) backdrop.getWidth(), h / (float) backdrop.getHeight());
                     int bw = (int) (backdrop.getWidth() * s), bh = (int) (backdrop.getHeight() * s);
                     dst.set((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2);
@@ -118,15 +106,14 @@ public class PrizmaCardPlayer extends Dialog {
             }
         };
         root.setWillNotDraw(false);
-        root.setOnClickListener(v -> dismiss()); // a tap beside the card closes it
+        root.setOnClickListener(v -> dismiss());
 
         card = new LinearLayout(ctx);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(AndroidUtilities.dp(22), AndroidUtilities.dp(22), AndroidUtilities.dp(22), AndroidUtilities.dp(18));
-        card.setClickable(true); // taps on the card don't close it
+        card.setClickable(true);
         root.addView(card, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 18, 0, 18, 0));
 
-        // top: grabber + menu
         FrameLayout top = new FrameLayout(ctx);
         View grab = new View(ctx);
         GradientDrawable gb = new GradientDrawable();
@@ -142,7 +129,6 @@ public class PrizmaCardPlayer extends Dialog {
         top.addView(more, LayoutHelper.createFrame(36, 36, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, -8, 0));
         card.addView(top, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 30, 0, -8, 0, 8));
 
-        // the cover: a square
         cover = new BackupImageView(ctx) {
             @Override
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
@@ -152,7 +138,6 @@ public class PrizmaCardPlayer extends Dialog {
         cover.setRoundRadius(AndroidUtilities.dp(14));
         card.addView(cover, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-        // title + artist, a small live waveform on the right
         LinearLayout meta = new LinearLayout(ctx);
         meta.setOrientation(LinearLayout.HORIZONTAL);
         meta.setGravity(Gravity.CENTER_VERTICAL);
@@ -177,7 +162,6 @@ public class PrizmaCardPlayer extends Dialog {
         meta.addView(bars, LayoutHelper.createLinear(22, 18, Gravity.CENTER_VERTICAL, 12, 0, 0, 0));
         card.addView(meta, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 20, 0, 0));
 
-        // progress
         progress = new Line(ctx, false);
         progress.listener = (p, done) -> {
             MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
@@ -193,7 +177,6 @@ public class PrizmaCardPlayer extends Dialog {
         times.addView(timeRight, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT));
         card.addView(times, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, -2, 0, 0));
 
-        // ⏮ ⏯ ⏭
         LinearLayout controls = new LinearLayout(ctx);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
@@ -225,7 +208,6 @@ public class PrizmaCardPlayer extends Dialog {
         controls.addView(next, LayoutHelper.createLinear(72, 64));
         card.addView(controls, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 14, 0, 0));
 
-        // volume: 🔈 ───── 🔊
         LinearLayout vol = new LinearLayout(ctx);
         vol.setOrientation(LinearLayout.HORIZONTAL);
         vol.setGravity(Gravity.CENTER_VERTICAL);
@@ -240,7 +222,6 @@ public class PrizmaCardPlayer extends Dialog {
         vol.addView(new Speaker(ctx, true), LayoutHelper.createLinear(24, 22, Gravity.CENTER_VERTICAL));
         card.addView(vol, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 16, 0, 0));
 
-        // where the sound goes
         device = new TextView(ctx);
         device.setTextColor(0xddffffff);
         device.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
@@ -282,7 +263,6 @@ public class PrizmaCardPlayer extends Dialog {
         v.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start();
     }
 
-    /** The frosted card takes the cover's mood. */
     private void paintCard() {
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{
                 withAlpha(blend(tint, 0xff000000, 0.25f), 0xcc), withAlpha(blend(tint, 0xff000000, 0.55f), 0xe6)});
@@ -310,7 +290,6 @@ public class PrizmaCardPlayer extends Dialog {
         running = true;
         update(true);
         AndroidUtilities.runOnUIThread(ticker);
-        // the card rises and settles
         card.setAlpha(0f);
         card.setTranslationY(AndroidUtilities.dp(40));
         card.setScaleX(0.96f);
@@ -398,10 +377,6 @@ public class PrizmaCardPlayer extends Dialog {
         return sec / 60 + ":" + (sec % 60 < 10 ? "0" : "") + sec % 60;
     }
 
-    /**
-     * Обложка: вшитая в файл → iTunes → картинка Telegram. Под ними всегда заглушка, чтобы не было
-     * чёрного квадрата, а когда файл докачается, checkLateCover() подставит вшитую обложку.
-     */
     private void loadCover(MessageObject mo) {
         Bitmap bmp = audioInfoCover();
         if (bmp != null) {
@@ -426,7 +401,7 @@ public class PrizmaCardPlayer extends Dialog {
         }
     }
 
-    private boolean coverWaiting; // на обложке пока заглушка
+    private boolean coverWaiting;
 
     private void checkLateCover() {
         if (!coverWaiting) return;
@@ -452,12 +427,10 @@ public class PrizmaCardPlayer extends Dialog {
         return null;
     }
 
-    /** Один трек = чат + номер сообщения (в разных чатах номера повторяются). */
     private static long trackKey(MessageObject mo) {
         return mo.getDialogId() * 1_000_003L + mo.getId();
     }
 
-    /** Waits for the cover bitmap, then blurs a small copy for the background (off the UI thread). */
     private void buildBackdrop(MessageObject mo) {
         Bitmap src = null;
         try {
@@ -491,7 +464,6 @@ public class PrizmaCardPlayer extends Dialog {
             AndroidUtilities.runOnUIThread(() -> {
                 if (!running || id != loadedId) return;
                 backdrop = small;
-                // keep it moody: never brighter than a dusky tone
                 float[] hsv = new float[3];
                 Color.colorToHSV(avg, hsv);
                 hsv[2] = Math.min(hsv[2], 0.42f);
@@ -561,9 +533,6 @@ public class PrizmaCardPlayer extends Dialog {
         return r;
     }
 
-    // ===================== pieces =====================
-
-    /** A thin rounded line you can drag; it thickens a little under the finger. */
     private static class Line extends View {
         interface Listener {
             void onChange(float value, boolean done);
@@ -601,7 +570,6 @@ public class PrizmaCardPlayer extends Dialog {
                     dragging = true;
                     getParent().requestDisallowInterceptTouchEvent(true);
                     animateGrow(1f);
-                    // falls through: a tap jumps right there
                 case MotionEvent.ACTION_MOVE:
                     setValue(p);
                     if (listener != null) listener.onChange(p, volume);
@@ -637,7 +605,6 @@ public class PrizmaCardPlayer extends Dialog {
         }
     }
 
-    /** ⏮ / ⏭ drawn as two plain triangles, like the reference. */
     private static class Skip extends View {
         private final boolean forward;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -672,7 +639,6 @@ public class PrizmaCardPlayer extends Dialog {
         }
     }
 
-    /** A small speaker with no / two sound waves. */
     private static class Speaker extends View {
         private final boolean loud;
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), stroke = new Paint(Paint.ANTI_ALIAS_FLAG);

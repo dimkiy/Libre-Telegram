@@ -21,27 +21,14 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.PrizmaEqualizer;
 import org.telegram.ui.ActionBar.AlertDialog;
 
-/*
- * Libre — что это за файл:
- * Экран эквалайзера.
- */
-
-/**
- * Prizma: the equalizer. Floats over a frosted copy of the player. The centre piece is a graphic EQ
- * drawn like a hardware unit — a dB scale, thin fader tracks and one clean response curve through
- * the knobs; picking a preset morphs the curve. Colour is kept for what you touch (the switch and
- * the knob being dragged); everything else is white on glass.
- */
 public class PrizmaEqualizerSheet {
-
     private static PrizmaGlass.Sheet current;
-    private static String selectedPreset; // "p:<index>" built-in / "c:<index>" own
+    private static String selectedPreset;
 
     public static void show(Context context) {
         show(context, null, PrizmaGlass.DEFAULT_ACCENT);
     }
 
-    /** @param behind the view whose picture becomes the frosted backdrop (the player); null = the activity */
     public static void show(Context context, View behind, int accent) {
         if (context == null) return;
         if (behind == null) {
@@ -76,7 +63,6 @@ public class PrizmaEqualizerSheet {
             root.setOrientation(LinearLayout.VERTICAL);
             root.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(18), AndroidUtilities.dp(20), AndroidUtilities.dp(10));
 
-            // ---- header: title + "Готово" like an iOS sheet ----
             LinearLayout header = new LinearLayout(context);
             header.setOrientation(LinearLayout.HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
@@ -98,7 +84,6 @@ public class PrizmaEqualizerSheet {
             header.addView(done, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
             root.addView(header, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-            // ---- state line: what is applied (or the value being dragged) + the switch ----
             LinearLayout stateRow = new LinearLayout(context);
             stateRow.setOrientation(LinearLayout.HORIZONTAL);
             stateRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -126,7 +111,6 @@ public class PrizmaEqualizerSheet {
                 return;
             }
 
-            // ---- the graphic EQ ----
             final int bands = eq.getNumberOfBands();
             freqs = new int[bands];
             short[] levels = new short[bands];
@@ -140,18 +124,17 @@ public class PrizmaEqualizerSheet {
                 eq.setBandLevel(band, level);
                 if (!eq.isEnabled()) setEnabled(true);
                 if (selectedPreset != null) {
-                    selectedPreset = null; // a hand-made curve is no longer that preset
+                    selectedPreset = null;
                     fillPresets();
                 }
                 if (finished) {
                     updateStatus();
                 } else {
-                    status.setText(freqFull(freqs[band]) + "  ·  " + dbLabel(level)); // live readout
+                    status.setText(freqFull(freqs[band]) + "  ·  " + dbLabel(level));
                 }
             });
             root.addView(graph, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 214, 0, 16, 0, 0));
 
-            // ---- presets: one line of text, the applied one marked with a dot ----
             HorizontalScrollView scroll = new HorizontalScrollView(context);
             scroll.setHorizontalScrollBarEnabled(false);
             scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -163,7 +146,6 @@ public class PrizmaEqualizerSheet {
             root.addView(scroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, -6, 14, -6, 0));
             fillPresets();
 
-            // ---- effects ----
             bassValue = new TextView(context);
             bass = effect(root, "Бас", eq.getBassStrength(), bassValue, true, 20);
             virtValue = new TextView(context);
@@ -195,7 +177,6 @@ public class PrizmaEqualizerSheet {
             final PrizmaGlass.Sheet s = new PrizmaGlass.Sheet(context, behind, content);
             sheet = s;
             current = s;
-            // the previous sheet finishes its close animation later — it must not clear the new one
             s.setOnDismissListener(d -> {
                 if (current == s) current = null;
             });
@@ -261,7 +242,6 @@ public class PrizmaEqualizerSheet {
             t.setTypeface(selected ? AndroidUtilities.bold() : null);
             t.setGravity(Gravity.CENTER_HORIZONTAL);
             t.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(6), AndroidUtilities.dp(8), AndroidUtilities.dp(4));
-            // the applied preset gets a small dot underneath (an empty one keeps the baseline even)
             GradientDrawable dot = new GradientDrawable();
             dot.setShape(GradientDrawable.OVAL);
             dot.setColor(selected ? 0xffffffff : 0x00000000);
@@ -309,7 +289,6 @@ public class PrizmaEqualizerSheet {
             updateStatus();
         }
 
-        /** Off = everything stays visible but recedes: the settings are kept, just bypassed. */
         private void setEnabledLook(boolean on, boolean animated) {
             float a = on ? 1f : 0.4f;
             View[] views = {graph, presetsScroll, bass, virt};
@@ -325,7 +304,7 @@ public class PrizmaEqualizerSheet {
                 int bands = eq.getNumberOfBands();
                 short[] levels = new short[bands];
                 for (int b = 0; b < bands; b++) levels[b] = eq.getBandLevel(b);
-                graph.setLevels(levels, animate); // the curve morphs into the new shape
+                graph.setLevels(levels, animate);
             }
             if (bass != null) {
                 bass.setValue(eq.getBassStrength() / 1000f);
@@ -379,19 +358,16 @@ public class PrizmaEqualizerSheet {
         }
     }
 
-    // ===================== graphic EQ =====================
-
     interface BandListener {
         void onBand(int band, short level, boolean done);
     }
 
-    /** dB scale on the left, a thin fader per band, one response curve through the knobs. */
     private static class GraphicEq extends View {
         private final int bands;
         private final int[] freqs;
         private final short min, max;
-        private final float[] value;   // 0..1 target
-        private final float[] display; // 0..1 drawn (eases toward value → morphing)
+        private final float[] value;
+        private final float[] display;
         private final float[] xs;
         private BandListener listener;
         private int dragging = -1;
@@ -473,7 +449,7 @@ public class PrizmaEqualizerSheet {
         }
 
         private float gutter() {
-            return AndroidUtilities.dp(30); // dB scale
+            return AndroidUtilities.dp(30);
         }
 
         private float top() {
@@ -481,7 +457,7 @@ public class PrizmaEqualizerSheet {
         }
 
         private float bottom() {
-            return getHeight() - AndroidUtilities.dp(26); // frequency labels below
+            return getHeight() - AndroidUtilities.dp(26);
         }
 
         private float yOf(float v) {
@@ -526,7 +502,6 @@ public class PrizmaEqualizerSheet {
         private void move(float y, boolean done) {
             float v = (bottom() - y) / Math.max(1f, bottom() - top());
             v = Math.max(0f, Math.min(1f, v));
-            // a gentle magnet at 0 dB with a tick, so "flat" is easy to hit exactly
             boolean inSnap = min < 0 && max > 0 && Math.abs(v - toValue((short) 0)) < 0.03f;
             if (inSnap) {
                 v = toValue((short) 0);
@@ -534,7 +509,7 @@ public class PrizmaEqualizerSheet {
             }
             snapped = inSnap;
             value[dragging] = v;
-            display[dragging] = v; // the finger leads, no lag
+            display[dragging] = v;
             if (listener != null) listener.onBand(dragging, toLevel(v), done);
             invalidate();
         }
@@ -566,7 +541,6 @@ public class PrizmaEqualizerSheet {
             final float zeroY = yOf(toValue((short) 0));
             final float textDy = AndroidUtilities.dp(3.5f);
 
-            // scale: +max / 0 / min
             canvas.drawLine(g, top, w, top, hair);
             canvas.drawLine(g, bottom, w, bottom, hair);
             canvas.drawLine(g, zeroY, w, zeroY, zero);
@@ -574,7 +548,6 @@ public class PrizmaEqualizerSheet {
             canvas.drawText("0", g - AndroidUtilities.dp(8), zeroY + textDy, scale);
             canvas.drawText(dbShort(min), g - AndroidUtilities.dp(8), bottom + textDy, scale);
 
-            // the column being touched lifts a little
             if (lastDragged >= 0 && dragProgress > 0.01f) {
                 float col = (w - g) / (float) bands;
                 column.setAlpha((int) (0x0f * dragProgress));
@@ -582,14 +555,12 @@ public class PrizmaEqualizerSheet {
                 canvas.drawRoundRect(rect, AndroidUtilities.dp(10), AndroidUtilities.dp(10), column);
             }
 
-            // fader tracks
             final float trackW = AndroidUtilities.dpf2(2f);
             for (int i = 0; i < bands; i++) {
                 rect.set(xs[i] - trackW / 2f, top, xs[i] + trackW / 2f, bottom);
                 canvas.drawRoundRect(rect, trackW / 2f, trackW / 2f, track);
             }
 
-            // response curve + a faint wash between it and 0 dB
             buildCurve(g, w);
             fillPath.set(curvePath);
             fillPath.lineTo(w, zeroY);
@@ -598,7 +569,6 @@ public class PrizmaEqualizerSheet {
             canvas.drawPath(fillPath, fill);
             canvas.drawPath(curvePath, curve);
 
-            // knobs + frequencies
             for (int i = 0; i < bands; i++) {
                 float cx = xs[i], cy = yOf(display[i]);
                 float grow = i == lastDragged ? dragProgress : 0f;
@@ -619,7 +589,6 @@ public class PrizmaEqualizerSheet {
             float y0 = yOf(display[0]);
             curvePath.moveTo(left, y0);
             curvePath.lineTo(xs[0], y0);
-            // Catmull-Rom → cubic Bézier through the knob centres
             for (int i = 0; i < bands - 1; i++) {
                 float x0 = i > 0 ? xs[i - 1] : xs[i], yy0 = yOf(display[i > 0 ? i - 1 : i]);
                 float x1 = xs[i], y1 = yOf(display[i]);
@@ -632,8 +601,6 @@ public class PrizmaEqualizerSheet {
             curvePath.lineTo(w, yOf(display[bands - 1]));
         }
     }
-
-    // ===================== text =====================
 
     private static String freqShort(int hz) {
         if (hz >= 1000) {

@@ -27,18 +27,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 
-/*
- * Libre — что это за файл:
- * Плашка «сейчас играет» поверх экрана.
- */
-
-/**
- * Prizma: a floating "Dynamic Island" style now-playing pill. It's much larger and easier to
- * find than Telegram's thin default now-playing bar, and tapping it jumps straight back into the
- * full-screen player. Appears whenever music is playing and tucks itself away otherwise.
- */
 public class PrizmaNowPlayingIsland extends FrameLayout implements NotificationCenter.NotificationCenterDelegate {
-
     private static final int ACCENT = 0xffFF4D6D;
 
     private final LinearLayout pill;
@@ -52,7 +41,6 @@ public class PrizmaNowPlayingIsland extends FrameLayout implements NotificationC
     private int boundMsgId = Integer.MIN_VALUE;
     private boolean shown;
 
-    // drag state (user can move the island anywhere; position is persisted)
     private float offX, offY;
     private float downRawX, downRawY, startOffX, startOffY;
     private boolean dragging;
@@ -213,7 +201,6 @@ public class PrizmaNowPlayingIsland extends FrameLayout implements NotificationC
         }
     }
 
-    /** Re-reads the player state and shows/updates/hides the island. */
     public void refresh(boolean animate) {
         MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
         boolean shouldShow = mo != null && mo.isMusic();
@@ -272,7 +259,6 @@ public class PrizmaNowPlayingIsland extends FrameLayout implements NotificationC
         return thumb != null ? ImageLocation.getForDocument(thumb, doc) : null;
     }
 
-    /** After a drag, glide the island to the nearest side edge so it sits neatly out of the way. */
     private void snapToEdge() {
         View parent = (View) getParent();
         if (parent == null || getWidth() == 0) {
@@ -350,7 +336,6 @@ public class PrizmaNowPlayingIsland extends FrameLayout implements NotificationC
                 .start();
     }
 
-    /** Thin accent progress line along the bottom edge of the pill. */
     private static class ProgressLine {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF rect = new RectF();

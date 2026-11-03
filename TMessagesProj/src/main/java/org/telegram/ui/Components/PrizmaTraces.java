@@ -30,35 +30,19 @@ import org.telegram.ui.LaunchActivity;
 
 import java.io.File;
 
-/*
- * Libre — что это за файл:
- * «Стереть следы»: история поиска, черновики, буфер обмена и прочее одной кнопкой.
- */
-
-/**
- * Prizma: "erase traces" — one button that removes what the phone remembers about how Libre was
- * used: search history, recent stickers and emoji, drafts, the clipboard, temporary cache, and
- * (optionally) downloaded photos / videos / voice / files. Music is never touched (playlists
- * replay it from the cache). Can also run by itself after Libre has been in the background.
- */
 public final class PrizmaTraces {
-
     public static final int SEARCH = 1;
     public static final int RECENT = 2;
     public static final int DRAFTS = 4;
     public static final int CLIPBOARD = 8;
     public static final int CACHE = 16;
     public static final int MEDIA = 32;
-    /** Nothing that loses the user's own unsent text or downloaded files unless they tick it. */
     public static final int DEFAULT_MASK = SEARCH | RECENT | CLIPBOARD | CACHE;
 
     private static final long AUTO_DELAY_MS = 10 * 60 * 1000L;
 
     private PrizmaTraces() {}
 
-    // ===================== wiping =====================
-
-    /** Wipes the chosen traces for every logged-in account; {@code done} gets the freed bytes (UI thread). */
     public static void wipe(int mask, Utilities.Callback<Long> done) {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (!UserConfig.getInstance(a).isClientActivated()) continue;
@@ -103,7 +87,6 @@ public final class PrizmaTraces {
             } catch (Throwable ignore) {
             }
         }
-        // files: on a background thread, then let Telegram re-check what is still downloaded
         Utilities.globalQueue.postRunnable(() -> {
             long freed = 0;
             if ((mask & CACHE) != 0) {
@@ -114,10 +97,9 @@ public final class PrizmaTraces {
                 freed += clean(FileLoader.checkDirectory(FileLoader.MEDIA_DIR_IMAGE), 0);
                 freed += clean(FileLoader.checkDirectory(FileLoader.MEDIA_DIR_VIDEO), 0);
                 freed += clean(FileLoader.checkDirectory(FileLoader.MEDIA_DIR_AUDIO), 0);
-                freed += clean(FileLoader.checkDirectory(FileLoader.MEDIA_DIR_DOCUMENT), 1); // 1 = files, not music
+                freed += clean(FileLoader.checkDirectory(FileLoader.MEDIA_DIR_DOCUMENT), 1);
                 freed += clean(FileLoader.checkDirectory(FileLoader.MEDIA_DIR_FILES), 1);
             }
-            // leftovers of old debug builds, if any
             freed += clean(AndroidUtilities.getLogsDir(), 0);
             final long result = freed;
             for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
@@ -134,7 +116,6 @@ public final class PrizmaTraces {
         });
     }
 
-    /** The chat list keeps its recent searches in memory — reload them from the (now empty) table. */
     private static void forgetSearchOnOpenScreens() {
         try {
             LaunchActivity la = LaunchActivity.instance;
@@ -149,7 +130,6 @@ public final class PrizmaTraces {
         }
     }
 
-    /** Telegram's own cleaner (same docType filters as "Storage usage"); returns the bytes it removed. */
     private static long clean(File dir, int docType) {
         if (dir == null || !dir.exists()) return 0;
         long before = size(dir);
@@ -173,16 +153,12 @@ public final class PrizmaTraces {
         return total;
     }
 
-    // ===================== automatic mode =====================
-
     private static final Runnable autoWipe = () -> {
         if (PrizmaConfig.tracesAuto() && ApplicationLoader.mainInterfacePaused) {
-            // not the clipboard: by now it may hold something copied in another app (a password...)
             wipe(PrizmaConfig.tracesMask() & ~CLIPBOARD, null);
         }
     };
 
-    /** LaunchActivity.onPause: in 10 minutes in the background the traces go by themselves. */
     public static void onAppBackground() {
         AndroidUtilities.cancelRunOnUIThread(autoWipe);
         if (PrizmaConfig.tracesAuto()) {
@@ -193,8 +169,6 @@ public final class PrizmaTraces {
     public static void onAppForeground() {
         AndroidUtilities.cancelRunOnUIThread(autoWipe);
     }
-
-    // ===================== the sheet =====================
 
     public static void show(Context context, View behind) {
         final int[] mask = {PrizmaConfig.tracesMask()};
@@ -223,7 +197,6 @@ public final class PrizmaTraces {
         addRow(root, context, mask, DRAFTS, "Черновики", "неотправленный текст во всех чатах — его не вернуть");
         mediaSize[0] = addRow(root, context, mask, MEDIA, "Скачанные фото, видео и файлы", "загрузятся снова, если открыть их в чате");
 
-        // automatic mode
         LinearLayout autoRow = new LinearLayout(context);
         autoRow.setOrientation(LinearLayout.HORIZONTAL);
         autoRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -251,7 +224,6 @@ public final class PrizmaTraces {
         });
         root.addView(autoRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 6, 0, 0));
 
-        // the button: tap once to arm, again to erase (nothing irreversible on a single stray tap)
         final TextView erase = new TextView(context);
         erase.setText("Стереть");
         erase.setTextColor(0xff111114);
@@ -295,7 +267,6 @@ public final class PrizmaTraces {
         });
         root.addView(erase, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 14, 0, 0));
 
-        // sizes, so the choice isn't blind
         Utilities.globalQueue.postRunnable(() -> {
             File cache = FileLoader.checkDirectory(FileLoader.MEDIA_DIR_CACHE);
             final long c = size(cache);
@@ -310,7 +281,6 @@ public final class PrizmaTraces {
         new PrizmaGlass.Sheet(context, behind, root).show();
     }
 
-    /** One choice: text on the left, a round check on the right. Returns the subtitle (for sizes). */
     private static TextView addRow(LinearLayout root, Context context, int[] mask, int bit, String name, String desc) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);

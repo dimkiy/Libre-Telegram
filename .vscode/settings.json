@@ -1,12 +1,7 @@
 {
-  // Libre: VS Code — для чтения и проверки кода. Собирается APK в Android Studio или через gradlew.
-  // Java открывается в лёгком режиме: подсветка и синтаксические ошибки без тяжёлого импорта Gradle
-  // (полный импорт Android-проекта такого размера VS Code не тянет).
   "java.server.launchMode": "LightWeight",
   "java.import.gradle.enabled": false,
   "java.configuration.updateBuildConfiguration": "disabled",
-
-  // поиск только по нашему коду и Telegram, без нативных библиотек и сборки
   "search.exclude": {
     "**/build": true,
     "**/.gradle": true,

@@ -23,24 +23,7 @@ import org.telegram.ui.ChatActivity;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Плашка «Слушать вместе» над полем ввода в чате.
- */
-
-/**
- * Prizma: the "listen together" pill above the chat input. It answers the question a guest has
- * before touching anything — is somebody playing music here right now, where are they in the
- * track, and what happens if I press the button:
- *
- *  • someone is live    → "Аня слушает сейчас · 1:23 / 3:45 · Трек"   [Слушать]  (joins from that second)
- *  • you joined         → "Слушаете вместе: Аня · 1:24 / 3:45"         [Выйти]
- *  • you are the host   → "Вы ведёте эфир · 1:23 / 3:45 · Трек"        [Стоп]
- *
- * Tapping the pill itself scrolls to the session's message. Nothing is shown when no session is live.
- */
 public class PrizmaTogetherBar extends LinearLayout implements NotificationCenter.NotificationCenterDelegate {
-
     private static final int HIDDEN = 0, INVITE = 1, FOLLOWING = 2, HOSTING = 3;
 
     private final ChatActivity fragment;
@@ -61,7 +44,7 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
         public void run() {
             if (mode == HIDDEN || !isAttachedToWindow()) return;
             if (mode == INVITE && !PrizmaTogether.isLive(liveMsg, liveState)) {
-                rescan(); // the session ran out while we were looking
+                rescan();
                 return;
             }
             updateTexts();
@@ -120,8 +103,6 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
         setVisibility(GONE);
     }
 
-    // ===================== lifecycle =====================
-
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -157,7 +138,7 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
             if (mode == FOLLOWING || mode == HOSTING) updateTexts();
             return;
         }
-        if (args.length > 0 && args[0] instanceof Long && (Long) args[0] != dialogId) return; // another chat
+        if (args.length > 0 && args[0] instanceof Long && (Long) args[0] != dialogId) return;
         scheduleRescan(150);
     }
 
@@ -165,8 +146,6 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
         AndroidUtilities.cancelRunOnUIThread(rescanRunnable);
         AndroidUtilities.runOnUIThread(rescanRunnable, delay);
     }
-
-    // ===================== state =====================
 
     private void rescan() {
         PrizmaTogether t = PrizmaTogether.get();
@@ -178,7 +157,6 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
         } else if (t.isFollowingIn(account, dialogId)) {
             newMode = FOLLOWING;
         } else if (fragment.messages != null) {
-            // newest first; only the newest session message counts (older ones are past tracks)
             ArrayList<MessageObject> list = fragment.messages;
             int n = Math.min(list.size(), 300);
             for (int i = 0; i < n; i++) {
@@ -295,8 +273,6 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
         return t;
     }
 
-    // ===================== actions =====================
-
     private void onButton() {
         PrizmaTogether t = PrizmaTogether.get();
         switch (mode) {
@@ -325,8 +301,6 @@ public class PrizmaTogetherBar extends LinearLayout implements NotificationCente
             }
         }
     }
-
-    // ===================== the little equalizer =====================
 
     private static class Bars extends View {
         private final Paint circle = new Paint(Paint.ANTI_ALIAS_FLAG);

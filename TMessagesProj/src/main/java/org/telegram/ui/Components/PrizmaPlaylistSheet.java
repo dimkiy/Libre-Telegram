@@ -42,20 +42,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Экран моих плейлистов: список, обложки, перестановка треков.
- */
-
-/**
- * Prizma: multi-playlist music library, styled like a modern music app — playlist cards with
- * their own covers and names, create/rename/delete, add tracks across playlists.
- */
 public class PrizmaPlaylistSheet {
-
     public static final int COVER_REQUEST = 48216;
 
-    // card gradient palette (used when a playlist has no cover image)
     private static final int[][] PALETTE = {
             {0xff7C5CFF, 0xff4D2BD6}, {0xffFF6B9D, 0xffC13584},
             {0xff26C281, 0xff0E8C5A}, {0xffFF8A3C, 0xffE8534B},
@@ -65,8 +54,6 @@ public class PrizmaPlaylistSheet {
     private static BottomSheet sheet;
     private static Context pickCtx;
     private static long coverTargetId;
-
-    // ======================= HOME: all playlists =======================
 
     public static void show(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
@@ -78,7 +65,6 @@ public class PrizmaPlaylistSheet {
 
         ArrayList<PrizmaPlaylist.Playlist> pls = PrizmaPlaylist.playlists();
 
-        // header
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(LinearLayout.VERTICAL);
         TextView title = new TextView(context);
@@ -94,7 +80,6 @@ public class PrizmaPlaylistSheet {
         header.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
         root.addView(header, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 16));
 
-        // grid of playlist cards + a "create" card
         ScrollView scroll = new ScrollView(context);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setClipToPadding(false);
@@ -107,7 +92,6 @@ public class PrizmaPlaylistSheet {
         int gap = AndroidUtilities.dp(12);
         int cardW = (totalW - gap * (cols - 1)) / cols;
 
-        // items: all playlists, then the "create" card
         int itemCount = pls.size() + 1;
         final ArrayList<View> cards = new ArrayList<>();
         LinearLayout rowLayout = null;
@@ -138,7 +122,6 @@ public class PrizmaPlaylistSheet {
         try { sheet.fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
         sheet.show();
 
-        // staggered entrance
         for (int i = 0; i < cards.size(); i++) {
             final View c = cards.get(i);
             c.setAlpha(0f);
@@ -268,7 +251,6 @@ public class PrizmaPlaylistSheet {
                 reopenHome(context);
             }));
         }
-        // open this playlist to everyone in Libre (one at a time)
         final boolean isPublic = PrizmaPlaylist.publicId() == p.id;
         root.addView(menuRow(context, textColor, isPublic ? R.drawable.msg_archive_hide : R.drawable.msg_views,
                 isPublic ? "Скрыть из профиля Libre" : "Показывать в профиле Libre", () -> {
@@ -328,8 +310,6 @@ public class PrizmaPlaylistSheet {
         show(context);
     }
 
-    // ======================= one playlist =======================
-
     public static void openPlaylist(Context context, long id) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
@@ -342,7 +322,6 @@ public class PrizmaPlaylistSheet {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(14), AndroidUtilities.dp(16), AndroidUtilities.dp(14));
 
-        // top: back + ⋮
         LinearLayout top = new LinearLayout(context);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -353,7 +332,6 @@ public class PrizmaPlaylistSheet {
         back.setOnClickListener(v -> reopenHome(context));
         top.addView(back, LayoutHelper.createLinear(36, 36, Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
         top.addView(new View(context), LayoutHelper.createLinear(0, 1, 1f));
-        // find single tracks anywhere in Telegram and add them here
         ImageView find = new ImageView(context);
         find.setImageResource(R.drawable.msg_search);
         find.setColorFilter(textColor);
@@ -369,7 +347,6 @@ public class PrizmaPlaylistSheet {
         top.addView(more, LayoutHelper.createLinear(36, 36, Gravity.CENTER_VERTICAL));
         root.addView(top, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
 
-        // header: big cover + name + count + play-all
         LinearLayout head = new LinearLayout(context);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -411,7 +388,6 @@ public class PrizmaPlaylistSheet {
         }
         root.addView(head, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 14));
 
-        // tracks — RecyclerView with drag-to-reorder
         int h = (int) (AndroidUtilities.displaySize.y / AndroidUtilities.density * 0.48f);
         if (tracks.isEmpty()) {
             ScrollView scroll = new ScrollView(context);
@@ -438,7 +414,7 @@ public class PrizmaPlaylistSheet {
             if (c != null) { curDid0 = c.getDialogId(); curMid0 = c.getId(); }
             final long curDid = curDid0;
             final int curMid = curMid0;
-            final ArrayList<PrizmaPlaylist.Track> data = tracks; // mutable, reordered on drag
+            final ArrayList<PrizmaPlaylist.Track> data = tracks;
 
             final RecyclerView rv = new RecyclerView(context);
             rv.setLayoutManager(new LinearLayoutManager(context));
@@ -458,7 +434,6 @@ public class PrizmaPlaylistSheet {
                 public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
                     FrameLayout box = (FrameLayout) holder.itemView;
                     box.removeAllViews();
-                    // full width — without it the row wraps its text and the handle drifts after short titles
                     box.addView(buildReorderRow(context, id, data.get(position), textColor, grayColor,
                             curDid, curMid, holder, helperRef[0]), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
                 }
@@ -489,7 +464,7 @@ public class PrizmaPlaylistSheet {
 
                 @Override
                 public boolean isLongPressDragEnabled() {
-                    return false; // drag via the handle only (long-press opens the menu)
+                    return false;
                 }
 
                 @Override
@@ -508,7 +483,6 @@ public class PrizmaPlaylistSheet {
                     viewHolder.itemView.setAlpha(1f);
                     viewHolder.itemView.setScaleX(1f);
                     viewHolder.itemView.setScaleY(1f);
-                    // refresh the position numbers after a reorder (posted so we don't notify mid-layout)
                     r.post(() -> {
                         try { adapter.notifyItemRangeChanged(0, adapter.getItemCount()); } catch (Throwable ignore) {}
                     });
@@ -524,14 +498,11 @@ public class PrizmaPlaylistSheet {
         BottomSheet.Builder builder = new BottomSheet.Builder(context);
         builder.setCustomView(root);
         sheet = builder.create();
-        // a fast fling up the track list must not read as "swipe the sheet away": the sheet only
-        // follows the list's own overscroll (nested scrolling), i.e. once it's at the very top
         sheet.setCanDismissWithSwipe(false);
         try { sheet.fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
         sheet.show();
     }
 
-    /** Global music search; the playlist reopens with whatever was added. */
     private static void openSearch(Context context, long id) {
         if (sheet != null) sheet.dismiss();
         PrizmaMusicSearchSheet.show(context, id, () -> openPlaylist(context, id));
@@ -570,7 +541,6 @@ public class PrizmaPlaylistSheet {
 
         LinearLayout texts = new LinearLayout(context);
         texts.setOrientation(LinearLayout.VERTICAL);
-        // full title: wraps onto more lines instead of being cut at the first one
         TextView t = new TextView(context);
         t.setText(tr.title == null || tr.title.isEmpty() ? "Трек" : tr.title);
         t.setTextColor(current ? accent : textColor);
@@ -589,7 +559,6 @@ public class PrizmaPlaylistSheet {
         texts.addView(a, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
         row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 10, 0, 6, 0));
 
-        // drag handle
         ImageView handle = new ImageView(context);
         handle.setImageResource(R.drawable.list_reorder);
         handle.setColorFilter(grayColor);
@@ -618,12 +587,6 @@ public class PrizmaPlaylistSheet {
         return row;
     }
 
-    // ===================== "+" in the player: choose playlists =====================
-
-    /**
-     * Glass sheet over the player: every playlist with a check — tap toggles the current track in it,
-     * "Новый плейлист" creates one and puts the track there. onChanged runs after every change.
-     */
     public static void showAddToPlaylist(Context context, View behind, int accent, MessageObject mo, Runnable onChanged) {
         if (context == null || mo == null) return;
         if (accent == 0) accent = PrizmaGlass.DEFAULT_ACCENT;
@@ -719,7 +682,6 @@ public class PrizmaPlaylistSheet {
         ref[0].show();
     }
 
-    /** One row of the chooser: cover (or a glass "+" for a new playlist), name, count, check on the right. */
     private static View chooserRow(Context context, PrizmaPlaylist.Playlist p, String name, String sub, boolean checked, int accent, Runnable onClick) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -768,7 +730,6 @@ public class PrizmaPlaylistSheet {
         return row;
     }
 
-    /** Round check: an empty glass ring, or an accent disc with a tick. */
     private static class CheckMark extends View {
         private final boolean checked;
         private final int accent;
@@ -847,7 +808,6 @@ public class PrizmaPlaylistSheet {
         head.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(6), AndroidUtilities.dp(14), AndroidUtilities.dp(10));
         root.addView(head);
 
-        // need a real MessageObject to add — rebuild from the source playlist, match by did/mid
         final ArrayList<MessageObject> src = PrizmaPlaylist.buildMessages(fromId);
         MessageObject moFound = null;
         for (MessageObject m : src) {
@@ -905,7 +865,6 @@ public class PrizmaPlaylistSheet {
             }
             PrizmaPlaylist.Track tr = meta.get(index);
             ArrayList<MessageObject> all = PrizmaPlaylist.buildMessages(plId);
-            // match by did/mid — buildMessages may skip undecodable tracks, so indices can differ
             MessageObject target = null;
             for (MessageObject m : all) {
                 if (m != null && m.getDialogId() == tr.did && m.getId() == tr.mid) {
@@ -917,8 +876,6 @@ public class PrizmaPlaylistSheet {
                 android.widget.Toast.makeText(context, "Трек не сохранён полностью — открой его в чате и нажми ♥ заново", android.widget.Toast.LENGTH_LONG).show();
                 return;
             }
-            // loadMusic = false: play exactly this playlist (it used to pull in the rest of the music
-            // from the chat the track came from), looping it like Spotify
             try { MediaController.getInstance().setPlaylist(all, target, 0, false, null); } catch (Throwable ignore) {}
             boolean ok = false;
             try { ok = MediaController.getInstance().playMessage(target); } catch (Throwable ignore) {}
@@ -933,8 +890,6 @@ public class PrizmaPlaylistSheet {
             android.widget.Toast.makeText(context, "Ошибка", android.widget.Toast.LENGTH_SHORT).show();
         }
     }
-
-    // ======================= cover picker =======================
 
     private static void pickCover(Context context, long id) {
         if (!(context instanceof Activity)) {
@@ -952,7 +907,6 @@ public class PrizmaPlaylistSheet {
         }
     }
 
-    /** Routed from LaunchActivity.onActivityResult. */
     public static void handleCoverPicked(Activity activity, Uri uri) {
         if (activity == null || uri == null) return;
         try {
@@ -977,9 +931,6 @@ public class PrizmaPlaylistSheet {
         }
     }
 
-    // ======================= shared views/helpers =======================
-
-    /** Rounded cover: the playlist image if set, otherwise a per-name gradient with a music glyph. */
     private static FrameLayout coverView(Context context, String path, String name, int size, int radius) {
         FrameLayout box = new FrameLayout(context);
         box.setClipToOutline(true);

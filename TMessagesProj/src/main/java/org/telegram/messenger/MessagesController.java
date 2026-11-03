@@ -926,8 +926,6 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isPremiumUser(TLRPC.User currentUser) {
-        // Libre: тот, кто надел Libre-подарок, показывается с ним у ника и без Premium
-        // (везде здесь речь только о том, что рисовать рядом с именем)
         return currentUser != null && (currentUser.premium || PrizmaPresence.isLibreWear(currentUser.emoji_status)) && !isSupportUser(currentUser);
     }
 
@@ -2574,7 +2572,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public void updateEmojiStatus(long dialogId, TLRPC.EmojiStatus newStatus, TL_stars.StarGift gift) {
         final boolean myself = dialogId == 0 || dialogId == getUserConfig().getClientUserId();
         if (myself && PrizmaPresence.myWear(currentAccount) != null) {
-            PrizmaPresence.setMyWear(currentAccount, null, 0, null, null); // Libre: новый статус Telegram снимает надетый Libre-подарок
+            PrizmaPresence.setMyWear(currentAccount, null, 0, null, null);
         }
         TLRPC.EmojiStatus new_emoji_status = newStatus;
         if (new_emoji_status instanceof TLRPC.TL_inputEmojiStatusCollectible && gift instanceof TL_stars.TL_starGiftUnique) {
@@ -6859,9 +6857,9 @@ public class MessagesController extends BaseController implements NotificationCe
             return false;
         }
         if (PrizmaSocial.isCreator(user.id) || PrizmaSocial.isTeam(user.id)) {
-            user.verified = true; // Libre: the check next to the name for the creator and the Libre team, seen only in Libre
+            user.verified = true;
         }
-        PrizmaPresence.decorate(currentAccount, user); // Libre: подарок из Libre, надетый к нику, — как настоящий
+        PrizmaPresence.decorate(currentAccount, user);
         fromCache = fromCache && user.id / 1000 != 333 && user.id != 777000;
         TLRPC.User oldUser = users.get(user.id);
         if (oldUser == user && !force) {
@@ -9339,7 +9337,7 @@ public class MessagesController extends BaseController implements NotificationCe
             } else {
                 channelId = 0;
             }
-            PrizmaAntiDelete.markSelfDeleted(messages, channelId); // Prizma: anti-delete must not keep our own deletions
+            PrizmaAntiDelete.markSelfDeleted(messages, channelId);
             if (!cacheOnly) {
                 toSend = new ArrayList<>();
                 for (int a = 0, N = messages.size(); a < N; a++) {
@@ -14572,7 +14570,6 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     private void completeReadTask(ReadTask task) {
-        // Prizma: invisible read — do not send the read receipt for private (user) chats
         if (PrizmaConfig.invisibleRead() && task.dialogId > 0 && task.replyId == 0 && task.monoForumPeerId == 0 && !DialogObject.isEncryptedDialog(task.dialogId)) {
             return;
         }
@@ -17616,7 +17613,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     protected void deleteMessagesByPush(long dialogId, ArrayList<Integer> _ids, long channelId) {
-        final ArrayList<Integer> ids = PrizmaAntiDelete.filterRemoteDeletion(currentAccount, channelId, _ids); // Prizma: anti-delete
+        final ArrayList<Integer> ids = PrizmaAntiDelete.filterRemoteDeletion(currentAccount, channelId, _ids);
         if (ids.isEmpty()) return;
         getMessagesStorage().getStorageQueue().postRunnable(() -> {
             AndroidUtilities.runOnUIThread(() -> {
@@ -21292,7 +21289,6 @@ public class MessagesController extends BaseController implements NotificationCe
         if (deletedMessages != null) {
             for (int a = 0, size = deletedMessages.size(); a < size; a++) {
                 long key = deletedMessages.keyAt(a);
-                // Prizma: anti-delete — someone else's deletions stay in the database (see PrizmaAntiDelete)
                 ArrayList<Integer> arrayList = PrizmaAntiDelete.filterRemoteDeletion(currentAccount, key < 0 ? -key : 0, deletedMessages.valueAt(a));
                 if (arrayList.isEmpty()) continue;
                 getMessagesStorage().getStorageQueue().postRunnable(() -> {
@@ -21695,7 +21691,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public SponsoredMessagesInfo getSponsoredMessages(long dialogId) {
         if (PrizmaConfig.hideAds()) {
-            return null; // Prizma: hide sponsored messages (ads)
+            return null;
         }
         SponsoredMessagesInfo info = sponsoredMessages.get(dialogId);
         if (info != null && (info.loading || Math.abs(SystemClock.elapsedRealtime() - info.loadTime) <= 5 * 60 * 1000)) {

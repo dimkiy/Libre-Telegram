@@ -9680,7 +9680,6 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     } else {
                         maxHeight = maxWidth = (int) (Math.min(getParentWidth(), AndroidUtilities.displaySize.y) * 0.5f);
                     }
-                    // Prizma: user sticker size scale
                     float prizmaStickerScale = org.telegram.messenger.PrizmaConfig.stickerScale();
                     if (prizmaStickerScale < 0.999f) {
                         maxHeight *= prizmaStickerScale;
@@ -20767,7 +20766,6 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
         if ((drawBackground || transitionParams.animateDrawBackground) && currentBackgroundDrawable != null && (currentPosition == null || isDrawSelectionBackground() && (currentMessageObject.isMusic() || currentMessageObject.isDocument())) && !(enterTransitionInProgress && !currentMessageObject.isVoice())) {
             float alphaInternal = this.alphaInternal;
-            // Prizma: translucent "glass" bubbles — dim only the bubble background (text/media stay full alpha)
             if (org.telegram.messenger.PrizmaConfig.glassBubbles()) {
                 alphaInternal *= 0.55f;
             }

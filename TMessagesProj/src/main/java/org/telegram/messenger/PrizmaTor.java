@@ -8,19 +8,7 @@ import android.net.Uri;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.utils.proxy.ProxySettings;
 
-/*
- * Libre — что это за файл:
- * Режим Tor: трафик Telegram идёт через приложение Orbot.
- */
-
-/**
- * Prizma: "Tor mode" — routes Telegram's own traffic through a local Tor SOCKS5 proxy
- * (provided by the Orbot app at 127.0.0.1:9050). Hides the user's IP from Telegram's
- * servers and helps bypass ordinary blocks. Against strict whitelists, Orbot must use
- * obfs4 bridges. This does NOT turn Telegram into a darknet browser.
- */
 public class PrizmaTor {
-
     public static final String ORBOT_PKG = "org.torproject.android";
     public static final String HOST = "127.0.0.1";
     public static final int PORT = 9050;
@@ -71,7 +59,6 @@ public class PrizmaTor {
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
     }
 
-    /** Ask Orbot to start (no-op if not installed or it blocks background start). */
     public static void startOrbot(Context ctx) {
         try {
             Intent i = new Intent("org.torproject.android.intent.action.START");

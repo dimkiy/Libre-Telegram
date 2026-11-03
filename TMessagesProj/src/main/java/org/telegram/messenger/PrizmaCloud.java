@@ -20,25 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-/*
- * Libre — что это за файл:
- * Связь с сервером Libre: вход через бота, чужие профили (баннер, «в Libre с», статус), открытый плейлист, загрузки.
- */
-
-/**
- * Prizma: Libre Cloud client — profiles of other Libre users (banner, "в Libre с", views).
- *
- * Login without passwords: we ask Telegram for the Libre bot's Mini App data. Telegram signs it with
- * the bot's token; the server checks the signature and trusts the Telegram id. Nothing secret is
- * shipped inside the APK.
- *
- * All requests go through {@link PrizmaNet}: through the Telegram SOCKS5 proxy if one is on, and
- * not at all with an MTProto proxy. Until the server address and the bot are set, everything here
- * stays silent.
- */
 public final class PrizmaCloud {
-
-    /** Filled in once the server is up (can also be set in the Libre hub for testing). */
     public static final String DEFAULT_HOST = "https://api.bestfork.online";
     public static final String DEFAULT_BOT = "LibreGram_bot";
 
@@ -51,20 +33,12 @@ public final class PrizmaCloud {
         return ApplicationLoader.applicationContext.getSharedPreferences("prizma_cloud", Context.MODE_PRIVATE);
     }
 
-    /**
-     * Small API requests run side by side. They used to share one thread with banner videos and
-     * cloud copies (up to 15 MB): on a slow connection a single upload held back clans, walls and
-     * profiles for minutes.
-     */
     private static final java.util.concurrent.ExecutorService api = java.util.concurrent.Executors.newFixedThreadPool(3, r -> {
         Thread t = new Thread(r, "prizmaCloudApi");
         t.setDaemon(true);
         return t;
     });
-    /** Big transfers — banners, wall photos, cloud copies — one at a time, apart from the API. */
     private static final DispatchQueue queue = new DispatchQueue("prizmaCloud");
-
-    // ===================== settings =====================
 
     public static String host() {
         String h = prefs().getString("host", DEFAULT_HOST);
@@ -112,38 +86,34 @@ public final class PrizmaCloud {
         e.apply();
     }
 
-    // ===================== state for the UI =====================
-
     public static class Remote {
         public long id;
-        public long since;          // unix seconds — first Libre login
+        public long since;
         public long views = -1;
         public String bannerUrl;
         public boolean bannerVideo;
         public int bannerVer;
-        public String bannerPath;   // downloaded copy, null until ready
-        public int showcaseVer;     // bumps whenever their Libre NFTs change (0 = none)
-        public long clanId;         // 0 = no clan
+        public String bannerPath;
+        public int showcaseVer;
+        public long clanId;
         public String clanTag, clanName;
         public int clanColor;
-        public String playlistName; // a playlist they opened to everyone (null = none)
+        public String playlistName;
         public int playlistCount, playlistVer;
-        /** Libre achievements as the server decided them: {id, desc}; null = an older server. */
         public ArrayList<String[]> ach;
-        public int status = -1;     // PrizmaSocial.STATUS_*; -1 = none shown
+        public int status = -1;
         public String statusText;
-        public long statusUntil;    // unix seconds, 0 = until changed
-        public String anon;         // анонимный номер (+888) цифрами, null = не показывает
+        public long statusUntil;
+        public String anon;
     }
 
     private static final HashMap<Long, Remote> remotes = new HashMap<>();
     private static final HashMap<Long, Long> fetchedAt = new HashMap<>();
-    private static final HashSet<Long> missing = new HashSet<>();  // not Libre users (as of fetchedAt)
+    private static final HashSet<Long> missing = new HashSet<>();
     private static final HashSet<Long> loading = new HashSet<>();
     private static final ArrayList<Runnable> listeners = new ArrayList<>();
     private static int version;
 
-    /** Bumps whenever something fetched changes — the profile card rebuilds only then. */
     public static int version() {
         return version;
     }
@@ -166,12 +136,10 @@ public final class PrizmaCloud {
         }
     }
 
-    /** What we know, without fetching. */
     public static Remote peek(long userId) {
         return remotes.get(userId);
     }
 
-    /** What we know; refreshes in the background when it's old. UI thread. */
     public static Remote remote(int account, long userId) {
         if (!enabled() || userId <= 0) return null;
         Long at = fetchedAt.get(userId);
@@ -181,7 +149,6 @@ public final class PrizmaCloud {
         return remotes.get(userId);
     }
 
-    /** True while the profile or its banner is still on the way (the header keeps polling). */
     public static boolean isPending(long userId) {
         if (loading.contains(userId)) return true;
         Remote r = remotes.get(userId);
@@ -190,15 +157,12 @@ public final class PrizmaCloud {
 
     private static final HashSet<Long> bannerFailed = new HashSet<>();
 
-    // ===================== auth =====================
-
     private static String tokenKey(int account) {
         return "token_" + UserConfig.getInstance(account).getClientUserId();
     }
 
     private static final HashMap<Integer, ArrayList<Utilities.Callback<String>>> authWaiters = new HashMap<>();
 
-    /** Runs {@code cb} with a session token (null when login failed). UI thread. */
     private static void withToken(int account, Utilities.Callback<String> cb) {
         String t = prefs().getString(tokenKey(account), null);
         if (t != null) {
@@ -257,7 +221,6 @@ public final class PrizmaCloud {
         prefs().edit().remove(tokenKey(account)).apply();
     }
 
-    /** Signed Mini App data of the Libre bot, straight from Telegram. */
     private static void requestInitData(int account, Utilities.Callback<String> cb) {
         final MessagesController mc = MessagesController.getInstance(account);
         TLObject known = mc.getUserOrChat(bot());
@@ -295,7 +258,6 @@ public final class PrizmaCloud {
                 cb.run(data);
                 return;
             }
-            // the bot has no main Mini App set — a simple web view of our page is signed the same way
             TLRPC.TL_messages_requestSimpleWebView simple = new TLRPC.TL_messages_requestSimpleWebView();
             simple.bot = mc.getInputUser(bot);
             simple.url = host() + "/app";
@@ -322,14 +284,12 @@ public final class PrizmaCloud {
         return null;
     }
 
-    // ===================== profiles =====================
-
     private static void fetch(int account, long userId) {
         loading.add(userId);
         withToken(account, token -> {
             if (token == null) {
                 loading.remove(userId);
-                fetchedAt.put(userId, System.currentTimeMillis()); // don't hammer a dead login
+                fetchedAt.put(userId, System.currentTimeMillis());
                 return;
             }
             final String host = host();
@@ -376,7 +336,7 @@ public final class PrizmaCloud {
                         }
                         remote.anon = o.optString("anon", "");
                         if (remote.anon.isEmpty()) remote.anon = null;
-                        final JSONObject profileJson = o; // статус-кружок и подарок у ника (кэш живёт в UI-потоке)
+                        final JSONObject profileJson = o;
                         AndroidUtilities.runOnUIThread(() -> PrizmaPresence.fromProfile(account, userId, profileJson));
                         JSONObject b = o.optJSONObject("banner");
                         if (b != null) {
@@ -395,7 +355,7 @@ public final class PrizmaCloud {
                     fetchedAt.put(userId, System.currentTimeMillis());
                     if (code == 401) {
                         dropToken(account);
-                        fetchedAt.remove(userId); // log in again on the next look
+                        fetchedAt.remove(userId);
                         return;
                     }
                     if (result != null) {
@@ -429,7 +389,6 @@ public final class PrizmaCloud {
         }
         bannerFailed.remove(userId);
         queue.postRunnable(() -> {
-            // older versions of this person's banner are no longer needed
             File[] old = dir.listFiles((d, name) -> name.startsWith(userId + "_") && !name.equals(dst.getName()));
             if (old != null) for (File f : old) f.delete();
             boolean ok = PrizmaNet.download(url, dst, MAX_VIDEO_BANNER + 1024 * 1024, 30000);
@@ -445,13 +404,10 @@ public final class PrizmaCloud {
         });
     }
 
-    // ===================== Libre NFTs in profiles =====================
-
     private static final HashMap<Long, ArrayList<org.telegram.ui.Components.PrizmaGifts.RemoteGift>> showcases = new HashMap<>();
     private static final HashMap<Long, Integer> showcaseVers = new HashMap<>();
     private static final HashSet<Long> showcaseLoading = new HashSet<>();
 
-    /** Someone's NFTs upgraded in Libre, or null when unknown / none. UI thread. */
     public static ArrayList<org.telegram.ui.Components.PrizmaGifts.RemoteGift> showcaseOf(long userId) {
         return showcases.get(userId);
     }
@@ -506,7 +462,6 @@ public final class PrizmaCloud {
 
     private static final Runnable[] showcaseSync = new Runnable[1];
 
-    /** My upgraded NFTs changed (or might have) — put them on the server a few seconds later. */
     public static void syncShowcaseSoon(int account) {
         if (!enabled()) return;
         AndroidUtilities.runOnUIThread(() -> {
@@ -538,7 +493,6 @@ public final class PrizmaCloud {
         upload(account, "PUT", "/v1/showcase", data, "application/json", r -> {
             if (r.code != 200) return;
             prefs().edit().putString(key, hash).apply();
-            // honest numbers: a number another Libre NFT already had is swapped for a free one
             try {
                 org.json.JSONArray fixes = r.body != null ? new JSONObject(r.body).optJSONArray("fixes") : null;
                 if (fixes == null || fixes.length() == 0) return;
@@ -547,21 +501,15 @@ public final class PrizmaCloud {
                     if (f.has("inst") && !f.isNull("inst")) PrizmaConfig.setNftNum(f.getLong("inst"), f.getString("num"));
                 }
                 invalidateGifts(account, UserConfig.getInstance(account).getClientUserId());
-                syncShowcaseSoon(account); // the corrected numbers go up too
+                syncShowcaseSoon(account);
             } catch (Throwable e) {
                 FileLog.e(e);
             }
         });
     }
 
-    // ===================== my achievements and status =====================
-
     private static final Runnable[] achSync = new Runnable[1];
 
-    /**
-     * The Libre achievements only this phone can know (listening sessions, NFC, playlists) go to the
-     * server, so other people see the same set as I do. The rest the server counts itself.
-     */
     public static void syncAchievementsSoon(int account) {
         if (!enabled()) return;
         AndroidUtilities.runOnUIThread(() -> {
@@ -585,7 +533,6 @@ public final class PrizmaCloud {
                 list.put(o);
             }
             body.put("list", list);
-            // the phone may remember an earlier first run (Libre before the server existed)
             body.put("since", PrizmaSocial.librSince() / 1000L);
         } catch (Throwable e) {
             return;
@@ -601,7 +548,6 @@ public final class PrizmaCloud {
         });
     }
 
-    /** {@code done} gets null on success or the error text. */
     public static void putStatus(int account, int status, String text, long until, Utilities.Callback<String> done) {
         JSONObject body = new JSONObject();
         try {
@@ -616,11 +562,8 @@ public final class PrizmaCloud {
         });
     }
 
-    // ===================== my open playlist =====================
-
     private static final Runnable[] playlistSync = new Runnable[1];
 
-    /** The playlist I show in my profile changed (or was switched off) — update the server copy. */
     public static void syncPlaylistSoon(int account) {
         if (!enabled()) return;
         AndroidUtilities.runOnUIThread(() -> {
@@ -677,13 +620,6 @@ public final class PrizmaCloud {
         });
     }
 
-    /**
-     * Libre 1.2.1. Треки из личных чатов в моём открытом плейлисте другие люди скачать не могут —
-     * так устроен Telegram. Сервер просит переслать такие треки боту Libre ({@code need} — id файлов),
-     * бот выкладывает их в публичный канал, и оттуда трек может включить любой. Здесь: пересылаем
-     * каждый трек боту (тихо, без подписи «переслано от») и через пару секунд удаляем у себя —
-     * бот к этому времени уже забрал файл.
-     */
     private static void relayTracks(int account, long playlistId, org.json.JSONArray need) {
         final MessagesController mc = MessagesController.getInstance(account);
         TLObject known = mc.getUserOrChat(bot());
@@ -703,7 +639,7 @@ public final class PrizmaCloud {
             final long[] src = PrizmaPlaylist.sourceMessage(playlistId, need.optLong(i));
             if (src == null || src[0] == 0 || src[1] == 0) continue;
             AndroidUtilities.runOnUIThread(() -> forwardToBot(account, botUser, src[0], (int) src[1]), delay);
-            delay += 800; // по одному, чтобы Telegram не счёл это спамом
+            delay += 800;
         }
     }
 
@@ -726,14 +662,11 @@ public final class PrizmaCloud {
                 if (u instanceof org.telegram.tgnet.tl.TL_update.TL_updateMessageID) sent.add(((org.telegram.tgnet.tl.TL_update.TL_updateMessageID) u).id);
             }
             mc.processUpdates(updates, false);
-            // убираем пересланное из чата с ботом (у обоих) — это служебная пересылка, не переписка
             if (!sent.isEmpty()) {
                 AndroidUtilities.runOnUIThread(() -> mc.deleteMessages(sent, null, null, botUser.id, 0, true, 0), 2500);
             }
         });
     }
-
-    // ---- decoded banner images (the header asks every frame — never decode on the UI thread) ----
 
     private static final LruCache<String, Bitmap> bitmaps = new LruCache<String, Bitmap>(24 * 1024 * 1024) {
         @Override
@@ -776,12 +709,9 @@ public final class PrizmaCloud {
         return path != null && decoding.contains(path);
     }
 
-    // ===================== views =====================
-
     private static final HashSet<Long> viewedToday = new HashSet<>();
     private static long viewedDay;
 
-    /** Opening someone's profile counts as one view a day (unless «не отмечаться в просмотрах»). */
     public static void markView(int account, long userId) {
         if (!enabled() || PrizmaSocial.noViewMark() || userId <= 0) return;
         if (userId == UserConfig.getInstance(account).getClientUserId()) return;
@@ -803,9 +733,6 @@ public final class PrizmaCloud {
         });
     }
 
-    // ===================== my banner =====================
-
-    /** Puts my current banner (or its removal) on the server if it changed. UI thread. */
     public static void syncOwnBanner(int account) {
         if (!enabled()) return;
         syncShowcaseSoon(account);
@@ -861,7 +788,6 @@ public final class PrizmaCloud {
         }
     }
 
-    /** Banner images go up as JPEG ≤ 1440 px — sharp on any screen, light on traffic. */
     private static byte[] encodeImage(String path) {
         try {
             BitmapFactory.Options o = new BitmapFactory.Options();
@@ -888,25 +814,18 @@ public final class PrizmaCloud {
         }
     }
 
-    /**
-     * An authorised request to Libre Cloud (logs in first if needed; one retry after an expired
-     * session). {@code done} runs on the UI thread; code -1 = no server / no network / no login.
-     */
     public static void call(int account, String method, String path, JSONObject json, Utilities.Callback<PrizmaNet.Response> done) {
         call(account, method, path, json, null, null, done, true);
     }
 
-    /** Same, with a raw body (a photo). */
     public static void upload(int account, String method, String path, byte[] data, String contentType, Utilities.Callback<PrizmaNet.Response> done) {
         call(account, method, path, null, data, contentType, done, true);
     }
 
-    /** Something outside this class (the wall) changed what profiles show. UI thread. */
     static void notifyChanged() {
         changed();
     }
 
-    /** Ask for this profile again next time (after joining a clan, publishing a playlist…). */
     public static void forget(long userId) {
         fetchedAt.remove(userId);
     }
@@ -949,14 +868,13 @@ public final class PrizmaCloud {
                 });
             };
             if (raw != null || path.startsWith("/v1/backup")) {
-                queue.postRunnable(send); // uploads and the cloud copy can be megabytes
+                queue.postRunnable(send);
             } else {
                 api.execute(send);
             }
         });
     }
 
-    /** «Удалить мои данные» — the server forgets this account completely. */
     public static void deleteMe(int account, Runnable done) {
         if (!configured()) {
             if (done != null) done.run();

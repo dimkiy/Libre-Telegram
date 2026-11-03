@@ -1369,7 +1369,6 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         button.setStateListAnimator(null);
         button2.addView(button, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.CENTER));
         button2.setOnClickListener(v -> {
-            // Prizma: on your own profile, "send gift" opens the free visual gift picker
             if (dialogId == org.telegram.messenger.UserConfig.getInstance(currentAccount).getClientUserId()) {
                 org.telegram.ui.Components.PrizmaGiftsSheet.show(getContext(), () -> {
                     final StarsController.GiftsList l = StarsController.getInstance(currentAccount).getProfileGiftsList(dialogId, false);

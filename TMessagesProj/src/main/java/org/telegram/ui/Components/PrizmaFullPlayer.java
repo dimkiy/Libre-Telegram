@@ -43,18 +43,7 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Большой плеер на весь экран: обложка, текст песни, очередь, «Слушать вместе».
- */
-
-/**
- * Prizma: immersive full-screen music player, Apple Music styled.
- * Background is a soft blurred version of the album art; a thin capsule seek bar;
- * Spotify-style synced lyrics panel at the bottom with smooth line transitions.
- */
 public class PrizmaFullPlayer extends Dialog {
-
     private final Context ctx;
     private BackupImageView cover;
     private PrizmaWaveBars waveBars;
@@ -79,7 +68,6 @@ public class PrizmaFullPlayer extends Dialog {
     private LinearLayout controls;
     private LinearLayout nextBar;
     private TextView nextBarLabel;
-    // "listen together" status row under the top bar
     private LinearLayout togetherBar;
     private TextView togetherEyebrow, togetherLabel, togetherButton;
     private String togetherKey = "";
@@ -88,14 +76,11 @@ public class PrizmaFullPlayer extends Dialog {
     private int coverBaseSide;
     private boolean editMode;
     private static boolean lite() {
-        // Lite mode, a weak device or the battery saver → no beat glow / zoom pulse / parallax
         try { return !org.telegram.messenger.PrizmaConfig.fancyEffects(); } catch (Throwable e) { return false; }
     }
     private LinearLayout editBar;
 
     private boolean userSeeking;
-    // Libre: трек узнаём по чату И номеру сообщения — в плейлисте из разных чатов номера совпадают,
-    // и раньше плеер оставлял обложку и текст от предыдущего трека
     private long loadedMsgId = Long.MIN_VALUE;
     private long lyricsForMsgId = Long.MIN_VALUE;
     private boolean running;
@@ -103,7 +88,7 @@ public class PrizmaFullPlayer extends Dialog {
     private Bitmap blurBg;
     private Bitmap blurSrcRef;
     private long blurForMsgId = Long.MIN_VALUE;
-    private boolean coverWaiting; // на обложке пока заглушка — ждём картинку из самого файла
+    private boolean coverWaiting;
     private final Paint bgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final Paint scrimPaint = new Paint();
     private int scrimForHeight = -1;
@@ -114,7 +99,6 @@ public class PrizmaFullPlayer extends Dialog {
     private final Paint accentBgPaint = new Paint();
     private int accentBgForH = -1, accentBgColor = 0;
 
-    // beat-reactive background: zoom pulse + side glow
     private float beatAmp, beatAmpTarget;
     private long beatLastTime;
     private final Paint edgePaint = new Paint();
@@ -143,7 +127,6 @@ public class PrizmaFullPlayer extends Dialog {
         if (open) {
             return;
         }
-        // «Новый плеер (бета)» switched on in the player's menu
         if (org.telegram.messenger.PrizmaConfig.betaPlayer()) {
             PrizmaCardPlayer.show(context);
             return;
@@ -174,7 +157,6 @@ public class PrizmaFullPlayer extends Dialog {
             @Override
             protected void onDraw(Canvas canvas) {
                 int w = getWidth(), h = getHeight();
-                // smooth the beat amplitude (slow = calmer)
                 long now = System.currentTimeMillis();
                 float dt = beatLastTime == 0 ? 16 : Math.min(40, now - beatLastTime);
                 beatLastTime = now;
@@ -184,16 +166,15 @@ public class PrizmaFullPlayer extends Dialog {
                 try { mode = org.telegram.messenger.PrizmaConfig.playerBg(); } catch (Throwable e) { mode = 0; }
 
                 try {
-                    if (mode == 2) {               // dark theme — calm vertical graphite
+                    if (mode == 2) {
                         drawThemeBg(canvas, w, h);
-                    } else if (mode == 3) {        // accent gradient from the cover colour
+                    } else if (mode == 3) {
                         drawAccentBg(canvas, w, h);
                     } else if (mode == 1 && blurSrcRef != null && !blurSrcRef.isRecycled()) {
-                        // sharp cover, centre-cropped with a gentle beat zoom
                         float s = 1f + 0.02f * beatAmp;
                         drawCenterCrop(canvas, blurSrcRef, w, h, s);
                     } else if (blurBg != null && !blurBg.isRecycled()) {
-                        float s = 1f + 0.028f * beatAmp; // very gentle zoom pulse
+                        float s = 1f + 0.028f * beatAmp;
                         int ex = (int) (w * (s - 1f) / 2f), ey = (int) (h * (s - 1f) / 2f);
                         bgDst.set(-ex, -ey, w + ex, h + ey);
                         canvas.drawBitmap(blurBg, null, bgDst, bgPaint);
@@ -201,7 +182,7 @@ public class PrizmaFullPlayer extends Dialog {
                         canvas.drawColor(0xff0e0e12);
                     }
                 } catch (Throwable e) {
-                    canvas.drawColor(0xff0e0e12); // never crash the player over a recycled cover bitmap
+                    canvas.drawColor(0xff0e0e12);
                 }
                 if (scrimForHeight != h) {
                     scrimForHeight = h;
@@ -211,11 +192,10 @@ public class PrizmaFullPlayer extends Dialog {
                 }
                 canvas.drawRect(0, 0, w, h, scrimPaint);
 
-                // soft iridescent side glow — wide, feathered, gently pulsing (fits any cover)
                 float glow = (float) Math.pow(Math.max(0f, Math.min(1f, beatAmp)), 0.7f);
                 if (!lite() && glow > 0.015f && w > 0) {
-                    int edgeWidth = (int) (w * 0.34f); // wider, softer wash
-                    float hue = (now / 70f) % 360f;    // slower, calmer hue drift
+                    int edgeWidth = (int) (w * 0.34f);
+                    float hue = (now / 70f) % 360f;
                     int bucket = (int) (hue / 8f);
                     if (edgeW != w || edgeAccent != bucket) {
                         edgeW = w;
@@ -228,14 +208,14 @@ public class PrizmaFullPlayer extends Dialog {
                         edgeRight = new LinearGradient(w - edgeWidth, 0, w, 0,
                                 new int[]{c1, cMid, c0}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
                     }
-                    int a = (int) (58 * glow); // gentler peak
+                    int a = (int) (58 * glow);
                     edgePaint.setShader(edgeLeft);
                     edgePaint.setAlpha(a);
                     canvas.drawRect(0, 0, edgeWidth, h, edgePaint);
                     edgePaint.setShader(edgeRight);
                     edgePaint.setAlpha(a);
                     canvas.drawRect(w - edgeWidth, 0, w, h, edgePaint);
-                    org.telegram.messenger.PrizmaConfig.nextDecorFrame(this); // keep the hue drifting
+                    org.telegram.messenger.PrizmaConfig.nextDecorFrame(this);
                 } else if (Math.abs(beatAmpTarget - beatAmp) > 0.01f) {
                     postInvalidateOnAnimation();
                 }
@@ -250,7 +230,6 @@ public class PrizmaFullPlayer extends Dialog {
         column.setClipToPadding(false);
         root.setClipChildren(false);
 
-        // top bar: close chevron (left) + like (right)
         ImageView close = new ImageView(ctx);
         close.setImageResource(R.drawable.arrow_more);
         close.setColorFilter(0xffffffff);
@@ -270,7 +249,6 @@ public class PrizmaFullPlayer extends Dialog {
         shareButtonTop.setOnClickListener(v -> shareCurrentTrack());
         rightBar.addView(shareButtonTop, LayoutHelper.createLinear(40, 40, Gravity.CENTER_VERTICAL, 0, 0, 4, 0));
 
-        // "+" → pick which playlist(s) the track goes to; it turns into a tick once the track is in one
         likeButton = new ImageView(ctx);
         likeButton.setScaleType(ImageView.ScaleType.CENTER);
         likeButton.setImageDrawable(addDrawable = new AddDrawable());
@@ -296,7 +274,6 @@ public class PrizmaFullPlayer extends Dialog {
         topBar.addView(rightBar, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
         column.addView(topBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 10, 0, 8));
 
-        // "listen together": who we're in sync with (or that we're the host) + one tap to leave
         togetherBar = new LinearLayout(ctx);
         togetherBar.setOrientation(LinearLayout.HORIZONTAL);
         togetherBar.setGravity(Gravity.CENTER_VERTICAL);
@@ -341,7 +318,6 @@ public class PrizmaFullPlayer extends Dialog {
         togetherBar.setVisibility(View.GONE);
         column.addView(togetherBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
 
-        // compact "up next" bar above the cover — next track's art + title, tap expands the full queue
         nextBar = new LinearLayout(ctx);
         nextBar.setOrientation(LinearLayout.HORIZONTAL);
         nextBar.setGravity(Gravity.CENTER_VERTICAL);
@@ -382,7 +358,6 @@ public class PrizmaFullPlayer extends Dialog {
         });
         column.addView(nextBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
 
-        // cover (large centered square)
         cover = new BackupImageView(ctx);
         cover.setRoundRadius(AndroidUtilities.dp(18));
         int side = Math.min(AndroidUtilities.displaySize.x - AndroidUtilities.dp(72), (int) (AndroidUtilities.displaySize.y * 0.34f));
@@ -393,11 +368,10 @@ public class PrizmaFullPlayer extends Dialog {
         coverLp.bottomMargin = AndroidUtilities.dp(14);
         column.addView(cover, coverLp);
 
-        // swipes on the cover: down = close, left = next, right = previous
         final android.view.GestureDetector coverGestures = new android.view.GestureDetector(ctx, new android.view.GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDown(MotionEvent e) {
-                return true; // consume so the fling/swipe stream is delivered
+                return true;
             }
 
             @Override
@@ -419,7 +393,6 @@ public class PrizmaFullPlayer extends Dialog {
         });
         cover.setOnTouchListener((v, ev) -> coverGestures.onTouchEvent(ev));
 
-        // title + author (left aligned)
         titleView = new TextView(ctx);
         titleView.setTextColor(0xffffffff);
         titleView.setTextSize(24);
@@ -435,7 +408,6 @@ public class PrizmaFullPlayer extends Dialog {
         authorView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         column.addView(authorView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 10));
 
-        // capsule seek
         seek = new AppleSeek(ctx);
         seek.onSeek = (progress, committed) -> {
             userSeeking = !committed;
@@ -456,7 +428,6 @@ public class PrizmaFullPlayer extends Dialog {
         times.addView(timeDur, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
         column.addView(times, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 8));
 
-        // controls
         controls = new LinearLayout(ctx);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
@@ -518,7 +489,6 @@ public class PrizmaFullPlayer extends Dialog {
 
         column.addView(controls, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 4, 0, 8));
 
-        // lyrics panel (Spotify style, scrollable)
         lyricsPanel = new LyricsPanel(ctx);
         lyricsPanel.onSeekToMs = (ms) -> {
             MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
@@ -529,8 +499,6 @@ public class PrizmaFullPlayer extends Dialog {
         };
         column.addView(lyricsPanel, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-        // queue moved to the compact "up next" bar above the cover; keep the instance for its
-        // order logic + the expandable full list (showFull). A flexible spacer fills the bottom.
         queueView = new QueueView(ctx);
         View spacer = new View(ctx);
         column.addView(spacer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
@@ -545,8 +513,6 @@ public class PrizmaFullPlayer extends Dialog {
             window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
             window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.BLACK));
             window.setDimAmount(0f);
-            // Prizma: fully immersive — the blurred artwork runs behind BOTH the status bar and the
-            // navigation bar, so no system-bar strips of a different colour are visible (only the player).
             try {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
                 window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
@@ -564,7 +530,6 @@ public class PrizmaFullPlayer extends Dialog {
         root.post(this::applyCustomization);
     }
 
-    /** The track that will actually play next (null in shuffle or when unknown). */
     private MessageObject nextTrack() {
         try {
             ArrayList<MessageObject> pl = MediaController.getInstance().getPlaylist();
@@ -588,8 +553,6 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    /** Refreshes the compact "up next" bar above the cover. */
-    /** Shows who we're listening with; only rebuilds when the together state actually changes. */
     private void updateTogetherBar() {
         if (togetherBar == null) return;
         PrizmaTogether t = PrizmaTogether.get();
@@ -658,13 +621,11 @@ public class PrizmaFullPlayer extends Dialog {
         nextBar.setVisibility(View.VISIBLE);
     }
 
-    /** Loads a small album-art thumbnail of a track into the given image view. */
     private void loadMiniCover(BackupImageView iv, MessageObject mo) {
         if (iv == null || mo == null) return;
         try {
             String artworkUrl = mo.getArtworkUrl(true);
             ImageLocation thumbLoc = thumbLocation(mo);
-            // заглушка под картинкой: если обложка не загрузится, будет она, а не чёрный квадрат
             GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a2d3a, 0xff15161c});
             ph.setCornerRadius(AndroidUtilities.dp(8));
             if (artworkUrl != null && !artworkUrl.isEmpty()) {
@@ -677,7 +638,6 @@ public class PrizmaFullPlayer extends Dialog {
         } catch (Throwable ignore) {}
     }
 
-    /** Apply the user's saved cover size. (Moving controls around is gone — old offsets are dropped.) */
     private void applyCustomization() {
         try {
             org.telegram.messenger.PrizmaConfig.clearPlayerOffsets();
@@ -698,15 +658,12 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    // ===================== cover size =====================
-
     private ScaleGestureDetector pinch;
     private View pinchShield;
     private PrizmaSlider sizeSlider;
 
     private static final float COVER_MIN = 0.6f, COVER_MAX = 1.3f;
 
-    /** Cover size mode: pinch anywhere or drag the slider; the cover resizes live. */
     private void enterEditMode() {
         if (editMode) return;
         editMode = true;
@@ -714,7 +671,6 @@ public class PrizmaFullPlayer extends Dialog {
             cover.setRotationX(0);
             cover.setRotationY(0);
         }
-        // full-screen catcher for the pinch gesture (under the bar)
         pinchShield = new View(ctx);
         pinch = new ScaleGestureDetector(ctx, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
@@ -825,7 +781,6 @@ public class PrizmaFullPlayer extends Dialog {
 
     private AddDrawable addDrawable;
 
-    /** Added to a playlist: the button pops and the "+" morphs into a tick. */
     private void popAddButton() {
         if (likeButton == null) return;
         try { likeButton.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); } catch (Throwable ignore) {}
@@ -836,7 +791,6 @@ public class PrizmaFullPlayer extends Dialog {
                 .setInterpolator(new OvershootInterpolator(3f)).setDuration(420).start();
     }
 
-    /** "+" that morphs into "✓" (two strokes travel to the tick's two legs). */
     private static class AddDrawable extends android.graphics.drawable.Drawable {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private float progress;
@@ -887,7 +841,6 @@ public class PrizmaFullPlayer extends Dialog {
             float cx = b.exactCenterX(), cy = b.exactCenterY();
             float h = AndroidUtilities.dpf2(9f);
             float t = progress;
-            // horizontal stroke → short leg of the tick, vertical stroke → long leg
             float ax = cx - h, ay = cy, bx = cx + h, by = cy;
             float tax = cx - h * 0.9f, tay = cy + h * 0.05f, tbx = cx - h * 0.25f, tby = cy + h * 0.7f;
             canvas.drawLine(lerp(ax, tax, t), lerp(ay, tay, t), lerp(bx, tbx, t), lerp(by, tby, t), paint);
@@ -936,8 +889,8 @@ public class PrizmaFullPlayer extends Dialog {
         if (accentBgForH != h || accentBgColor != accentColor) {
             accentBgForH = h;
             accentBgColor = accentColor;
-            int c0 = 0xcc000000 | top;  // accent-tinted top
-            int c1 = 0xff0c0c10;        // deep bottom
+            int c0 = 0xcc000000 | top;
+            int c1 = 0xff0c0c10;
             accentBgPaint.setShader(new LinearGradient(0, 0, 0, h,
                     new int[]{c0, 0xaa000000 | top, c1}, new float[]{0f, 0.4f, 1f}, Shader.TileMode.CLAMP));
         }
@@ -988,7 +941,6 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    /** Idempotent: stops everything the player started. Also runs when the window is torn down without dismiss(). */
     private void release() {
         open = false;
         running = false;
@@ -997,13 +949,11 @@ public class PrizmaFullPlayer extends Dialog {
         stopParallax();
     }
 
-    // ===================== 3D parallax cover tilt =====================
-
     private android.hardware.SensorManager parallaxSensors;
     private android.hardware.Sensor parallaxSensor;
     private boolean parallaxBaselineSet;
     private float parallaxBaseX, parallaxBaseY;
-    private float parallaxRx, parallaxRy; // smoothed rotation
+    private float parallaxRx, parallaxRy;
 
     private final android.hardware.SensorEventListener parallaxListener = new android.hardware.SensorEventListener() {
         @Override
@@ -1016,14 +966,14 @@ public class PrizmaFullPlayer extends Dialog {
                 parallaxBaseY = gy;
                 parallaxBaselineSet = true;
             }
-            final float MAX = 10f;      // max tilt degrees (was 16 — too loose)
-            final float K = 1.6f;       // degrees per m/s^2 of tilt (was 2.6)
-            final float DEAD = 0.35f;   // ignore hand tremor: tilt below this (m/s^2) doesn't move the cover
+            final float MAX = 10f;
+            final float K = 1.6f;
+            final float DEAD = 0.35f;
             float dx = deadZone(gx - parallaxBaseX, DEAD);
             float dy = deadZone(gy - parallaxBaseY, DEAD);
-            float targetRy = Math.max(-MAX, Math.min(MAX, -dx * K)); // left/right → rotateY
-            float targetRx = Math.max(-MAX, Math.min(MAX, dy * K));  // up/down → rotateX
-            parallaxRy += (targetRy - parallaxRy) * 0.08f;           // heavier, slower follow (was 0.14)
+            float targetRy = Math.max(-MAX, Math.min(MAX, -dx * K));
+            float targetRx = Math.max(-MAX, Math.min(MAX, dy * K));
+            parallaxRy += (targetRy - parallaxRy) * 0.08f;
             parallaxRx += (targetRx - parallaxRx) * 0.08f;
             cover.setRotationX(parallaxRx);
             cover.setRotationY(parallaxRy);
@@ -1043,7 +993,6 @@ public class PrizmaFullPlayer extends Dialog {
         try {
             if (lite() || !org.telegram.messenger.PrizmaConfig.coverParallax()) return;
             if (cover != null) {
-                // smaller camera distance = more visible perspective (6000 was so flat the tilt was imperceptible)
                 cover.setCameraDistance(ctx.getResources().getDisplayMetrics().density * 1800);
             }
             parallaxSensors = (android.hardware.SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
@@ -1080,7 +1029,7 @@ public class PrizmaFullPlayer extends Dialog {
                     stopParallax();
                     parallaxPausedInBackground = true;
                 }
-                AndroidUtilities.runOnUIThread(this, 500); // nothing is visible — just poll slowly
+                AndroidUtilities.runOnUIThread(this, 500);
                 return;
             }
             if (parallaxPausedInBackground) {
@@ -1120,7 +1069,7 @@ public class PrizmaFullPlayer extends Dialog {
         }
         timeCur.setText(formatTime(mo.audioProgressSec));
         int dur = (int) (mo.getDuration() * 1000);
-        lyricsPanel.setPosition((long) (mo.audioProgress * dur) + 450); // lead to compensate tick+animation latency
+        lyricsPanel.setPosition((long) (mo.audioProgress * dur) + 450);
     }
 
     private void applyTrack(MessageObject mo) {
@@ -1189,7 +1138,7 @@ public class PrizmaFullPlayer extends Dialog {
         } else {
             root.addView(optionRow(ctx, textColor, R.drawable.msg_groups, "Слушать вместе…", () -> {
                 if (ref[0] != null) ref[0].dismiss();
-                dismiss(); // the chat picker opens under the player otherwise
+                dismiss();
                 PrizmaTogether.pickChatAndStart(ctx);
             }));
         }
@@ -1356,7 +1305,6 @@ public class PrizmaFullPlayer extends Dialog {
         ref[0].show();
     }
 
-    /** Full-screen lyrics with live karaoke highlight (synced) and tap-to-seek. */
     private void showFullLyrics() {
         final PrizmaLyrics.Lyrics lyr = currentLyrics;
         if (lyr == null || lyr.lines == null || lyr.lines.isEmpty()) {
@@ -1515,7 +1463,6 @@ public class PrizmaFullPlayer extends Dialog {
         } catch (Throwable ignore) {}
     }
 
-    /** Applies an accent colour (from the cover art) across the player's highlights. */
     private void applyAccent(int color) {
         accentColor = color;
         if (seek != null) seek.setAccent(color);
@@ -1527,7 +1474,6 @@ public class PrizmaFullPlayer extends Dialog {
         if (mo != null) updateLikeIcon(org.telegram.messenger.PrizmaPlaylist.inAny(mo));
     }
 
-    /** Picks a vivid representative colour from a cover bitmap, or keeps the default accent. */
     private int dominantColor(Bitmap src) {
         try {
             Bitmap small = Bitmap.createScaledBitmap(src, 24, 24, true);
@@ -1540,7 +1486,7 @@ public class PrizmaFullPlayer extends Dialog {
                     int c = small.getPixel(x, y);
                     Color.colorToHSV(c, hsv);
                     float sat = hsv[1], val = hsv[2];
-                    float score = sat * (0.4f + 0.6f * val); // prefer saturated, reasonably bright
+                    float score = sat * (0.4f + 0.6f * val);
                     if (score > bestScore) {
                         bestScore = score;
                         bestColor = c;
@@ -1548,9 +1494,8 @@ public class PrizmaFullPlayer extends Dialog {
                 }
             }
             if (bestScore < 0.15f) {
-                return ACCENT; // washed-out cover → keep brand accent
+                return ACCENT;
             }
-            // lift a too-dark pick so highlights read well
             Color.colorToHSV(bestColor, hsv);
             if (hsv[2] < 0.5f) hsv[2] = 0.6f;
             if (hsv[1] < 0.45f) hsv[1] = 0.55f;
@@ -1567,13 +1512,11 @@ public class PrizmaFullPlayer extends Dialog {
         final float off = AndroidUtilities.dp(90);
         final float textUp = AndroidUtilities.dp(10);
 
-        // text crossfades up
         for (View v : texts) {
             v.animate().cancel();
             v.animate().alpha(0f).translationY(-textUp).setDuration(150).setInterpolator(ease).start();
         }
 
-        // cover is "tossed" out to the left with a tilt, then the new one springs in from the right
         cover.animate().cancel();
         cover.animate()
                 .alpha(0f)
@@ -1584,7 +1527,6 @@ public class PrizmaFullPlayer extends Dialog {
                 .setInterpolator(ease)
                 .withEndAction(() -> {
                     applyTrack(mo);
-                    // start state: off to the right, tilted the other way, small
                     cover.setTranslationX(off);
                     cover.setRotation(12f);
                     cover.setScaleX(0.82f);
@@ -1625,15 +1567,6 @@ public class PrizmaFullPlayer extends Dialog {
         });
     }
 
-    /**
-     * Обложка трека. Откуда берём, по порядку:
-     * 1) картинка, вшитая в сам аудиофайл (когда файл уже скачан);
-     * 2) обложка из iTunes по названию и исполнителю;
-     * 3) маленькая картинка, которую Telegram хранит у файла.
-     * Libre: раньше, если ничего из этого не загрузилось (iTunes недоступен, файл ещё качается),
-     * оставался чёрный квадрат. Теперь под картинкой всегда заглушка с нотой, а когда файл докачается,
-     * checkLateCover() подставит вшитую обложку.
-     */
     private void loadCover(MessageObject mo) {
         Bitmap bmp = audioInfoCover();
         if (bmp != null) {
@@ -1654,11 +1587,10 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    /** Обложка ещё не загрузилась, а файл уже скачан — берём картинку, вшитую в файл. */
     private void checkLateCover() {
         if (!coverWaiting || cover == null) return;
         if (cover.getImageReceiver() != null && cover.getImageReceiver().hasImageLoaded() && cover.getImageReceiver().getBitmap() != null) {
-            coverWaiting = false; // iTunes или Telegram успели — всё хорошо
+            coverWaiting = false;
             return;
         }
         Bitmap bmp = audioInfoCover();
@@ -1679,7 +1611,6 @@ public class PrizmaFullPlayer extends Dialog {
         return null;
     }
 
-    /** Заглушка вместо обложки: спокойный цвет (свой у каждого исполнителя) и нота посередине. */
     private android.graphics.drawable.Drawable coverPlaceholder(MessageObject mo) {
         String key = mo.getMusicAuthor() == null ? "" : mo.getMusicAuthor();
         int[][] tones = {{0xff2f3a52, 0xff1b2130}, {0xff3d2f4f, 0xff221a2e}, {0xff2c4440, 0xff182624}, {0xff4a3a2a, 0xff2a2018}};
@@ -1694,16 +1625,14 @@ public class PrizmaFullPlayer extends Dialog {
         return layers;
     }
 
-    /** Один трек = чат + номер сообщения (одних номеров мало: в разных чатах они повторяются). */
     private static long trackKey(MessageObject mo) {
         return mo.getDialogId() * 1_000_003L + mo.getId();
     }
 
     private void tryBuildBlur(MessageObject mo) {
         if (blurForMsgId == trackKey(mo) && blurBg != null) {
-            return; // already built for this track
+            return;
         }
-        // Prefer the bitmap actually shown by the cover view; it reflects the NEW track.
         Bitmap src = null;
         try {
             if (cover.getImageReceiver() != null) {
@@ -1714,10 +1643,10 @@ public class PrizmaFullPlayer extends Dialog {
             }
         } catch (Throwable ignore) {}
         if (src == null || src.isRecycled()) {
-            return; // keep the previous blur until the new cover is available
+            return;
         }
         if (src == blurSrcRef) {
-            return; // still the previous track's bitmap — wait for the new one
+            return;
         }
         try {
             Bitmap small = Bitmap.createScaledBitmap(src, 56, 56, true).copy(Bitmap.Config.ARGB_8888, true);
@@ -1729,7 +1658,7 @@ public class PrizmaFullPlayer extends Dialog {
             if (old != null && !old.isRecycled()) {
                 old.recycle();
             }
-            applyAccent(dominantColor(src)); // tint highlights with the cover's vivid colour
+            applyAccent(dominantColor(src));
             if (root != null) root.invalidate();
         } catch (Throwable ignore) {}
     }
@@ -1750,20 +1679,17 @@ public class PrizmaFullPlayer extends Dialog {
         return m + ":" + (s < 10 ? "0" + s : s);
     }
 
-    // ===================== Apple-style capsule seek =====================
-
     interface OnSeek {
         void onSeek(float progress, boolean committed);
     }
 
-    /** Beat-reactive bar seek: a waveform of bars that pulses with the music and scrubs the track. */
     private static class AppleSeek extends View implements PrizmaVisualizerData.Listener {
         OnSeek onSeek;
-        private float value;      // committed 0..1
-        private float display;    // animated 0..1
+        private float value;
+        private float display;
         private boolean pressed;
         private boolean playing;
-        private float amp;        // smoothed beat amplitude 0..1
+        private float amp;
         private float ampTarget;
         private long lastTime;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1853,7 +1779,6 @@ public class PrizmaFullPlayer extends Dialog {
             return super.onTouchEvent(e);
         }
 
-        // stable pseudo-waveform shape per bar
         private float baseHeight(int i) {
             float s = (float) (0.55 + 0.45 * Math.sin(i * 0.9) * Math.cos(i * 0.37 + 1.3));
             return Math.max(0.18f, Math.min(1f, Math.abs(s)));
@@ -1874,7 +1799,6 @@ public class PrizmaFullPlayer extends Dialog {
             } catch (Throwable e) {
                 isPlaying = playing;
             }
-            // idle amplitude so bars gently breathe while playing even between beats
             float target = isPlaying ? Math.max(0.18f, ampTarget) : 0.05f;
             amp += (target - amp) * ka;
 
@@ -1900,7 +1824,6 @@ public class PrizmaFullPlayer extends Dialog {
             for (int i = 0; i < count; i++) {
                 float x = i * step + gap / 2f;
                 float cx = x + barW / 2f;
-                // organic motion: base shape * beat amp + subtle time ripple
                 float wiggle = (float) (0.12 * Math.sin(now / 190.0 + i * 0.6));
                 float level = baseHeight(i) * (0.32f + 0.68f * amp) + wiggle;
                 level = Math.max(0.08f, Math.min(1f, level));
@@ -1913,19 +1836,19 @@ public class PrizmaFullPlayer extends Dialog {
                     continue;
                 }
                 int col;
-                if (style == 1) { // горящий: тёплый градиент, мерцание + свечение
+                if (style == 1) {
                     float heat = (float) (0.5 + 0.5 * Math.sin(now / 200.0 + i * 0.45));
                     col = blend(0xffFFC24B, 0xffFF2D2D, heat);
                     glowPaint.setColor((col & 0x00ffffff) | 0x55000000);
                     float gp = AndroidUtilities.dpf2(2.6f);
                     rGlow.set(x - gp, cy - bh / 2f - gp, x + barW + gp, cy + bh / 2f + gp);
                     canvas.drawRoundRect(rGlow, rad + gp, rad + gp, glowPaint);
-                } else if (style == 2) { // переливающийся: бегущая радуга
+                } else if (style == 2) {
                     hsv[0] = (float) (((i * 9) + now * 0.08) % 360.0);
                     hsv[1] = 0.82f;
                     hsv[2] = 1f;
                     col = Color.HSVToColor(hsv);
-                } else { // дефолтный — акцент под обложку
+                } else {
                     col = accent;
                 }
                 p.setColor(col);
@@ -1937,8 +1860,6 @@ public class PrizmaFullPlayer extends Dialog {
             }
         }
     }
-
-    // ===================== Spotify-style lyrics panel =====================
 
     interface OnSeekMs {
         void run(long ms);
@@ -1961,7 +1882,7 @@ public class PrizmaFullPlayer extends Dialog {
             island.setGravity(Gravity.CENTER);
             GradientDrawable bg = new GradientDrawable();
             bg.setCornerRadius(AndroidUtilities.dp(26));
-            bg.setColor(0xE6000000); // near-black Dynamic Island
+            bg.setColor(0xE6000000);
             island.setBackground(bg);
             island.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(9), AndroidUtilities.dp(20), AndroidUtilities.dp(9));
             if (android.os.Build.VERSION.SDK_INT >= 21) {
@@ -2009,7 +1930,6 @@ public class PrizmaFullPlayer extends Dialog {
                 return;
             }
             if (!l.synced) {
-                // no timings — show a gentle hint, no karaoke
                 island.setVisibility(VISIBLE);
                 lineView.setText("♪");
                 nextView.setText("текст без синхронизации");
@@ -2061,11 +1981,8 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    // ===================== Up-next queue =====================
-
     private static final int ACCENT = 0xffFF4D6D;
 
-    /** Scrollable "Up Next" list: tap a row to jump to that track. */
     private class QueueView extends LinearLayout {
         private final TextView countLabel;
         private final TextView nextLabel;
@@ -2082,7 +1999,6 @@ public class PrizmaFullPlayer extends Dialog {
             super(c);
             setOrientation(VERTICAL);
 
-            // header: eyebrow "ОЧЕРЕДЬ" + track count
             LinearLayout header = new LinearLayout(c);
             header.setOrientation(HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
@@ -2114,7 +2030,6 @@ public class PrizmaFullPlayer extends Dialog {
             addView(header, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
             expand.setOnClickListener(v -> showFull());
 
-            // "Далее: <track>" — tells the user exactly what plays next
             nextLabel = new TextView(c);
             nextLabel.setTextColor(0xccffffff);
             nextLabel.setTextSize(12.5f);
@@ -2126,7 +2041,6 @@ public class PrizmaFullPlayer extends Dialog {
             scroll = new ScrollView(c);
             scroll.setVerticalScrollBarEnabled(false);
             scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-            // soft fade at top/bottom so tracks melt away instead of hard-cutting
             scroll.setVerticalFadingEdgeEnabled(true);
             scroll.setFadingEdgeLength(AndroidUtilities.dp(30));
             list = new LinearLayout(c);
@@ -2153,7 +2067,6 @@ public class PrizmaFullPlayer extends Dialog {
             int n = pl.size();
             countLabel.setText(n + " " + plural(n));
 
-            // find the currently-playing position
             int curIndex = -1;
             for (int i = 0; i < n; i++) {
                 MessageObject m = pl.get(i);
@@ -2163,8 +2076,6 @@ public class PrizmaFullPlayer extends Dialog {
                 }
             }
 
-            // Build real play order so the row under "now playing" is genuinely next.
-            // Shuffle changes the actual order (not exposed here) — fall back to list order then.
             boolean shuffle = org.telegram.messenger.SharedConfig.shuffleMusic;
             int[] order = new int[n];
             if (curIndex >= 0 && !shuffle) {
@@ -2180,7 +2091,6 @@ public class PrizmaFullPlayer extends Dialog {
                 for (int k = 0; k < n; k++) order[k] = k;
             }
 
-            // "Далее: …" — the track that will actually play next (order[1])
             if (n > 1) {
                 MessageObject nx = pl.get(order[1]);
                 String t = nx == null ? null : nx.getMusicTitle();
@@ -2196,7 +2106,7 @@ public class PrizmaFullPlayer extends Dialog {
                 nextLabel.setVisibility(GONE);
             }
 
-            int max = 300; // guard against enormous chat music lists
+            int max = 300;
             int added = 0;
             int curPos = -1;
             for (int k = 0; k < n && added < max; k++) {
@@ -2209,7 +2119,6 @@ public class PrizmaFullPlayer extends Dialog {
                 added++;
             }
 
-            // bring the current track near the top so "what's next" is visible
             final int target = curPos;
             if (target >= 0) {
                 scroll.post(() -> {
@@ -2228,7 +2137,6 @@ public class PrizmaFullPlayer extends Dialog {
             return "треков";
         }
 
-        /** Full-screen queue — every track, scrollable, tap to play. */
         void showFull() {
             ArrayList<MessageObject> pl;
             try {
@@ -2299,8 +2207,6 @@ public class PrizmaFullPlayer extends Dialog {
             BottomSheet s = b.create();
             try { s.setBackgroundColor(0xff141418); } catch (Throwable ignore) {}
             try { s.fixNavigationBar(0xff141418); } catch (Throwable ignore) {}
-            // the inner list scroll was being read as a sheet-drag and dismissed the whole sheet
-            // when you reached an edge and swiped back — close via tap-outside / back instead
             try { s.setCanDismissWithSwipe(false); } catch (Throwable ignore) {}
             s.show();
         }
@@ -2319,7 +2225,6 @@ public class PrizmaFullPlayer extends Dialog {
                 row.setBackground(Theme.createSelectorDrawable(0x22ffffff, 2, AndroidUtilities.dp(14)));
             }
 
-            // leading slot: index number, or live mini-equalizer when playing
             FrameLayout lead = new FrameLayout(ctx);
             if (isCur) {
                 MiniEqBars eq = new MiniEqBars(ctx, accentColor);
@@ -2358,7 +2263,6 @@ public class PrizmaFullPlayer extends Dialog {
 
             row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
 
-            // trailing duration
             TextView dur = new TextView(ctx);
             dur.setText(formatTime((int) mo.getDuration()));
             dur.setTextColor(0x59ffffff);
@@ -2369,7 +2273,7 @@ public class PrizmaFullPlayer extends Dialog {
             row.setOnClickListener(v -> {
                 if (MediaController.getInstance().getPlayingMessageObject() != null
                         && MediaController.getInstance().getPlayingMessageObject().getId() == target.getId()) {
-                    return; // already playing this one
+                    return;
                 }
                 v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(90)
                         .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f)
@@ -2383,7 +2287,6 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    /** Tiny self-animating equalizer (independent of the shared visualizer listener). */
     private static class MiniEqBars extends View {
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF r = new RectF();
@@ -2427,7 +2330,6 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
-    /** Ambient beat-reactive bars across the bottom of the player background. */
     private static class BeatBackground extends View implements PrizmaVisualizerData.Listener {
         private static final int BARS = 42;
         private final float[] target = new float[BARS];
@@ -2477,7 +2379,7 @@ public class PrizmaFullPlayer extends Dialog {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            if (lite()) return; // no ambient beat bars in Lite mode
+            if (lite()) return;
             long now = System.currentTimeMillis();
             float dt = lastTime == 0 ? 16 : Math.min(40, now - lastTime);
             lastTime = now;
@@ -2491,7 +2393,7 @@ public class PrizmaFullPlayer extends Dialog {
             }
             int w = getWidth(), h = getHeight();
             if (w == 0) return;
-            paint.setColor((accent & 0x00ffffff) | 0x33000000); // subtle accent-tinted, ~20% alpha
+            paint.setColor((accent & 0x00ffffff) | 0x33000000);
             float gap = w / (float) BARS;
             float barW = gap * 0.5f;
             float maxH = h * 0.26f;

@@ -67,18 +67,7 @@ import org.telegram.ui.Components.RecyclerListView;
 import java.io.File;
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Экран стены профиля: записи, комментарии, кто может писать.
- */
-
-/**
- * Prizma: a profile's wall on Libre Cloud — any Libre user can write on it, the owner decides who
- * may write, deletes anything and can block an author. With {@code postId != 0} the same screen
- * shows one post and all its comments.
- */
 public class PrizmaWallActivity extends BaseFragment {
-
     private static final int TYPE_NOTE = 0, TYPE_POST = 1, TYPE_COMMENT = 2, TYPE_EMPTY = 3, TYPE_LOADING = 4;
     private static final int MENU_SETTINGS = 1;
     private static final int MAX_POST = 2000, MAX_COMMENT = 500;
@@ -98,16 +87,14 @@ public class PrizmaWallActivity extends BaseFragment {
 
     private final ArrayList<Object> items = new ArrayList<>();
 
-    // comments mode
     private PrizmaWall.Post post;
     private final ArrayList<PrizmaWall.Comment> comments = new ArrayList<>();
     private boolean postLoaded;
     private String postError;
 
-    // animations
-    private Object animateIn;       // a post or comment that should slide in on its next bind
-    private PrizmaWall.Post settle;  // a post the server just confirmed — fades to full
-    private long holdReloadUntil;    // don't rebuild rows while an entrance plays
+    private Object animateIn;
+    private PrizmaWall.Post settle;
+    private long holdReloadUntil;
     private boolean reloadScheduled;
 
     private final Runnable cloudChanged = this::reloadSoon;
@@ -147,12 +134,10 @@ public class PrizmaWallActivity extends BaseFragment {
         return ownerId == me();
     }
 
-    /** A clan's wall (owner = −clan id). */
     private boolean clanWall() {
         return ownerId < 0;
     }
 
-    /** May delete anyone's posts and comments here. */
     private boolean moderator() {
         if (myWall()) return true;
         PrizmaWall.Wall w = PrizmaWall.peek(ownerId);
@@ -163,8 +148,6 @@ public class PrizmaWallActivity extends BaseFragment {
         TLRPC.User u = getMessagesController().getUser(ownerId);
         return u != null ? UserObject.getFirstName(u) : null;
     }
-
-    // ===================== layout =====================
 
     @Override
     public View createView(Context context) {
@@ -199,7 +182,7 @@ public class PrizmaWallActivity extends BaseFragment {
 
         listView = new RecyclerListView(context);
         listView.setLayoutManager(layoutManager = new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
-        listView.setItemAnimator(null); // rows animate themselves
+        listView.setItemAnimator(null);
         listView.setVerticalScrollBarEnabled(false);
         listView.setClipToPadding(false);
         listView.setPadding(0, AndroidUtilities.dp(6), 0, AndroidUtilities.dp(10));
@@ -212,7 +195,6 @@ public class PrizmaWallActivity extends BaseFragment {
         });
         root.addView(listView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
 
-        // picked photo, waiting to be posted
         photoPreview = new FrameLayout(context);
         photoPreview.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundWhite));
         photoPreview.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(8), AndroidUtilities.dp(12), 0);
@@ -236,7 +218,6 @@ public class PrizmaWallActivity extends BaseFragment {
         if (postId == 0) {
             if (PrizmaCloud.enabled()) PrizmaWall.load(currentAccount, ownerId, false, null);
         } else {
-            // show the wall's copy at once, then the full post with every comment
             PrizmaWall.Wall w = PrizmaWall.peek(ownerId);
             if (w != null) {
                 for (PrizmaWall.Post p : w.posts) {
@@ -338,8 +319,6 @@ public class PrizmaWallActivity extends BaseFragment {
         updateSendButton();
     }
 
-    // ===================== data =====================
-
     private void loadPost() {
         PrizmaWall.loadPost(currentAccount, postId, (p, list) -> {
             post = p;
@@ -434,8 +413,6 @@ public class PrizmaWallActivity extends BaseFragment {
         }
     }
 
-    // ===================== sending =====================
-
     private void send() {
         if (!sendReady()) {
             AndroidUtilities.shakeViewSpring(input);
@@ -445,14 +422,14 @@ public class PrizmaWallActivity extends BaseFragment {
         flySendButton();
         if (postId == 0) {
             final String photo = pendingPhoto;
-            setPendingPhoto(null, false); // the file now belongs to the post
+            setPendingPhoto(null, false);
             input.setText("");
             PrizmaWall.Post draft = PrizmaWall.addPost(currentAccount, ownerId, text, photo, (p, err) -> {
                 if (p != null) {
                     settle = p;
                 } else {
                     toast(err);
-                    if (input != null && input.length() == 0) input.setText(text); // nothing typed is lost
+                    if (input != null && input.length() == 0) input.setText(text);
                     if (photo != null && pendingPhoto == null) setPendingPhoto(photo, false);
                 }
                 reloadSoon();
@@ -492,7 +469,6 @@ public class PrizmaWallActivity extends BaseFragment {
         }
     }
 
-    /** The paper plane leaves to the right and a fresh one slides back in. */
     private void flySendButton() {
         if (sendButton == null) return;
         sendButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
@@ -515,8 +491,8 @@ public class PrizmaWallActivity extends BaseFragment {
         super.onResume();
         AndroidUtilities.requestAdjustResize(getParentActivity(), classGuid);
         PrizmaCloud.addListener(cloudChanged);
-        if (postId == 0 && PrizmaCloud.enabled()) PrizmaWall.get(currentAccount, ownerId); // refresh when stale
-        reload(); // counts may have changed in the comments screen
+        if (postId == 0 && PrizmaCloud.enabled()) PrizmaWall.get(currentAccount, ownerId);
+        reload();
     }
 
     @Override
@@ -533,11 +509,9 @@ public class PrizmaWallActivity extends BaseFragment {
         PrizmaCloud.removeListener(cloudChanged);
         AndroidUtilities.cancelRunOnUIThread(delayedReload);
         if (pendingPhoto != null) {
-            new File(pendingPhoto).delete(); // picked but never posted
+            new File(pendingPhoto).delete();
         }
     }
-
-    // ===================== actions =====================
 
     private View rowOf(Object item) {
         int i = items.indexOf(item);
@@ -545,7 +519,6 @@ public class PrizmaWallActivity extends BaseFragment {
         return h != null ? h.itemView : null;
     }
 
-    /** Fold a row away, then rebuild the list. */
     private void animateOut(Object item) {
         View row = rowOf(item);
         if (row == null) {
@@ -709,7 +682,7 @@ public class PrizmaWallActivity extends BaseFragment {
     }
 
     private void openProfile(long userId) {
-        if (getMessagesController().getUser(userId) == null) return; // someone we've never met in Telegram
+        if (getMessagesController().getUser(userId) == null) return;
         Bundle args = new Bundle();
         args.putLong("user_id", userId);
         presentFragment(new ProfileActivity(args));
@@ -730,13 +703,10 @@ public class PrizmaWallActivity extends BaseFragment {
         button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
     }
 
-    // ===================== list =====================
-
     private class Adapter extends RecyclerListView.SelectionAdapter {
-
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
-            return false; // rows handle their own taps
+            return false;
         }
 
         @Override
@@ -785,7 +755,6 @@ public class PrizmaWallActivity extends BaseFragment {
                 float rest = p.sending ? 0.6f : 1f;
                 if (animateIn == p) {
                     animateIn = null;
-                    // drops in from the top with a little spring
                     f.setAlpha(0f);
                     f.setTranslationY(-AndroidUtilities.dp(18));
                     f.setScaleX(0.94f);
@@ -840,7 +809,6 @@ public class PrizmaWallActivity extends BaseFragment {
         card.setBackground(bg);
         card.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(14), AndroidUtilities.dp(16), AndroidUtilities.dp(12));
 
-        // author
         LinearLayout head = new LinearLayout(ctx);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -892,7 +860,6 @@ public class PrizmaWallActivity extends BaseFragment {
             card.addView(photoView(ctx, p, like), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
         }
 
-        // like · comments
         LinearLayout actions = new LinearLayout(ctx);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.CENTER_VERTICAL);
@@ -905,7 +872,6 @@ public class PrizmaWallActivity extends BaseFragment {
         }
         card.addView(actions, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
 
-        // the latest comments right under the post
         if (postId == 0 && !p.last.isEmpty()) {
             View line = new View(ctx);
             line.setBackgroundColor(getThemedColor(Theme.key_divider));
@@ -946,7 +912,6 @@ public class PrizmaWallActivity extends BaseFragment {
         presentFragment(new PrizmaWallActivity(ownerId, p.id));
     }
 
-    /** The photo; a double tap likes the post with a big heart over it. */
     private View photoView(Context ctx, PrizmaWall.Post p, LikeButton like) {
         FrameLayout frame = new FrameLayout(ctx);
         ImageView photo = new ImageView(ctx);
@@ -962,7 +927,6 @@ public class PrizmaWallActivity extends BaseFragment {
             loadPhoto(photo, path, AndroidUtilities.displaySize.x);
             frame.addView(photo, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         } else {
-            // still downloading — hold the place
             GradientDrawable ph = new GradientDrawable();
             ph.setCornerRadius(AndroidUtilities.dp(12));
             ph.setColor(Theme.multAlpha(getThemedColor(Theme.key_windowBackgroundWhiteBlackText), 0.06f));
@@ -1020,7 +984,6 @@ public class PrizmaWallActivity extends BaseFragment {
         return t;
     }
 
-    /** A soft pill, the same field as the profile's Libre block. */
     private Drawable pill() {
         GradientDrawable pill = new GradientDrawable();
         pill.setCornerRadius(AndroidUtilities.dp(17));
@@ -1082,14 +1045,7 @@ public class PrizmaWallActivity extends BaseFragment {
         return iv;
     }
 
-    // ===================== the like button =====================
-
-    /**
-     * Heart + count in a pill. Liking pops the heart, scatters a ring of small dots and rolls the
-     * number; un-liking just gives the heart a soft squeeze.
-     */
     private class LikeButton extends View {
-
         private final Drawable heartOff, heartOn;
         private final AnimatedTextView.AnimatedTextDrawable count = new AnimatedTextView.AnimatedTextDrawable(false, true, true);
         private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1172,7 +1128,6 @@ public class PrizmaWallActivity extends BaseFragment {
             float cx = AndroidUtilities.dp(12) + AndroidUtilities.dp(10);
             float cy = getHeight() / 2f;
             if (burst >= 0f) {
-                // seven small dots flying out of the heart and fading
                 float r = AndroidUtilities.dp(8) + AndroidUtilities.dp(10) * burst;
                 float size = AndroidUtilities.dp(2.2f) * (1f - burst * 0.7f);
                 dot.setAlpha((int) (255 * (1f - burst)));
@@ -1206,7 +1161,7 @@ public class PrizmaWallActivity extends BaseFragment {
 
         @Override
         public void invalidateDrawable(Drawable drawable) {
-            if (drawable == count) requestLayout(); // the number's width changes while it rolls
+            if (drawable == count) requestLayout();
             invalidate();
         }
 
@@ -1219,8 +1174,6 @@ public class PrizmaWallActivity extends BaseFragment {
             burst = -1f;
         }
     }
-
-    // ===================== photos =====================
 
     private static void roundCorners(View v, int radiusDp) {
         v.setOutlineProvider(new ViewOutlineProvider() {

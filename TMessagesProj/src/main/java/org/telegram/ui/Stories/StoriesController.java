@@ -1295,7 +1295,6 @@ public class StoriesController {
             if (!profile) {
                 storiesStorage.updateMaxReadId(dialogId, newReadId);
             }
-            // Prizma: stealth stories — don't tell the server we viewed it
             if (!org.telegram.messenger.PrizmaConfig.stealthStories()) {
                 TL_stories.TL_stories_readStories req = new TL_stories.TL_stories_readStories();
                 req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
@@ -3726,7 +3725,6 @@ public class StoriesController {
             if (seenStories.contains(storyId)) return false;
             seenStories.add(storyId);
             saveCache();
-            // Prizma: stealth stories — don't increment/register the view on the server
             if (!org.telegram.messenger.PrizmaConfig.stealthStories()) {
                 TL_stories.TL_stories_incrementStoryViews req = new TL_stories.TL_stories_incrementStoryViews();
                 req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);

@@ -1,17 +1,3 @@
-"""
-Libre Cloud — the small server behind Libre profiles.
-
-What it keeps (and nothing else):
-  * users:   Telegram id, the date Libre first logged in, a profile-view counter, the banner file;
-  * tokens:  sha256 of session tokens (the tokens themselves are never stored);
-  * seen:    "viewer X looked at Y today" as a salted hash, kept for two days only, to count each
-             viewer once a day. Nobody — not even the admin — gets a list of who viewed whom.
-
-Login: Libre asks Telegram for Mini App data of the Libre bot. Telegram signs it with the bot token;
-we check the signature, so the Telegram id is trusted without passwords or phone numbers.
-
-Run behind nginx (TLS, /media served as static files). Config comes from /etc/libre.env.
-"""
 import asyncio
 import hashlib
 import hmac
@@ -175,34 +161,27 @@ CREATE TABLE IF NOT EXISTS reports (
 
 
 def ensure_column(table, column, decl):
-    """CREATE TABLE IF NOT EXISTS never adds columns to a table that's already there."""
     if column not in {r[1] for r in db.execute(f"PRAGMA table_info({table})")}:
         db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
-# 1.1.4: a member's display name, so the clan list shows people one has never chatted with
 ensure_column("clan_members", "name", "TEXT")
-# 1.1.5: Libre achievements everyone sees the same, and Discord-like statuses
 ensure_column("users", "ach", "TEXT")
 ensure_column("users", "status", "INTEGER NOT NULL DEFAULT 0")
 ensure_column("users", "status_text", "TEXT")
 ensure_column("users", "status_until", "INTEGER NOT NULL DEFAULT 0")
-# 1.2.1: a Libre gift worn next to the name, and an anonymous (+888) number other Libre users see
 ensure_column("users", "wear", "TEXT")
 ensure_column("users", "anon", "TEXT")
 
-# 1.2.1: tracks of open playlists that came from private chats. Nobody but the owner can download
-# such a track, so the Libre bot re-posts it once into a public channel (MUSIC_CHANNEL); after that
-# every listener takes it from there. One copy per track for everybody.
 db.executescript("""
 CREATE TABLE IF NOT EXISTS relay (
-    doc      INTEGER PRIMARY KEY,   -- the track's id in Telegram
-    src      TEXT NOT NULL,         -- "channel/message" where everyone can get it
+    doc      INTEGER PRIMARY KEY,
+    src      TEXT NOT NULL,
     created  INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS relay_wait (
-    user     INTEGER NOT NULL,      -- who will send the track to the bot
-    size     INTEGER NOT NULL,      -- file size: how the bot recognises which track arrived
+    user     INTEGER NOT NULL,
+    size     INTEGER NOT NULL,
     doc      INTEGER NOT NULL,
     created  INTEGER NOT NULL,
     PRIMARY KEY (user, doc)
@@ -218,10 +197,7 @@ def sha(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
-# ---------------------------------------------------------------- auth
-
 def check_init_data(init_data: str):
-    """Telegram Mini App data → user id, or None if the signature/age is wrong."""
     try:
         pairs = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True, strict_parsing=True))
     except ValueError:
@@ -254,7 +230,6 @@ def user_of(request: web.Request):
     return row[0]
 
 
-# simple per-user / per-ip rate limit: N requests per minute
 _hits: dict = {}
 
 
@@ -294,14 +269,11 @@ async def auth(request: web.Request):
     db.execute("INSERT OR IGNORE INTO users(id, since) VALUES(?, ?)", (uid, now()))
     token = secrets.token_urlsafe(32)
     db.execute("INSERT INTO tokens(hash, user_id, created) VALUES(?, ?, ?)", (sha(token), uid, now()))
-    # keep the last few sessions per user (several phones), drop older ones
     db.execute("""DELETE FROM tokens WHERE user_id=? AND hash NOT IN
                   (SELECT hash FROM tokens WHERE user_id=? ORDER BY created DESC LIMIT 5)""", (uid, uid))
     since = db.execute("SELECT since FROM users WHERE id=?", (uid,)).fetchone()[0]
     return web.json_response({"token": token, "id": uid, "since": since})
 
-
-# ---------------------------------------------------------------- profiles
 
 def profile_json(row):
     uid, since, views, banner, video, ver = row
@@ -332,7 +304,6 @@ def profile_json(row):
 
 
 def public_status(s, text, until):
-    """What others may see of a status: invisible shows nothing (like Discord), an expired one is gone."""
     if until and until <= now():
         return None
     if s in (STATUS_IDLE, STATUS_DND) or s == STATUS_ONLINE and text:
@@ -340,14 +311,9 @@ def public_status(s, text, until):
     return None
 
 
-# ---------------------------------------------------------------- achievements
-# Telegram-side achievements (Premium, gifts…) every viewer reads from Telegram itself. The Libre ones
-# are decided here: what the server can check it counts itself; the rest only the phone knows
-# (listening sessions, NFC, playlists) — the app reports those, so every profile shows the same set.
-
 CLIENT_ACH = ("dj", "listener", "nfc", "meloman")
-EARLY_UNTIL = 1796083200  # 2026-12-01: the first Libre users
-LIBRE_EPOCH = 1791331200  # 2026-10-07: the first Libre build
+EARLY_UNTIL = 1796083200
+LIBRE_EPOCH = 1791331200
 
 
 def achievements_of(uid, since, views, reported):
@@ -383,7 +349,6 @@ async def put_achievements(request: web.Request):
     keep = [{"id": a["id"], "desc": clean(a.get("desc"), 120)} for a in items
             if isinstance(a, dict) and a.get("id") in CLIENT_ACH]
     db.execute("UPDATE users SET ach=? WHERE id=?", (json.dumps(keep, ensure_ascii=False), uid))
-    # «в Libre с»: a first run the phone remembers from before the first login counts — never before Libre existed
     try:
         since = int(body.get("since", 0))
     except (TypeError, ValueError):
@@ -392,8 +357,6 @@ async def put_achievements(request: web.Request):
         db.execute("UPDATE users SET since=MIN(since, ?) WHERE id=?", (since, uid))
     return web.json_response({"ok": True})
 
-
-# ---------------------------------------------------------------- statuses (like Discord)
 
 STATUS_ONLINE, STATUS_IDLE, STATUS_DND, STATUS_INVISIBLE = 0, 1, 2, 3
 
@@ -418,10 +381,6 @@ async def put_status(request: web.Request):
 
 @need_user
 async def presence(request: web.Request):
-    """
-    Many people at once — for the chat list: the colour of each status dot and the gift worn next
-    to the name. The phone sends the ids it is showing; people who aren't in Libre are simply absent.
-    """
     if limited(("presence", request["uid"]), 40):
         return web.json_response({"error": "slow down"}, status=429)
     try:
@@ -449,11 +408,6 @@ WEAR_TITLE = 64
 
 @need_user
 async def put_wear(request: web.Request):
-    """
-    A Libre gift worn next to the name (like Telegram's collectible status). The phone sends what it
-    looks like: the model and pattern (Telegram document ids) and the four background colours.
-    An empty body takes it off.
-    """
     uid = request["uid"]
     if limited(("wear", uid), 20):
         return web.json_response({"error": "slow down"}, status=429)
@@ -485,10 +439,6 @@ ANON_NUMBER = re.compile(r"888\d{4,10}")
 
 @need_user
 async def put_anon(request: web.Request):
-    """
-    The person's anonymous number (+888, bought on Fragment) — shown to other Libre users in the
-    profile. Only +888 numbers are accepted: a real phone number never gets here. Empty = hide it.
-    """
     uid = request["uid"]
     if limited(("anon", uid), 10):
         return web.json_response({"error": "slow down"}, status=429)
@@ -531,8 +481,6 @@ async def view(request: web.Request):
         db.execute("UPDATE users SET views = views + 1 WHERE id=?", (target,))
     return web.json_response({"ok": True})
 
-
-# ---------------------------------------------------------------- banner
 
 def kind_of(data: bytes):
     if data[:3] == b"\xff\xd8\xff":
@@ -609,11 +557,6 @@ async def delete_me(request: web.Request):
     return web.json_response({"ok": True})
 
 
-# ---------------------------------------------------------------- gifts between Libre users
-# An NFT from the Libre showcase travels as a small JSON description (gift id + its look). The
-# sender's phone removes it only after the server took it; the recipient's phone picks it up from
-# the inbox and acknowledges it, then it's deleted here. Undelivered gifts are dropped after 60 days.
-
 MAX_GIFT = 8 * 1024
 
 
@@ -643,7 +586,6 @@ async def send_gift(request: web.Request):
 
 @need_user
 async def get_card(request: web.Request):
-    """The look of a handed-over gift, so both chats can draw it as a gift card."""
     uid = request["uid"]
     try:
         cid = int(request.match_info["id"])
@@ -654,9 +596,6 @@ async def get_card(request: web.Request):
         return web.json_response({"error": "not found"}, status=404)
     return web.json_response({"id": cid, "from": row[0], "to": row[1], "gift": json.loads(row[2]), "created": row[3]})
 
-
-# ---------------------------------------------------------------- showcase
-# The NFTs someone upgraded in Libre, so other Libre users see them in that profile.
 
 MAX_SHOWCASE = 1024 * 1024
 
@@ -714,12 +653,6 @@ async def gift_ack(request: web.Request):
     return web.json_response({"ok": True})
 
 
-# ---------------------------------------------------------------- the wall
-# Posts on profiles. The owner decides who may write (everyone / mutual contacts / nobody), can hide
-# the wall, delete anything on it and block authors (their posts and comments go away). Authors
-# can delete what they wrote. The display name is a snapshot the author's app sends with a post, so
-# people who don't share chats can still see who wrote it.
-
 MAX_POST = 2000
 MAX_COMMENT = 500
 MAX_NAME = 64
@@ -746,7 +679,7 @@ def can_see(owner, uid):
 
 
 def can_post(owner, uid, mutual):
-    if owner < 0:  # a clan's wall: members write
+    if owner < 0:
         return clan_role(-owner, uid) is not None
     if uid == owner:
         return True
@@ -792,7 +725,6 @@ def drop_wall_photo(name):
 
 
 def drop_posts(where, params):
-    """Deletes posts (with their comments, likes, reports and photos)."""
     rows = db.execute(f"SELECT id, photo FROM posts WHERE {where}", params).fetchall()
     for pid, photo in rows:
         db.execute("DELETE FROM comments WHERE post=?", (pid,))
@@ -829,7 +761,6 @@ def wall_exists(owner):
 
 
 def wall_moderator(owner, uid):
-    """The wall's owner — or, on a clan wall, its head and officers."""
     if owner < 0:
         role = clan_role(-owner, uid)
         return role is not None and role >= ROLE_OFFICER
@@ -865,7 +796,7 @@ async def wall(request: web.Request):
     out["posts"] = []
     for r in rows:
         pj = post_json(r)
-        if r[8]:  # the last two comments, so the wall shows the conversation without opening the post
+        if r[8]:
             last = db.execute("SELECT id, author, name, text, created FROM comments WHERE post=? ORDER BY id DESC LIMIT 2", (r[0],)).fetchall()
             pj["last"] = [comment_json(c) for c in reversed(last)]
         out["posts"].append(pj)
@@ -911,7 +842,6 @@ async def add_post(request: web.Request):
     photo = body.get("photo") or None
     if photo is not None:
         photo = str(photo)
-        # only a photo this author just uploaded, and only once
         if (not photo.startswith(f"{uid}_") or "/" in photo or ".." in photo
                 or not os.path.exists(os.path.join(WALL_PHOTOS, photo))
                 or db.execute("SELECT 1 FROM posts WHERE photo=?", (photo,)).fetchone()):
@@ -1062,7 +992,6 @@ async def report_post(request: web.Request):
 
 
 def forget_wall_user(uid):
-    """«Удалить мои данные»: my wall, everything I wrote anywhere, my likes."""
     drop_posts("owner=? OR author=?", (uid, uid))
     touched = [r[0] for r in db.execute("SELECT DISTINCT post FROM comments WHERE author=?", (uid,))]
     touched += [r[0] for r in db.execute("SELECT post FROM likes WHERE user=?", (uid,))]
@@ -1075,7 +1004,6 @@ def forget_wall_user(uid):
 
 
 def drop_orphan_photos():
-    """Photos uploaded but never posted (the author changed their mind) — after a day."""
     used = {r[0] for r in db.execute("SELECT photo FROM posts WHERE photo IS NOT NULL")}
     cutoff = time.time() - 86400
     for name in os.listdir(WALL_PHOTOS):
@@ -1086,10 +1014,6 @@ def drop_orphan_photos():
         except OSError:
             pass
 
-
-# ---------------------------------------------------------------- honest NFT numbers
-# Every NFT made in Libre gets a number that no other Libre NFT of the same gift has. The phone
-# rolls one when upgrading; the showcase upload checks it here and moves it if it's taken.
 
 def parse_num(v):
     try:
@@ -1114,7 +1038,6 @@ def free_number(gift_id, total):
 
 
 def settle_numbers(uid, gifts):
-    """Claims the numbers of my showcase; returns the ones that had to change."""
     fixes, kept = [], set()
     for g in gifts:
         if not isinstance(g, dict):
@@ -1157,8 +1080,6 @@ def move_number(gift, from_id, to_id):
     if nt and gift_id:
         db.execute("UPDATE nft_numbers SET owner=? WHERE gift_id=? AND num=? AND owner=?", (to_id, gift_id, nt[0], from_id))
 
-
-# ---------------------------------------------------------------- clans
 
 ROLE_MEMBER, ROLE_OFFICER, ROLE_HEAD = 0, 1, 2
 MAX_CLAN = 200
@@ -1211,7 +1132,6 @@ def drop_clan(clan_id):
 
 
 def leave_clan(uid):
-    """Leaves; a leaving head hands the clan to the next officer (or oldest member), the last one closes it."""
     row = db.execute("SELECT clan, role FROM clan_members WHERE user=?", (uid,)).fetchone()
     if not row:
         return
@@ -1316,7 +1236,6 @@ async def clan_join(request: web.Request):
 
 @need_user
 async def clan_hello(request: web.Request):
-    """The app tells the clan how its owner is called now (names change; older members have none)."""
     try:
         name = clean((await request.json()).get("my_name"), MAX_NAME)
     except Exception:
@@ -1328,7 +1247,6 @@ async def clan_hello(request: web.Request):
 
 @need_user
 async def clan_preview(request: web.Request):
-    """What an invite code leads to (shown before joining)."""
     row = db.execute("SELECT clan FROM clan_invites WHERE code=?", (request.match_info.get("code", ""),)).fetchone()
     c = clan_row(row[0]) if row else None
     if not c:
@@ -1368,7 +1286,7 @@ async def clan_set_role(request: web.Request):
         return web.json_response({"error": "bad request"}, status=400)
     if clan_role(cid, uid) != ROLE_HEAD or user == uid or clan_role(cid, user) is None or role not in (ROLE_MEMBER, ROLE_OFFICER, ROLE_HEAD):
         return web.json_response({"error": "not allowed"}, status=403)
-    if role == ROLE_HEAD:  # hand the clan over
+    if role == ROLE_HEAD:
         db.execute("UPDATE clan_members SET role=? WHERE user=?", (ROLE_OFFICER, uid))
         db.execute("UPDATE clans SET owner=? WHERE id=?", (user, cid))
     db.execute("UPDATE clan_members SET role=? WHERE user=?", (role, user))
@@ -1426,8 +1344,6 @@ async def invite_page(request):
     return web.Response(text=INVITE_PAGE % code, content_type="text/html")
 
 
-# ---------------------------------------------------------------- public playlist
-
 MAX_PLAYLIST = 3 * 1024 * 1024
 
 
@@ -1447,7 +1363,7 @@ async def put_playlist(request: web.Request):
             raise ValueError
     except Exception:
         return web.json_response({"error": "bad request"}, status=400)
-    need = []  # tracks from private chats the phone should send to the bot (see "tracks for open playlists")
+    need = []
     for t in tracks:
         if not isinstance(t, dict):
             continue
@@ -1481,7 +1397,6 @@ async def get_playlist(request: web.Request):
         return web.json_response({"error": "not found"}, status=404)
     tracks = json.loads(row[2])
     for t in tracks:
-        # a track from a private chat: where the bot re-posted it, once that has happened
         if isinstance(t, dict) and not t.get("src") and t.get("doc"):
             r = db.execute("SELECT src FROM relay WHERE doc=?", (int_or0(t.get("doc")),)).fetchone()
             if r:
@@ -1489,7 +1404,6 @@ async def get_playlist(request: web.Request):
     return web.json_response({"name": row[0], "count": row[1], "tracks": tracks, "ver": row[3]})
 
 
-# A public place in Telegram everybody can read: "channel_username/message_id"
 SOURCE = re.compile(r"[A-Za-z][A-Za-z0-9_]{3,31}/\d{1,10}")
 
 
@@ -1499,10 +1413,6 @@ def int_or0(v):
     except (TypeError, ValueError):
         return 0
 
-
-# ---------------------------------------------------------------- cloud copy of Libre
-# One file per person: the phone packs its Libre settings and playlists (gzip) and can bring
-# them back on a new phone. Only the owner can read it.
 
 MAX_BACKUP = 12 * 1024 * 1024
 
@@ -1551,8 +1461,6 @@ async def delete_backup(request: web.Request):
     return web.json_response({"ok": True})
 
 
-# ---------------------------------------------------------------- «что сервер знает обо мне»
-
 @need_user
 async def export_me(request: web.Request):
     uid = request["uid"]
@@ -1594,12 +1502,8 @@ async def export_me(request: web.Request):
     return web.json_response(out)
 
 
-# ---------------------------------------------------------------- listening together: who is here
-# Kept in memory only (never on disk): "these Libre users are listening to that host's session
-# right now". A listener's app pings every ~15 s; silence for 45 s means they left.
-
 TOGETHER_TTL = 45
-_together: dict = {}  # (host, sid) -> {uid: last ping}
+_together: dict = {}
 
 
 def together_key(request):
@@ -1658,11 +1562,6 @@ async def together_room(request: web.Request):
     return web.json_response({"listeners": [u for u in room if u != uid]})
 
 
-# ---------------------------------------------------------------- MAX notifications → the Libre bot
-# Libre on the phone reads MAX's notifications (Android "notification access", only with the
-# person's permission) and sends each one here; the Libre bot posts it to that person in Telegram.
-# Nothing is stored — the text only passes through. The person must have pressed Start in the bot.
-
 TG_API = os.environ.get("TG_API", "https://api.telegram.org").rstrip("/")
 MAX_FWD_TEXT = 3500
 _tg_session = None
@@ -1707,13 +1606,6 @@ async def max_forward(request: web.Request):
     return web.json_response({"error": "telegram"}, status=502)
 
 
-# ---------------------------------------------------------------- tracks for open playlists
-# A track that came from a private chat can be downloaded only by its owner — that's how Telegram
-# works. So the owner's phone forwards such tracks to the Libre bot; the bot re-posts each one into
-# a public channel (MUSIC_CHANNEL, the bot must be its admin) and remembers where. Listeners then
-# take the track from that channel, like from any public channel. The bot deletes the forwarded
-# copy from the chat right away. Without MUSIC_CHANNEL this is off.
-
 MUSIC_CHANNEL = os.environ.get("MUSIC_CHANNEL", "").strip()
 
 
@@ -1732,7 +1624,6 @@ async def tg_call(method, **params):
 
 
 async def relay_track(msg):
-    """The bot got an audio from someone: if it's a track we wait for, put it into the channel."""
     sender = (msg.get("from") or {}).get("id")
     audio = msg.get("audio") or msg.get("document")
     if not sender or not audio or not audio.get("file_size"):
@@ -1754,7 +1645,6 @@ async def relay_track(msg):
 
 
 async def bot_updates(app):
-    """Reads what people send to the Libre bot — only to catch forwarded tracks (see above)."""
     if not MUSIC_CHANNEL:
         return
 
@@ -1779,8 +1669,6 @@ async def bot_updates(app):
                         log.warning("relay: %s", e)
     app["bot"] = asyncio.create_task(loop())
 
-
-# ---------------------------------------------------------------- misc
 
 APP_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Libre</title>
@@ -1833,7 +1721,6 @@ async def app_page(request):
 
 
 async def update_info(request):
-    """What /media/app/latest.json says (written by publish-update.sh) — never cached."""
     try:
         with open(os.path.join(DATA, "media", "app", "latest.json"), encoding="utf-8") as f:
             info = json.load(f)
@@ -1866,7 +1753,7 @@ async def housekeeping(app):
 
 
 def main():
-    app = web.Application(client_max_size=MAX_BANNER + 1024 * 1024)  # also covers backups (12 MB)
+    app = web.Application(client_max_size=MAX_BANNER + 1024 * 1024)
     app.router.add_post("/v1/auth", auth)
     app.router.add_get("/v1/profile/{id}", get_profile)
     app.router.add_post("/v1/view/{id}", view)

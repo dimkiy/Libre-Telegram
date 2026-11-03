@@ -6294,7 +6294,7 @@ public class NotificationsController extends BaseController implements Notificat
 
     public boolean isGlobalNotificationsEnabled(int type) {
         if (PrizmaConfig.dnd()) {
-            return false; // Prizma: Do Not Disturb — suppress everything locally
+            return false;
         }
         if (type == TYPE_REACTIONS_MESSAGES) {
             return getAccountInstance().getNotificationsSettings().getBoolean("EnableReactionsMessages", true);

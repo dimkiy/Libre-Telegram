@@ -2833,7 +2833,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private NotificationCenter.ObserversGroup observersGroup;
 
-    /** Libre: "erase traces" wiped the search history — forget what this screen still holds in memory. */
     public void prizmaForgetSearch() {
         if (searchViewPager != null && searchViewPager.dialogsSearchAdapter != null) {
             searchViewPager.dialogsSearchAdapter.clearRecentHashtags();
@@ -3233,7 +3232,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
         ActionBarMenu menu = actionBar.createMenu();
         menu.setTranslationX(-dp(5));
-        // Prizma: music button — opens the full player (replaces the floating mini-player)
         prizmaMusicItem = menu.addItem(10477, R.drawable.msg_played);
         prizmaMusicItem.setVisibility(View.GONE);
         prizmaMusicItem.setOnClickListener(v -> {
@@ -3243,12 +3241,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         });
         updateMusicButton();
         if (initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect) {
-            // Prizma: privacy — blur the whole screen so a bystander can't read the chats
             ActionBarMenuItem blurItem = menu.addItem(10478, R.drawable.msg_blur_linear);
             blurItem.setOnClickListener(v -> org.telegram.ui.Components.PrizmaScreenBlur.show(getParentActivity()));
         }
         searchItem = menu.addItem(0, R.drawable.outline_header_search).setIsSearchField(true, false);
-        // Prizma: settings moved to Settings → Prizma (ghost button removed)
         searchItem.setOnClickListener(v -> {
             showSearch(true, false, true);
             fragmentSearchFieldWatcher.toggleSearch(true);
@@ -3531,7 +3527,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             if (folderId != 0) {
                 actionBar.setTitle(getString(R.string.ArchivedChats));
-                // Prizma: in-archive toggle to hide chat names + avatars
                 try {
                     prizmaArchiveHideItem = actionBar.createMenu().addItem(prizma_archive_hide,
                             org.telegram.messenger.PrizmaConfig.archiveHideNames() ? R.drawable.msg_secret : R.drawable.msg_views);
@@ -3913,7 +3908,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                             if (viewPages[a] != null) {
                                 try {
                                     if (viewPages[a].dialogsAdapter != null) {
-                                        viewPages[a].dialogsAdapter.notifyDataSetChanged(); // rebuild names/previews
+                                        viewPages[a].dialogsAdapter.notifyDataSetChanged();
                                     }
                                     if (viewPages[a].listView != null) {
                                         viewPages[a].listView.invalidateViews();
@@ -4127,8 +4122,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             viewPage.listView = new DialogsRecyclerView(context, viewPage);
             if (a == 0) {
-                // Prizma: no entrance cascade on cold start any more — it hid the rows for the first
-                // few hundred ms, so the app *looked* slower to open. The list now shows at once.
                 prizmaEntranceAt = System.currentTimeMillis();
             }
             viewPage.listView.addEdgeEffectListener(() -> viewPage.listView.postOnAnimation(this::blur3_InvalidateBlur));
@@ -4901,7 +4894,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             fragmentContextView = new FragmentContextView(context, this, false) {
                 @Override
                 public void setVisibility(int visibility) {
-                    // Prizma: music is shown by the floating island — hide the default audio bar here
                     if (visibility == VISIBLE && getCurrentStyle() == STYLE_AUDIO_PLAYER) {
                         topPanelLayout.setViewVisible(fragmentContextViewWrapper, false);
                         return;
@@ -7458,9 +7450,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             storyHint.show();
         }
         AndroidUtilities.runOnUIThread(this::createSearchViewPager, 200);
-        // Prizma: the chat-list cascade is driven solely by playOnFirstDraw (hides rows before the first
-        // frame → no flash). Re-playing here or on transition only re-hid visible rows and caused the
-        // "appear → disappear → animate" flicker, so it was removed.
     }
 
     private long prizmaEntranceAt;
@@ -7468,8 +7457,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onTransitionAnimationStart(boolean isOpen, boolean backward) {
         super.onTransitionAnimationStart(isOpen, backward);
-        // Prizma: only snap rows back to rest when leaving — the entrance itself is handled by
-        // playOnFirstDraw (so there is no re-hide flash). Re-playing on open is intentionally omitted.
         try {
             if (viewPages != null && viewPages[0] != null && !isOpen) {
                 org.telegram.ui.Components.PrizmaEntrance.reset(viewPages[0].listView);
@@ -7991,7 +7978,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     TLRPC.TL_dialogFolder dialogFolder = (TLRPC.TL_dialogFolder) dialog;
                     Bundle args = new Bundle();
                     args.putInt("folderId", dialogFolder.folder.id);
-                    // Prizma: lock the archive behind a PIN
                     if (dialogFolder.folder.id == 1 && org.telegram.ui.Components.PrizmaArchiveLock.isLocked() && getParentActivity() != null) {
                         org.telegram.ui.Components.PrizmaArchiveLock.verify(getParentActivity(), () -> presentFragment(new DialogsActivity(args)));
                         return;
@@ -8756,7 +8742,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             previewMenu[0].addView(markAsUnreadItem);
         }
 
-        // Prizma: color tag for this chat
         {
             ActionBarMenuSubItem colorItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
             colorItem.setTextAndIcon("Цветная метка", R.drawable.msg_colors);

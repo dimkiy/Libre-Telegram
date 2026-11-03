@@ -142,9 +142,6 @@ android {
 
         multiDexEnabled true
 
-        // Libre: our own api_id / api_hash from my.telegram.org are NOT in the sources — they live in
-        // local.properties (never committed):  TELEGRAM_APP_ID=...  and  TELEGRAM_APP_HASH=...
-        // Without them the build falls back to the public test values of the original Telegram repo.
         buildConfigField "int", "TG_APP_ID", (getProps("TELEGRAM_APP_ID") ?: "4")
         buildConfigField "String", "TG_APP_HASH", "\"" + (getProps("TELEGRAM_APP_HASH") ?: "014b35b6184100b085b0d0572f9b5103") + "\""
 
@@ -166,8 +163,6 @@ android {
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"" + getProps("BETA_PRIVATE_URL") + "\""
             buildConfigField "boolean", "DEBUG_VERSION", "true"
-            // Libre: "private debug" made every debug build serialize each request/response (message
-            // texts included) to JSON and write it to log files — slow and a privacy leak. Off.
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "0"

@@ -26,7 +26,6 @@ public class BuildVars {
     public static boolean NO_SCOPED_STORAGE = Build.VERSION.SDK_INT <= 29;
     public static String BUILD_VERSION_STRING = BuildConfig.BUILD_VERSION_STRING;
 
-    // Libre: taken from local.properties at build time (see TMessagesProj/build.gradle)
     public static int APP_ID = BuildConfig.TG_APP_ID;
     public static String APP_HASH = BuildConfig.TG_APP_HASH;
 

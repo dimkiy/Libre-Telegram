@@ -228,9 +228,6 @@ public class SelectAudioAlert extends BottomSheetWithRecyclerListView implements
                         loadGlobalAudioDelayed();
 //                    }
                 }
-                // Prizma: all updates in this sheet are non-animated. Erasing the query swaps whole
-                // sections and one track can sit in two sections at once — the diff animation then
-                // crashed RecyclerView ("Inconsistency detected") when the search field was cleared.
                 adapter.update(false);
             }
         });

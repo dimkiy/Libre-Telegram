@@ -699,7 +699,7 @@ public class ChatActivity extends BaseFragment implements
 
     public String quickReplyShortcut;
     private int chatMode;
-    private org.telegram.ui.Components.PrizmaTogetherBar prizmaTogetherBar; // Libre: "listen together" pill
+    private org.telegram.ui.Components.PrizmaTogetherBar prizmaTogetherBar;
     private int scheduledMessagesCount = -1;
     public boolean isSubscriberSuggestions;
 
@@ -7210,7 +7210,6 @@ public class ChatActivity extends BaseFragment implements
             contentView.addView(sideControlsButtonsLayout, indexToAdd, LayoutHelper.createFrame(57, 300, Gravity.RIGHT | Gravity.BOTTOM));
         }
         if (chatMode == 0) {
-            // Libre: who is playing music here right now and a button to join from the same second
             prizmaTogetherBar = new org.telegram.ui.Components.PrizmaTogetherBar(context, this);
             final int indexToAdd = chatActivityFadeView != null ? contentView.indexOfChild(chatActivityFadeView) : -1;
             contentView.addView(prizmaTogetherBar, indexToAdd, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 62, 0, 62, 0));
@@ -18930,12 +18929,9 @@ public class ChatActivity extends BaseFragment implements
             return super.dispatchKeyEvent(event);
         }
 
-        // Prizma: this view's OWN wallpaper instance — getNewDrawable() is called every frame,
-        // and sharing one drawable across chat + comments made the chat jitter. Each view keeps its own.
         private Drawable prizmaBg;
         private String prizmaBgKey;
 
-        // a replaced video wallpaper is simply dropped by SizeNotifierFrameLayout — free its decoder ourselves
         private void prizmaReleaseBg() {
             if (prizmaBg instanceof org.telegram.ui.Components.PrizmaVideoWallpaper) {
                 ((org.telegram.ui.Components.PrizmaVideoWallpaper) prizmaBg).onDetachedFromWindow();
@@ -20869,7 +20865,6 @@ public class ChatActivity extends BaseFragment implements
             postponedScrollToLastMessageQueryIndex = 0;
         }
         ArrayList<MessageObject> messArr = (ArrayList<MessageObject>) args[2];
-        // Prizma: messages someone else deleted stay in the chat after re-entering it, marked «Удалено»
         if (messArr != null && org.telegram.messenger.PrizmaConfig.antiDelete()) {
             for (int pIdx = 0; pIdx < messArr.size(); pIdx++) {
                 MessageObject pMsg = messArr.get(pIdx);
@@ -22637,7 +22632,6 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog.dismiss();
                 scheduleNowDialog = null;
             }
-            // Prizma: anti-delete keeps only messages removed by SOMEONE ELSE; our own deletions go through as usual
             ArrayList<MessageObject> prizmaKept = null;
             if (org.telegram.messenger.PrizmaConfig.antiDelete() && !scheduled && !movedToScheduled && !conversion && !messages.isEmpty()) {
                 ArrayList<Integer> selfIds = new ArrayList<>();
@@ -22656,7 +22650,6 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             if (prizmaKept != null && !prizmaKept.isEmpty()) {
-                // Prizma: keep deleted messages visible and mark them as "deleted"
                 for (int pIdx = 0; pIdx < prizmaKept.size(); pIdx++) {
                     MessageObject pMsg = prizmaKept.get(pIdx);
                     if (org.telegram.messenger.PrizmaAntiDelete.markDeleted(pMsg) && chatAdapter != null) {
@@ -27603,8 +27596,6 @@ public class ChatActivity extends BaseFragment implements
     public void onTransitionAnimationStart(boolean isOpen, boolean backward) {
         super.onTransitionAnimationStart(isOpen, backward);
         prizmaFadePrevOnOpen(isOpen, backward);
-        // Prizma: message cells are heavy (media, text layouts); cascading them during the chat-open
-        // transition caused occasional jank. The open transition itself stays smooth without it.
         startMs = System.currentTimeMillis();
         int[] alowedNotifications = null;
         if (isOpen) {
@@ -32406,7 +32397,6 @@ public class ChatActivity extends BaseFragment implements
                         } else {
                             cell.setVisibility(View.GONE);
                         }
-                        // Prizma: tap-to-translate — always show and always translate (auto-detect -> app language)
                         if (org.telegram.messenger.PrizmaConfig.tapTranslate()) {
                             cell.setVisibility(View.VISIBLE);
                             cell.setOnClickListener(e -> {
@@ -36227,7 +36217,6 @@ public class ChatActivity extends BaseFragment implements
         });
     }
 
-    // Prizma: smoothly fade the screen behind when opening comments/discussion, instead of it vanishing abruptly
     private View prizmaFadedPrevView;
 
     private void prizmaFadePrevOnOpen(boolean isOpen, boolean backward) {

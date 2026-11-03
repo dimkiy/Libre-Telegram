@@ -23,17 +23,7 @@ import org.telegram.messenger.Utilities;
 
 import java.security.MessageDigest;
 
-/*
- * Libre — что это за файл:
- * PIN-код на архив чатов.
- */
-
-/**
- * Prizma: a PIN lock for the chat archive, with a nice unlock screen — the background behind
- * blurs, and the keypad buttons appear one after another. The PIN is stored only as a SHA-256 hash.
- */
 public class PrizmaArchiveLock {
-
     private PrizmaArchiveLock() {}
 
     public static boolean isLocked() {
@@ -81,7 +71,6 @@ public class PrizmaArchiveLock {
 
         FrameLayout overlay = new FrameLayout(ctx);
 
-        // blurred snapshot of what's behind
         try {
             android.app.Activity act = AndroidUtilities.findActivity(ctx);
             if (act != null && act.getWindow() != null) {
@@ -98,14 +87,13 @@ public class PrizmaArchiveLock {
                 overlay.addView(bgImage, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             }
         } catch (Throwable ignore) {}
-        overlay.setBackgroundColor(0xAA000000); // scrim on top of blur
+        overlay.setBackgroundColor(0xAA000000);
 
         LinearLayout column = new LinearLayout(ctx);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setGravity(Gravity.CENTER_HORIZONTAL);
         column.setPadding(AndroidUtilities.dp(32), 0, AndroidUtilities.dp(32), AndroidUtilities.dp(28));
 
-        // lock icon
         ImageView lock = new ImageView(ctx);
         lock.setImageResource(R.drawable.ic_lock_white);
         lock.setColorFilter(0xffffffff);
@@ -149,7 +137,6 @@ public class PrizmaArchiveLock {
         };
         updateDots.run();
 
-        // keypad 3x4; buttons appear one after another
         LinearLayout pad = new LinearLayout(ctx);
         pad.setOrientation(LinearLayout.VERTICAL);
         pad.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -206,7 +193,6 @@ public class PrizmaArchiveLock {
                 overlay.animate().alpha(0f).setDuration(180).withEndAction(dialog::dismiss).start();
             } else {
                 busy[0] = false;
-                // wrong → shake + clear
                 dots.animate().cancel();
                 dots.setTranslationX(0);
                 android.animation.ObjectAnimator shake = android.animation.ObjectAnimator.ofFloat(dots, View.TRANSLATION_X,
@@ -237,7 +223,6 @@ public class PrizmaArchiveLock {
             return;
         }
 
-        // staggered appearance of the keypad
         for (int i = 0; i < padButtons.size(); i++) {
             final View btn = padButtons.get(i);
             btn.setAlpha(0f);
@@ -261,12 +246,12 @@ public class PrizmaArchiveLock {
             t.setText("OK");
             t.setTextSize(17);
             t.setTextColor(0xffffffff);
-            bg.setColor(0xff4CC764); // green confirm
+            bg.setColor(0xff4CC764);
         } else if ("⌫".equals(label)) {
             t.setText("⌫");
             t.setTextSize(22);
             t.setTextColor(0xffffffff);
-            bg.setColor(0x33E8534B); // soft red erase
+            bg.setColor(0x33E8534B);
             bg.setStroke(AndroidUtilities.dp(1.5f), 0x80E8534B);
         } else {
             t.setText(label);

@@ -17,22 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-/*
- * Libre — что это за файл:
- * Карточка Libre-подарка в чате (когда его передали другу).
- */
-
-/**
- * Prizma: a handed-over Libre NFT shows up in the chat as Telegram's own gift card.
- *
- * The chat message is plain text for everyone ("🎁 Дарю тебе…"); at its end, in zero-width
- * characters, sits the number of a "card" on Libre Cloud — the gift's look (model, backdrop,
- * pattern, number). Libre on both sides turns that message into a TL_messageActionStarGiftUnique
- * service message in memory only — the database keeps the text — so the chat draws the very same
- * card Telegram draws for a real NFT transfer.
- */
 public final class PrizmaGiftCard {
-
     private static final String PROTO = "LG1;";
     private static final char BIT0 = '‌', BIT1 = '‍';
 
@@ -42,9 +27,6 @@ public final class PrizmaGiftCard {
         return ApplicationLoader.applicationContext.getSharedPreferences("prizma_cards", Context.MODE_PRIVATE);
     }
 
-    // ===================== the hidden number =====================
-
-    /** Zero-width tail carrying the card number. */
     public static String hide(long cardId) {
         byte[] bytes = (PROTO + cardId).getBytes(StandardCharsets.US_ASCII);
         StringBuilder sb = new StringBuilder(bytes.length * 8);
@@ -62,7 +44,7 @@ public final class PrizmaGiftCard {
             if (c == BIT0 || c == BIT1) {
                 if (start < 0) start = i;
             } else if (start >= 0) {
-                start = -1; // only a run that reaches the end counts
+                start = -1;
             }
         }
         if (start < 0) return 0;
@@ -83,9 +65,6 @@ public final class PrizmaGiftCard {
         }
     }
 
-    // ===================== card data =====================
-
-    /** The sender (or the inbox) already knows the look — no need to ask the server later. */
     public static void remember(long cardId, JSONObject gift) {
         if (cardId <= 0 || gift == null) return;
         prefs().edit().putString("c" + cardId, gift.toString()).apply();
@@ -106,7 +85,7 @@ public final class PrizmaGiftCard {
                 loading.remove(cardId);
                 ArrayList<TLRPC.Message> msgs = waiting.remove(cardId);
                 if (r.code != 200 || r.body == null) {
-                    if (r.code == 404) failed.add(cardId); // not ours to see, or expired — stay a text message
+                    if (r.code == 404) failed.add(cardId);
                     return;
                 }
                 try {
@@ -116,7 +95,6 @@ public final class PrizmaGiftCard {
                     return;
                 }
                 if (msgs == null) return;
-                // the chat swaps the text bubble for the card
                 HashMap<Long, ArrayList<MessageObject>> byDialog = new HashMap<>();
                 for (TLRPC.Message msg : msgs) {
                     long did = MessageObject.getDialogId(msg);
@@ -131,14 +109,8 @@ public final class PrizmaGiftCard {
         });
     }
 
-    // ===================== our own message, once it's sent =====================
-
     private static final HashSet<Integer> watching = new HashSet<>();
 
-    /**
-     * While our message is still sending it stays text (its id isn't final yet); as soon as the
-     * server takes it, swap it for the card.
-     */
     public static void watchSent(int account) {
         if (!watching.add(account)) return;
         NotificationCenter.getInstance(account).addObserver((id, acc, args) -> {
@@ -153,12 +125,6 @@ public final class PrizmaGiftCard {
         }, NotificationCenter.messageReceivedByServer);
     }
 
-    // ===================== text → card =====================
-
-    /**
-     * MessageObject's constructor: a Libre gift message becomes a gift-card service message.
-     * Anything else (and anything still sending) comes back untouched. Any thread.
-     */
     public static TLRPC.Message convert(int account, TLRPC.Message m) {
         if (!(m instanceof TLRPC.TL_message) || m.id <= 0 || m.message == null || m.message.length() < 40) return m;
         char last = m.message.charAt(m.message.length() - 1);
@@ -174,7 +140,7 @@ public final class PrizmaGiftCard {
             JSONObject g = new JSONObject(json);
             long giftId = g.optLong("giftId");
             TL_stars.StarGift base = PrizmaGifts.find(giftId);
-            long lookId = -1_000_000_000_000_000L - cardId; // its own id space, never one of ours
+            long lookId = -1_000_000_000_000_000L - cardId;
             int[] nt = PrizmaGifts.parseNumber(g.optString("num", ""), lookId, base != null ? base : new TL_stars.TL_starGift());
             TL_stars.StarGift look = PrizmaGifts.buildUnique(base, lookId, PrizmaGifts.decodeAttrs(g.optString("attr", "")),
                     nt, g.optInt("style", 0), g.optBoolean("crafted", false), g.optString("title", ""));
@@ -184,7 +150,6 @@ public final class PrizmaGiftCard {
             a.transferred = true;
             a.saved = true;
             a.gift = look;
-            // "You transferred a gift to **un1**" / "**un1** transferred you a gift!"
             a.from_id = m.out ? m.peer_id : m.from_id;
 
             TLRPC.TL_messageService s = new TLRPC.TL_messageService();
@@ -201,7 +166,7 @@ public final class PrizmaGiftCard {
             s.flags = m.flags & ~(TLRPC.MESSAGE_FLAG_HAS_MEDIA | TLRPC.MESSAGE_FLAG_HAS_MARKUP | TLRPC.MESSAGE_FLAG_HAS_ENTITIES);
             s.dialog_id = m.dialog_id;
             s.send_state = m.send_state;
-            s.message = m.message; // keeps the marker, so the card can be recognised later
+            s.message = m.message;
             s.action = a;
             return s;
         } catch (Throwable e) {
@@ -209,7 +174,6 @@ public final class PrizmaGiftCard {
         }
     }
 
-    /** A card we drew ourselves (the gift exists only in Libre — open it locally, not via Telegram). */
     public static boolean isCard(MessageObject mo) {
         if (mo == null || !(mo.messageOwner instanceof TLRPC.TL_messageService)) return false;
         if (!(mo.messageOwner.action instanceof TLRPC.TL_messageActionStarGiftUnique)) return false;

@@ -16,16 +16,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-/*
- * Libre — что это за файл:
- * Своё фото или видео на обои чата.
- */
-
-/**
- * Prizma: pick an own photo or video to use as the chat wallpaper.
- */
 public class PrizmaChatWallpaper {
-
     public static final int REQUEST = 48211;
 
     public static void pick(Activity activity) {
@@ -46,7 +37,6 @@ public class PrizmaChatWallpaper {
         if (activity == null || uri == null) {
             return;
         }
-        // copying a picked video (can be hundreds of MB) on the UI thread froze the app ("not responding")
         final android.content.ContentResolver resolver = activity.getContentResolver();
         final android.content.Context appContext = activity.getApplicationContext();
         Utilities.globalQueue.postRunnable(() -> {
@@ -62,7 +52,6 @@ public class PrizmaChatWallpaper {
                 os.close();
                 in.close();
 
-                // determine if it is a video: trust mime, else probe (not a decodable image => video)
                 String mime = resolver.getType(uri);
                 boolean isVideo;
                 if (mime != null) {
@@ -74,11 +63,9 @@ public class PrizmaChatWallpaper {
                     isVideo = opt.outWidth <= 0;
                 }
 
-                // a new file name each time: open chats / the profile cache the drawable by path, so
-                // re-using one name kept showing the previous video after picking a new one
                 File dst = new File(ApplicationLoader.getFilesDirFixed(), (isVideo ? "prizma_chat_wp.mp4" : "prizma_chat_wp.jpg").replace(".", "_" + System.currentTimeMillis() + "."));
                 if (!tmp.renameTo(dst)) {
-                    dst = tmp; // fallback: use the temp file as-is
+                    dst = tmp;
                 }
                 final String path = dst.getAbsolutePath();
                 final boolean video = isVideo;

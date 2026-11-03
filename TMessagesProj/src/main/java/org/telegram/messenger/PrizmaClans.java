@@ -6,20 +6,9 @@ import org.telegram.tgnet.TLRPC;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Кланы: создать, вступить по ссылке, роли (глава, офицеры, участники). Данные живут на сервере Libre.
- */
-
-/**
- * Prizma: clans on Libre Cloud — create one with a tag and colour, invite by link, roles (head,
- * officers, members), a clan wall and a rating. One clan per person.
- */
 public final class PrizmaClans {
-
     private PrizmaClans() {}
 
-    // one entry per account slot: with two accounts the second one used to see the first one's clan
     private static final PrizmaSocial.Clan[] mine = new PrizmaSocial.Clan[UserConfig.MAX_ACCOUNT_COUNT];
     private static final long[] mineAt = new long[UserConfig.MAX_ACCOUNT_COUNT];
     private static final long[] mineOwner = new long[UserConfig.MAX_ACCOUNT_COUNT];
@@ -30,12 +19,10 @@ public final class PrizmaClans {
         return account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT;
     }
 
-    /** My clan (cached); refreshes now and then. UI thread. */
     public static PrizmaSocial.Clan mine(int account) {
         if (badAccount(account)) return null;
         long self = UserConfig.getInstance(account).getClientUserId();
         if (mineOwner[account] != self) {
-            // another Telegram account logged into this slot — the old clan isn't theirs
             mine[account] = null;
             mineAt[account] = 0;
             mineOwner[account] = self;
@@ -48,7 +35,6 @@ public final class PrizmaClans {
         return mine(UserConfig.selectedAccount);
     }
 
-    /** {@code done} runs once the server answered (or failed); the error text is null on success. */
     public static void refreshMine(int account, Runnable done) {
         Utilities.Callback<String> cb = null;
         if (done != null) cb = err -> done.run();
@@ -62,7 +48,7 @@ public final class PrizmaClans {
         }
         if (mineWaiters[account] == null) mineWaiters[account] = new ArrayList<>();
         if (done != null) mineWaiters[account].add(() -> done.run(lastError[account]));
-        if (mineLoading[account]) return; // the answer to the request on its way serves everyone waiting
+        if (mineLoading[account]) return;
         mineLoading[account] = true;
         final long self = UserConfig.getInstance(account).getClientUserId();
         PrizmaCloud.call(account, "GET", "/v1/clan/my", null, r -> {
@@ -83,7 +69,7 @@ public final class PrizmaClans {
                 }
             } else {
                 err = error(r);
-                mineAt[account] = System.currentTimeMillis() - 90_000L; // try again in half a minute, not in two
+                mineAt[account] = System.currentTimeMillis() - 90_000L;
             }
             lastError[account] = err;
             ArrayList<Runnable> waiting = mineWaiters[account];
@@ -104,7 +90,6 @@ public final class PrizmaClans {
 
     private static final String[] helloSent = new String[UserConfig.MAX_ACCOUNT_COUNT];
 
-    /** My name for the other members' lists (they may never have chatted with me). Once per run. */
     private static void sayHello(int account) {
         String name = myName(account);
         if (name.isEmpty() || name.equals(helloSent[account])) return;
@@ -115,7 +100,7 @@ public final class PrizmaClans {
         } catch (Throwable ignore) {
         }
         PrizmaCloud.call(account, "POST", "/v1/clan/hello", body, r -> {
-            if (r.code != 200) helloSent[account] = null; // an older server without names — try next time
+            if (r.code != 200) helloSent[account] = null;
         });
     }
 
@@ -124,7 +109,6 @@ public final class PrizmaClans {
         return me != null ? UserObject.getUserName(me) : "";
     }
 
-    /** «Удалить мои данные»: the server forgot the membership, so do we. */
     static void forgetMine(int account) {
         if (badAccount(account)) return;
         setMine(account, null);
@@ -138,7 +122,6 @@ public final class PrizmaClans {
         PrizmaCloud.notifyChanged();
     }
 
-    /** A clan created before the server knew clans moves there under the same name, tag and colour. */
     private static void migrateLegacy(int account) {
         JSONObject old = PrizmaSocial.legacyClan();
         if (old == null) return;
@@ -171,7 +154,7 @@ public final class PrizmaClans {
                 mem.roleId = m.optInt("role", 0);
                 mem.role = PrizmaSocial.roleName(mem.roleId);
                 TLRPC.User u = mc.getUser(mem.userId);
-                String told = m.optString("name", "").trim(); // what their Libre told the server
+                String told = m.optString("name", "").trim();
                 mem.name = u != null ? UserObject.getUserName(u) : !told.isEmpty() ? told : "Пользователь Libre";
                 c.list.add(mem);
             }
@@ -179,7 +162,6 @@ public final class PrizmaClans {
         return c;
     }
 
-    /** Server error code → words. */
     private static String error(PrizmaNet.Response r) {
         String e = "";
         try {
@@ -198,8 +180,6 @@ public final class PrizmaClans {
         if (r.code == 404) return "Клан не найден — возможно, его распустили";
         return PrizmaWall.error(r.code, null);
     }
-
-    // ===================== actions =====================
 
     public static void create(int account, String name, String tag, int color, Utilities.Callback2<PrizmaSocial.Clan, String> done) {
         JSONObject body = new JSONObject();
@@ -258,7 +238,6 @@ public final class PrizmaClans {
         done.run(null, error(r));
     }
 
-    /** {@code done} gets null on success or the error text. */
     public static void leave(int account, Utilities.Callback<String> done) {
         PrizmaCloud.call(account, "POST", "/v1/clan/leave", null, r -> {
             if (r.code == 200) {
@@ -291,7 +270,6 @@ public final class PrizmaClans {
         });
     }
 
-    /** The invite link (made once per clan, the same afterwards). */
     public static void invite(int account, long clanId, Utilities.Callback2<String, String> done) {
         PrizmaCloud.call(account, "POST", "/v1/clan/" + clanId + "/invite", null, r -> {
             try {
@@ -322,7 +300,6 @@ public final class PrizmaClans {
         });
     }
 
-    /** «https://<server>/c/<code>» or just the code → the code; null when it isn't one of ours. */
     public static String codeOf(String text) {
         if (text == null) return null;
         text = text.trim();

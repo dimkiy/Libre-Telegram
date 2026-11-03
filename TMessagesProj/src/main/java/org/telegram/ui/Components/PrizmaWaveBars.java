@@ -8,17 +8,7 @@ import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
 
-/*
- * Libre — что это за файл:
- * Анимированные полоски, которые прыгают под музыку.
- */
-
-/**
- * Prizma: animated bar visualizer that reacts to the currently playing track.
- * Fed by {@link PrizmaVisualizerData} with amplitude values [0..5].
- */
 public class PrizmaWaveBars extends View implements PrizmaVisualizerData.Listener {
-
     private static final int BARS = 6;
     private final float[] target = new float[BARS];
     private final float[] cur = new float[BARS];
@@ -32,8 +22,6 @@ public class PrizmaWaveBars extends View implements PrizmaVisualizerData.Listene
     public PrizmaWaveBars(Context context) {
         super(context);
         paint.setColor(0xffffffff);
-        // a cheap offset shadow instead of setShadowLayer: the shadow layer forced a SOFTWARE layer,
-        // i.e. the view was re-rendered on the CPU every frame while music played
         shadowPaint.setColor(0x40000000);
     }
 

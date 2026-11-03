@@ -13,17 +13,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 
-/*
- * Libre — что это за файл:
- * Адрес сервера Libre и бота (для тестов) и «Удалить мои данные».
- */
-
-/**
- * Prizma: where Libre Cloud lives (server address + the Libre bot) and «Удалить мои данные».
- * Release builds come with both filled in; this is for testing and for moving the server.
- */
 public final class PrizmaCloudSetup {
-
     private PrizmaCloudSetup() {}
 
     public static String status() {

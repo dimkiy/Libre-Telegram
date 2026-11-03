@@ -236,7 +236,6 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     @Override
     public void onTransitionAnimationStart(boolean isOpen, boolean backward) {
         super.onTransitionAnimationStart(isOpen, backward);
-        // Prizma: start the cascade as the screen appears (no flash); clean rows when leaving (no jitter)
         if (isOpen) {
             prizmaEntranceAt = System.currentTimeMillis();
             org.telegram.ui.Components.PrizmaEntrance.play(listView);
@@ -248,7 +247,6 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     @Override
     public void onBecomeFullyVisible() {
         super.onBecomeFullyVisible();
-        // Prizma: fallback cascade for an instant tab switch with no transition (off in Lite mode)
         if (System.currentTimeMillis() - prizmaEntranceAt > 650) {
             prizmaEntranceAt = System.currentTimeMillis();
             org.telegram.ui.Components.PrizmaEntrance.play(listView);
@@ -885,7 +883,6 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                                 if (selected == null || selected.getDocument() == null) {
                                     return;
                                 }
-                                // defer playback until the picker fully dismisses (it cleans up its preview player on dismiss)
                                 org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
                                     try {
                                         java.util.ArrayList<org.telegram.messenger.MessageObject> list = new java.util.ArrayList<>();

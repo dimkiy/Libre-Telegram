@@ -19,27 +19,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 
-/*
- * Libre — что это за файл:
- * «Уведомления из MAX»: читает уведомления приложения MAX и пересылает их боту Libre в Telegram.
- */
-
-/**
- * Prizma: «Уведомления из MAX» — whatever MAX shows as a notification on this phone (any chat,
- * personal or group) arrives in Telegram from the Libre bot.
- *
- * MAX has no way for an app to read someone's chats, but Android lets an app the person allowed
- * («Доступ к уведомлениям») see other apps' notifications. Libre reads only MAX's, only while the
- * switch in the hub is on, and passes each message through Libre Cloud to the Libre bot — nothing is
- * kept on the phone or the server. Only one way: there's nothing to answer from.
- */
 public class PrizmaMaxListener extends NotificationListenerService {
-
-    /** MAX by VK; a renamed or regional build is caught by its app name below. */
     private static final String[] MAX_PACKAGES = {"ru.oneme.app"};
 
-    private static final HashMap<String, Long> lastTime = new HashMap<>();   // notification key → newest message forwarded
-    private static final LinkedHashSet<String> recent = new LinkedHashSet<>(); // what went out lately (MAX re-posts the same lines)
+    private static final HashMap<String, Long> lastTime = new HashMap<>();
+    private static final LinkedHashSet<String> recent = new LinkedHashSet<>();
     private static final HashMap<String, Boolean> isMaxCache = new HashMap<>();
     private static long warnedAt;
 
@@ -52,8 +36,6 @@ public class PrizmaMaxListener extends NotificationListenerService {
         }
     }
 
-    // ===================== settings =====================
-
     public static boolean accessGranted(Context ctx) {
         try {
             return androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.getPackageName());
@@ -62,7 +44,6 @@ public class PrizmaMaxListener extends NotificationListenerService {
         }
     }
 
-    /** Asks Android to re-bind the listener (after the switch is turned on, or a restart killed it). */
     public static void rebind(Context ctx) {
         if (Build.VERSION.SDK_INT >= 24) {
             try {
@@ -71,8 +52,6 @@ public class PrizmaMaxListener extends NotificationListenerService {
             }
         }
     }
-
-    // ===================== reading =====================
 
     private boolean isMax(String pkg) {
         if (pkg == null || pkg.equals(getPackageName())) return false;
@@ -105,7 +84,6 @@ public class PrizmaMaxListener extends NotificationListenerService {
 
             Parcelable[] msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES);
             if (msgs != null && msgs.length > 0) {
-                // a messaging-style notification: each line is one message, oldest first
                 long seen = lastTime.containsKey(key) ? lastTime.get(key) : 0;
                 long newest = seen;
                 for (Parcelable p : msgs) {
@@ -142,7 +120,6 @@ public class PrizmaMaxListener extends NotificationListenerService {
 
     private void forward(String chat, String from, String text, long time) {
         if (TextUtils.isEmpty(text)) return;
-        // MAX updates its notification with the same lines again — each message goes out once
         String id = chat + "|" + from + "|" + text + "|" + (time / 1000);
         synchronized (recent) {
             if (!recent.add(id)) return;
@@ -163,7 +140,6 @@ public class PrizmaMaxListener extends NotificationListenerService {
             if (!PrizmaCloud.configured()) return;
             PrizmaCloud.call(UserConfig.selectedAccount, "POST", "/v1/max/forward", body, r -> {
                 if (r.code == 409 && System.currentTimeMillis() - warnedAt > 6 * 3600_000L) {
-                    // the bot may only write to people who pressed Start — remind, but not on every message
                     warnedAt = System.currentTimeMillis();
                     Toast.makeText(ApplicationLoader.applicationContext,
                             "Уведомления из MAX: нажмите «Старт» у бота @" + PrizmaCloud.bot() + ", иначе он не может вам писать",

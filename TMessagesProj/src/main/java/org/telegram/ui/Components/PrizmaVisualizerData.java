@@ -2,25 +2,13 @@ package org.telegram.ui.Components;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/*
- * Libre — что это за файл:
- * Передаёт форму звука играющего трека в анимации.
- */
-
-/**
- * Prizma: lightweight bridge that forwards the player's audio waveform
- * (already computed by Telegram's AudioVisualizerRenderersFactory) to UI views.
- * Supports multiple listeners so the seek bar and a background visualizer can react together.
- */
 public class PrizmaVisualizerData {
-
     public interface Listener {
         void onWaveform(boolean playing, boolean animate, float[] values);
     }
 
     private static final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
 
-    /** Adds a listener (does not replace existing ones). */
     public static void setListener(Listener l) {
         if (l != null && !listeners.contains(l)) {
             listeners.add(l);

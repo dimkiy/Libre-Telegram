@@ -496,7 +496,7 @@ public class GiftSheet extends BottomSheetWithRecyclerListView implements Notifi
                     if (myGifts != null && selectedTab == TAB_MY_GIFTS) {
                         TL_stars.SavedStarGift savedStarGift = null;
                         for (TL_stars.SavedStarGift g : myGifts.gifts) {
-                            if (g.gift == gift) { // the exact copy that was tapped (several can share an id)
+                            if (g.gift == gift) {
                                 savedStarGift = g;
                                 break;
                             }
@@ -512,7 +512,6 @@ public class GiftSheet extends BottomSheetWithRecyclerListView implements Notifi
                         if (savedStarGift == null) {
                             return;
                         }
-                        // Libre: a showcase NFT isn't a Telegram gift (no saved_id there) — it goes through Libre Cloud
                         if (org.telegram.ui.Components.PrizmaGifts.isInstance(savedStarGift.saved_id)) {
                             final long instId = savedStarGift.saved_id;
                             if (closeParentSheet != null) {

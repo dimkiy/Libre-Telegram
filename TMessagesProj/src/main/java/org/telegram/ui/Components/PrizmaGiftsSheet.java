@@ -18,17 +18,7 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
-/*
- * Libre — что это за файл:
- * Выбор подарков для витрины.
- */
-
-/**
- * Prizma: picker for the profile gift showcase. Shows the public gift catalog;
- * tapping a gift adds/removes it from the user's own decorative showcase.
- */
 public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDelegate {
-
     private static final int COLUMNS = 3;
 
     private final Context context;
@@ -72,7 +62,7 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
 
         ScrollView scroll = new ScrollView(context);
         scroll.setVerticalScrollBarEnabled(false);
-        scroll.setNestedScrollingEnabled(true); // the sheet follows only the list's overscroll at the top
+        scroll.setNestedScrollingEnabled(true);
         grid = new LinearLayout(context);
         grid.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(grid, new ScrollView.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
@@ -90,7 +80,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         BottomSheet.Builder builder = new BottomSheet.Builder(context);
         builder.setCustomView(root);
         sheet = builder.create();
-        // a fast fling up through the gifts must not read as "swipe the sheet away"
         sheet.setCanDismissWithSwipe(false);
         sheet.setOnHideListener(d -> {
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starGiftsLoaded);
@@ -128,7 +117,7 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
 
         LinearLayout row = null;
         ArrayList<TL_stars.StarGift> gifts = new ArrayList<>();
-        for (TL_stars.StarGift g : catalog) if (g != null) gifts.add(g); // a gap in the catalog must not leave a row unmade
+        for (TL_stars.StarGift g : catalog) if (g != null) gifts.add(g);
         int count = gifts.size();
         for (int i = 0; i < count; i++) {
             final TL_stars.StarGift gift = gifts.get(i);
@@ -161,7 +150,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         final android.widget.FrameLayout cell = new android.widget.FrameLayout(context);
         cell.setPadding(AndroidUtilities.dp(4), AndroidUtilities.dp(4), AndroidUtilities.dp(4), AndroidUtilities.dp(4));
 
-        // market-style card
         final android.widget.FrameLayout card = new android.widget.FrameLayout(context);
         card.setClipToPadding(false);
 
@@ -169,7 +157,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         PrizmaGifts.applySticker(iv, gift, org.telegram.messenger.PrizmaConfig.fancyEffects());
         card.addView(iv, LayoutHelper.createFrame(72, 72, Gravity.CENTER_HORIZONTAL | Gravity.TOP, 0, 16, 0, 0));
 
-        // price chip ⭐ N
         final TextView price = new TextView(context);
         price.setText("⭐ " + formatStars(gift.stars));
         price.setTextColor(0xffE8A400);
@@ -183,7 +170,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         price.setBackground(priceBg);
         card.addView(price, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 0, 0, 0, 12));
 
-        // "NFT" badge shown when upgraded
         final TextView badge = new TextView(context);
         badge.setText("NFT");
         badge.setTextColor(0xff1a1a1a);
@@ -196,7 +182,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         badge.setBackground(badgeBg);
         card.addView(badge, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.RIGHT, 0, 7, 7, 0));
 
-        // "×N" copies badge (shown when more than one of the same gift)
         final TextView countBadge = new TextView(context);
         countBadge.setTextColor(0xffffffff);
         countBadge.setTextSize(10);
@@ -215,7 +200,7 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
             int c = PrizmaGifts.count(gift.id);
             countBadge.setText("×" + c);
             countBadge.setVisibility(c >= 2 ? View.VISIBLE : View.GONE);
-            applyCellState(card, badge, c > 0, false); // NFT upgrade is per-copy, done from the profile
+            applyCellState(card, badge, c > 0, false);
         };
         refresh.run();
 
@@ -230,7 +215,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         });
         cell.setOnLongClickListener(v -> {
             try { v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); } catch (Throwable ignore) {}
-            // long-press = remove one copy right here, no menu; plain copies go first, an NFT only after asking
             if (PrizmaGifts.count(gift.id) > 0) {
                 final Runnable remove = () -> {
                     PrizmaGifts.removeOne(gift.id);
@@ -257,7 +241,6 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
         return cell;
     }
 
-    /** Long-press menu: add/remove copies. NFT upgrade is per-copy, done from the profile. */
     private void showGiftMenu(TL_stars.StarGift gift, Runnable refresh) {
         int c = PrizmaGifts.count(gift.id);
         java.util.ArrayList<String> items = new java.util.ArrayList<>();

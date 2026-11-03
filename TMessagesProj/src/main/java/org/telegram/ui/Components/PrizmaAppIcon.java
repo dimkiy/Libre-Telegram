@@ -22,20 +22,7 @@ import org.telegram.ui.LaunchActivity;
 
 import java.io.InputStream;
 
-/*
- * Libre — что это за файл:
- * Своя картинка на иконку приложения (ярлык на рабочем столе).
- */
-
-/**
- * Prizma: «Своя картинка» for the app icon.
- *
- * Android only lets an app switch between icons it was built with (the Libre icons are aliases in
- * the manifest). Any picture of the person's own can go to the home screen as a pinned shortcut —
- * it opens Libre just like the app icon; the launcher asks to confirm adding it.
- */
 public final class PrizmaAppIcon {
-
     public static final int REQUEST = 48240;
 
     private PrizmaAppIcon() {}
@@ -55,7 +42,6 @@ public final class PrizmaAppIcon {
         }
     }
 
-    /** LaunchActivity.onActivityResult. */
     public static void handlePicked(Activity activity, Uri uri) {
         if (activity == null || uri == null) return;
         Utilities.globalQueue.postRunnable(() -> {
@@ -86,16 +72,12 @@ public final class PrizmaAppIcon {
         });
     }
 
-    /**
-     * Adaptive icons are 108 dp with only the middle 72 dp sure to show — the picture is centre-cropped
-     * to a square and scaled so that middle part is what the person sees.
-     */
     private static Bitmap adaptive(Bitmap src) {
         final int size = 432;
         Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
         int side = Math.min(src.getWidth(), src.getHeight());
-        float scale = size / (float) side; // the square fills the whole layer; launchers show its middle two thirds
+        float scale = size / (float) side;
         Matrix m = new Matrix();
         m.postTranslate(-(src.getWidth() - side) / 2f, -(src.getHeight() - side) / 2f);
         m.postScale(scale, scale);

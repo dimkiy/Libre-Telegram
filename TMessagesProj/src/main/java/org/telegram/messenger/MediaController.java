@@ -1227,7 +1227,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private float audioVolume;
     private ValueAnimator audioVolumeAnimator;
 
-    // Prizma: smooth ducking — fade down when a notification/other app grabs transient focus, fade back up on return
     private float duckVolume = 1f;
     private ValueAnimator duckAnimator;
 
@@ -1606,10 +1605,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         playMessage(getPlayingMessageObject());
                     }
                 }
-                animateDuck(VOLUME_NORMAL, 650);  // smoothly bring the music back up
+                animateDuck(VOLUME_NORMAL, 650);
             } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
                 audioFocus = AUDIO_NO_FOCUS_CAN_DUCK;
-                animateDuck(VOLUME_DUCK, 160);   // gentle fade down under the notification
+                animateDuck(VOLUME_DUCK, 160);
             } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
                 audioFocus = AUDIO_NO_FOCUS_NO_DUCK;
                 if (isPlayingMessage(getPlayingMessageObject()) && !isMessagePaused()) {
@@ -1624,8 +1623,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private void setPlayerVolume() {
         try {
             float volume = isSilent ? 0 : VOLUME_NORMAL;
-            // Prizma: duckVolume rides between 1.0 and VOLUME_DUCK via a fade (smooth notification ducking).
-            // If a duck is requested but not animating (e.g. focus set without our animator), fall back to the hard duck value.
             float duck = duckVolume;
             if (audioFocus == AUDIO_NO_FOCUS_CAN_DUCK && duckAnimator == null && duck > VOLUME_DUCK) {
                 duck = VOLUME_DUCK;
@@ -1640,11 +1637,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
     }
 
-    /**
-     * Prizma: attach the equalizer to the music session. At the first STATE_READY the ExoPlayer
-     * audio session id is often still 0 (AudioTrack not created yet), so the effects wouldn't take
-     * until a seek re-created the session. Retry a few times until the session id is valid.
-     */
     private void prizmaAttachEqualizer(int tag, int attempt) {
         if (tag != playerNum || audioPlayer == null) {
             return;
@@ -2791,10 +2783,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         buildShuffledPlayList(playingMessageObject);
     }
 
-    // Prizma: the shuffled list is rebuilt every time more music is loaded (right after playback
-    // starts). The current track used to be taken as playlist.get(currentPlaylistNum) — but with
-    // shuffle on that number points into the SHUFFLED list, so some other track was treated as
-    // "current" and next/previous jumped around ("shuffle doesn't work"). Find it by object instead.
     private void buildShuffledPlayList(MessageObject current) {
         if (playlist.isEmpty()) {
             return;
@@ -2939,7 +2927,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
     public boolean setPlaylist(ArrayList<MessageObject> messageObjects, MessageObject current, long mergeDialogId, boolean loadMusic, PlaylistGlobalSearchParams params) {
         if (playingMessageObject == current) {
-            // Prizma: with shuffle on the position is an index in the shuffled list
             int newIdx = (SharedConfig.shuffleMusic ? shuffledPlaylist : playlist).indexOf(current);
             if (newIdx >= 0) {
                 currentPlaylistNum = newIdx;
@@ -2976,7 +2963,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
         if (current.isMusic() && !current.scheduled) {
             if (SharedConfig.shuffleMusic) {
-                buildShuffledPlayList(current); // the new track, not the one that is still playing
+                buildShuffledPlayList(current);
             }
             if (loadMusic) {
                 if (playlistGlobalSearchParams == null) {
@@ -3256,7 +3243,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             }
             if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                 audioFocus = AUDIO_FOCUSED;
-                // Prizma: clear any leftover ducking so a freshly started track isn't quiet
                 if (duckAnimator != null) { duckAnimator.cancel(); duckAnimator = null; }
                 duckVolume = 1f;
             }
@@ -4104,9 +4090,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 }
                 audioPlayer.setStreamType(useFrontSpeaker ? AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC);
                 if (!messageObject.isVoice()) {
-                    // Prizma: attach the equalizer BEFORE the first sample. It used to attach only at
-                    // STATE_READY, so each new track started loud and unprocessed for a moment (and the
-                    // effect switching on mid-stream clicked) before the EQ settings kicked in.
                     try {
                         int sid = audioPlayer.getAudioSessionId();
                         if (sid > 0) {

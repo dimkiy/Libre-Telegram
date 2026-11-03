@@ -23,31 +23,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 
-/*
- * Libre — что это за файл:
- * Профиль Libre: достижения, «в Telegram с» / «в Libre с», статусы, команда Libre.
- */
-
-/**
- * Prizma: the social layer of Libre profiles — achievements, "в Libre с", profile views, clans and
- * the wall. There is no Libre server yet, so this class is the whole "backend" for now:
- *
- *  • achievements that follow from public Telegram data (Premium, gifts, account age, channel…)
- *    are real for every profile;
- *  • your own Libre data (since-date, counters, your clan) lives on this phone;
- *  • views, banners and walls come from Libre Cloud (PrizmaCloud, PrizmaWall); clans can still be
- *    shown as clearly-labelled demo data until they move to the server too.
- *
- * The UI only talks to this class, so swapping the local store for server calls later doesn't
- * touch the screens.
- */
 public final class PrizmaSocial {
-
     private PrizmaSocial() {}
 
     private static int version;
 
-    /** Bumps on every change — the profile card rebuilds only then. */
     public static int version() {
         return version;
     }
@@ -60,9 +40,6 @@ public final class PrizmaSocial {
         return ApplicationLoader.applicationContext.getSharedPreferences("prizma_social", Context.MODE_PRIVATE);
     }
 
-    // ===================== settings =====================
-
-    /** The Libre block on profiles. */
     public static boolean cardEnabled() {
         return prefs().getBoolean("card", true);
     }
@@ -72,19 +49,16 @@ public final class PrizmaSocial {
         prefs().edit().putBoolean("card", v).apply();
     }
 
-    /** Sample data in other people's profiles — retired now that Libre Cloud is live. */
     public static boolean demo() {
         return false;
     }
 
-    /** The one who made Libre — gets the creator's check and plate. Nobody else can have it. */
     public static final long CREATOR_ID = 1433938238L;
 
     public static boolean isCreator(long userId) {
         return userId == CREATOR_ID;
     }
 
-    /** People who helped make Libre — the «Команда Libre» plate. */
     private static final long[] TEAM = {5229866647L, 5898279328L};
 
     public static boolean isTeam(long userId) {
@@ -97,7 +71,6 @@ public final class PrizmaSocial {
         prefs().edit().putBoolean("demo", v).apply();
     }
 
-    /** Ghost mode for views: don't count my visits to other profiles. */
     public static boolean noViewMark() {
         return prefs().getBoolean("no_view_mark", false);
     }
@@ -108,7 +81,6 @@ public final class PrizmaSocial {
 
     public static final int WALL_ALL = 0, WALL_CONTACTS = 1, WALL_NOBODY = 2;
 
-    /** Who may write on my wall. */
     public static int wallWho() {
         return prefs().getInt("wall_who", WALL_ALL);
     }
@@ -117,20 +89,13 @@ public final class PrizmaSocial {
         return v == WALL_CONTACTS ? "Только контакты" : v == WALL_NOBODY ? "Никто, кроме меня" : "Все пользователи Libre";
     }
 
-    /** My wall hidden from everyone else. */
     public static boolean wallHidden() {
         return prefs().getBoolean("wall_hidden", false);
     }
 
-    // ===================== counters (for achievements) =====================
-
-    public static final String C_HOSTED = "hosted";   // led a "listen together" session
-    public static final String C_JOINED = "joined";   // joined someone's session
-    public static final String C_NFC = "nfc";         // exchanged contacts by tapping phones
-
-    // Counters belong to a Telegram account, not to the phone: with two accounts in Libre the second
-    // one used to show the first one's achievements. Up to 1.1.3 they were one per phone — those old
-    // numbers go to the account that was logged in first (slot 0), once.
+    public static final String C_HOSTED = "hosted";
+    public static final String C_JOINED = "joined";
+    public static final String C_NFC = "nfc";
 
     private static long selfId(int account) {
         return UserConfig.getInstance(account).getClientUserId();
@@ -158,16 +123,13 @@ public final class PrizmaSocial {
         return perUser("c_" + key, userId);
     }
 
-    /** One more for the account that is open right now. */
     public static void inc(String key) {
         long uid = selfId(UserConfig.selectedAccount);
         if (uid == 0) return;
         touched();
         prefs().edit().putInt("c_" + key + "_" + uid, counter(key, uid) + 1).apply();
-        PrizmaCloud.syncAchievementsSoon(UserConfig.selectedAccount); // others see a new achievement too
+        PrizmaCloud.syncAchievementsSoon(UserConfig.selectedAccount);
     }
-
-    // ===================== status (like Discord) =====================
 
     public static final int STATUS_ONLINE = 0, STATUS_IDLE = 1, STATUS_DND = 2, STATUS_INVISIBLE = 3;
     public static final int[] STATUS_COLORS = {0xff43b581, 0xfffaa61a, 0xfff04747, 0xff8a8f98};
@@ -181,7 +143,6 @@ public final class PrizmaSocial {
         }
     }
 
-    /** My status: {status, text, until (unix s, 0 = until changed)}. An expired one is cleared here. */
     public static Object[] myStatus(int account) {
         long uid = selfId(account);
         SharedPreferences p = prefs();
@@ -197,7 +158,6 @@ public final class PrizmaSocial {
         return new Object[]{s, text, until};
     }
 
-    /** Saves my status, puts it on Libre Cloud and switches what it means on this phone. */
     public static void setMyStatus(int account, int s, String text, long until, Utilities.Callback<String> done) {
         long uid = selfId(account);
         if (uid == 0) return;
@@ -208,10 +168,6 @@ public final class PrizmaSocial {
         PrizmaCloud.putStatus(account, s, text, until, done);
     }
 
-    /**
-     * «Не беспокоить» silences notifications, «Невидимка» hides «в сети» — like in Discord. We only undo
-     * what the status itself switched on: settings the person chose in the hub stay as they were.
-     */
     private static void applyStatusEffects(int s) {
         SharedPreferences p = prefs();
         boolean wantDnd = s == STATUS_DND, wantHidden = s == STATUS_INVISIBLE;
@@ -231,17 +187,8 @@ public final class PrizmaSocial {
         }
     }
 
-    // ===================== "в Libre с" =====================
+    public static final long LIBRE_EPOCH = 1_791_331_200_000L;
 
-    /** The first Libre build — no one can have been in Libre earlier. */
-    public static final long LIBRE_EPOCH = 1_791_331_200_000L; // 2026-10-07
-
-    /**
-     * When this phone first ran Libre (ms). It used to be Android's "first install time", which on
-     * phones restored from a backup or moved with Mi Mover is the install date on the OLD phone — new
-     * users saw a random date. Now: the first run of Libre itself, and never before Libre existed.
-     * Profiles show Libre Cloud's date (the first login) — the same for the person and for everyone.
-     */
     public static long librSince() {
         long saved = prefs().getLong("since", 0);
         long now = System.currentTimeMillis();
@@ -250,7 +197,6 @@ public final class PrizmaSocial {
         try {
             Context c = ApplicationLoader.applicationContext;
             long installed = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).firstInstallTime;
-            // a plausible install time is kept (users from the first weeks), anything else is "now"
             if (installed >= LIBRE_EPOCH && installed <= now) t = installed;
         } catch (Throwable ignore) {
         }
@@ -259,9 +205,6 @@ public final class PrizmaSocial {
         return t;
     }
 
-    // Telegram doesn't publish when an account was made. Ids grow over time, so the date is estimated
-    // from accounts whose dates are known: points from the CreationDate project (github.com/WizardLoop/
-    // CreationDate, MIT), smoothed so the date never goes back as ids grow; linear in between.
     private static final long[] TG_IDS = {
             0L, 2768409L, 7679610L, 11538514L, 15835244L, 23646077L,
             38015510L, 44634663L, 46145305L, 54845238L, 63263518L, 101260938L,
@@ -277,7 +220,7 @@ public final class PrizmaSocial {
             7283525500L, 7375779833L, 7454492493L, 7692193285L, 7824631473L, 7866754510L,
             8043215005L, 8179125032L, 8284801005L, 8423113779L, 8480708838L, 8559682245L
     };
-    private static final int[] TG_DAYS = { // days since 1970-01-01
+    private static final int[] TG_DAYS = {
             15931, 16010, 16070, 16102, 16121, 16127, 16130, 16196, 16205, 16333,
             16370, 16500, 16507, 16586, 16600, 16647, 16664, 16697, 16715, 16770,
             16792, 16869, 16901, 16960, 16970, 17054, 17092, 17124, 17151, 17194,
@@ -287,10 +230,8 @@ public final class PrizmaSocial {
             19754, 19764, 19819, 19886, 19904, 19922, 19949, 19976, 19998, 20097,
             20121, 20252, 20258, 20278, 20337, 20371, 20397, 20403
     };
-    /** Beyond the last known point: about how many ids a day Telegram hands out lately. */
     private static final double TG_IDS_PER_DAY = 2_670_000d;
 
-    /** Rough moment (ms) a Telegram account was made, from its id; 0 when unknown. */
     public static long telegramSince(long userId) {
         if (userId <= 0) return 0;
         double day;
@@ -309,20 +250,17 @@ public final class PrizmaSocial {
         return Math.min(ms, System.currentTimeMillis());
     }
 
-    /** Whole years since the account was made (0 when unknown). */
     public static int telegramYears(long userId) {
         long ms = telegramSince(userId);
         if (ms <= 0) return 0;
         return (int) ((System.currentTimeMillis() - ms) / (365L * 86_400_000L));
     }
 
-    /** Whole days in Libre by the server's date (the same for everyone); -1 when unknown. */
     public static int libreDays(long sinceMs) {
         if (sinceMs <= 0) return -1;
         return (int) Math.max(0, (System.currentTimeMillis() - sinceMs) / 86_400_000L);
     }
 
-    /** Rough year of a Telegram account's registration, from its id. */
     public static int telegramYear(long userId) {
         long ms = telegramSince(userId);
         if (ms <= 0) return 0;
@@ -331,17 +269,15 @@ public final class PrizmaSocial {
         return c.get(java.util.Calendar.YEAR);
     }
 
-    // ===================== achievements =====================
-
     public static class Achievement {
         public String id;
         public String title;
-        public String desc;     // what it says about the person
-        public String how;      // how to get it (shown on locked ones)
+        public String desc;
+        public String how;
         public int icon;
         public int color;
         public boolean earned;
-        public int progress, goal; // for counters; goal 0 = no progress bar
+        public int progress, goal;
 
         Achievement(String id, String title, int icon, int color) {
             this.id = id;
@@ -351,17 +287,12 @@ public final class PrizmaSocial {
         }
     }
 
-    // soft field colours, one per achievement family (no neon, no gradients)
     public static final int SAGE = 0xff5fae8b, COBALT = 0xff4c7bd9, RUST = 0xffc8643b, ORCHID = 0xffa35dc1,
             EMBER = 0xffd99a2b, MAUVE = 0xffb0607a, SLATE = 0xff6b7c93;
     public static final int[] PALETTE = {SAGE, COBALT, RUST, ORCHID, EMBER, MAUVE, SLATE};
 
-    private static final long EARLY_UNTIL = 1_796_083_200_000L; // 2026-12-01: the first Libre users
+    private static final long EARLY_UNTIL = 1_796_083_200_000L;
 
-    /**
-     * Achievements of a profile. {@code all} = also the locked ones (only makes sense for your own
-     * profile — for others we only know what they have).
-     */
     public static ArrayList<Achievement> achievements(int account, long userId, boolean all) {
         ArrayList<Achievement> out = new ArrayList<>();
         MessagesController mc = MessagesController.getInstance(account);
@@ -382,7 +313,6 @@ public final class PrizmaSocial {
             out.add(a);
         }
 
-        // ---- from Telegram: true for everyone ----
         a = new Achievement("premium", "Премиум", R.drawable.msg_settings_premium, EMBER);
         a.desc = "Пользуется Telegram Premium";
         a.how = "Оформить Telegram Premium";
@@ -404,7 +334,6 @@ public final class PrizmaSocial {
         a.earned = hasRealNft(account, userId);
         add(out, a, all);
 
-        // years in Telegram, from the account's id (the same estimate on every phone)
         int year = telegramYear(userId);
         int tgYears = telegramYears(userId);
         a = new Achievement("veteran", tgYears >= 10 ? "Старожил" : "Бывалый", R.drawable.msg_calendar2, SLATE);
@@ -424,9 +353,8 @@ public final class PrizmaSocial {
         a = new Achievement("verified", "Подтверждён", R.drawable.menu_verification, COBALT);
         a.desc = "Аккаунт подтверждён Telegram";
         a.how = "Пройти верификацию Telegram";
-        // the creator's and the team's checks are drawn by Libre itself (MessagesController.putUser) — Telegram didn't verify anyone
         a.earned = user != null && user.verified && !isCreator(userId) && !isTeam(userId);
-        if (a.earned) add(out, a, false); // nobody can work towards it — don't list it as locked
+        if (a.earned) add(out, a, false);
 
         a = new Achievement("business", "Бизнес", R.drawable.msg_work, SAGE);
         a.desc = "Указал часы работы или адрес";
@@ -434,10 +362,6 @@ public final class PrizmaSocial {
         a.earned = full != null && (full.business_work_hours != null || full.business_location != null);
         if (a.earned) add(out, a, false);
 
-        // ---- Libre: one table, decided the same way for everyone ----
-        // Up to 1.1.4 your own profile counted these on the phone while others saw only what the
-        // server knew ("9 here, 5 there"). Now the phone reports what only it can know (listening
-        // sessions, NFC, playlists), the server counts the rest, and every profile shows the server's set.
         PrizmaCloud.Remote remote = PrizmaCloud.peek(userId);
         if (self) {
             long since = librSince();
@@ -482,7 +406,6 @@ public final class PrizmaSocial {
             a.goal = 30;
             add(out, a, all);
 
-            // the server decides these — the phone only shows the progress
             Clan clan = PrizmaClans.mine(account);
             a = libreAch("founder");
             if (clan != null) a.desc = "Основал клан «" + clan.name + "»";
@@ -516,7 +439,6 @@ public final class PrizmaSocial {
                 }
             }
         } else if (remote != null) {
-            // an older server without the list
             a = libreAch("libre");
             a.earned = true;
             out.add(a);
@@ -527,7 +449,6 @@ public final class PrizmaSocial {
                 out.add(a);
             }
         }
-        // ---- time in Libre: from the server's date, so every phone counts the same ----
         if (remote != null && remote.since > 0) {
             int days = libreDays(remote.since * 1000L);
             a = new Achievement("libre_time", days >= 365 ? "Год в Libre" : days >= 180 ? "Полгода в Libre" : "Месяц в Libre", R.drawable.msg_calendar2, EMBER);
@@ -543,12 +464,10 @@ public final class PrizmaSocial {
 
     private static final String[] LIBRE_ORDER = {"libre", "early", "dj", "listener", "nfc", "meloman", "founder", "wall", "popular"};
 
-    /** Only the phone knows these — Libre reports them to the server (PrizmaCloud.syncAchievementsSoon). */
     public static boolean isPhoneAchievement(String id) {
         return "dj".equals(id) || "listener".equals(id) || "nfc".equals(id) || "meloman".equals(id);
     }
 
-    /** What the server decided, once it has told us; until then the phone's own guess. */
     private static boolean serverSays(PrizmaCloud.Remote remote, Achievement a, boolean local) {
         if (remote == null || remote.ach == null) return local;
         for (String[] got : remote.ach) {
@@ -619,7 +538,6 @@ public final class PrizmaSocial {
             StarsController.GiftsList list = StarsController.getInstance(account).getProfileGiftsList(userId, false);
             if (list == null) return false;
             for (TL_stars.SavedStarGift g : list.gifts) {
-                // Libre copies don't count — neither ours nor the ones Libre Cloud shows in other profiles
                 if (g != null && g.gift instanceof TL_stars.TL_starGiftUnique && !PrizmaGifts.isLibreGift(g)) {
                     return true;
                 }
@@ -636,22 +554,18 @@ public final class PrizmaSocial {
         return many;
     }
 
-    // ===================== profile numbers =====================
-
     public static class Profile {
-        public long views = -1;      // -1 = unknown (needs the server)
-        public long since;           // 0 = unknown
+        public long views = -1;
+        public long since;
         public Clan clan;
-        public boolean demo;         // the numbers are sample data
+        public boolean demo;
     }
 
-    /** What we know about a profile's Libre side, or null when nothing is known yet. */
     public static Profile profile(int account, long userId) {
         boolean self = userId == UserConfig.getInstance(account).getClientUserId();
         PrizmaCloud.Remote remote = PrizmaCloud.peek(userId);
         if (self) {
             Profile p = new Profile();
-            // the date everyone sees is the server's; the phone's own only until the server answers
             p.since = remote != null && remote.since > 0 ? remote.since * 1000L : librSince();
             p.clan = PrizmaClans.mine(account);
             if (remote != null && remote.views >= 0) {
@@ -681,7 +595,7 @@ public final class PrizmaSocial {
         Profile p = new Profile();
         p.demo = true;
         p.views = demoViews(userId);
-        long start = 1_791_331_200_000L; // 2026-10-07, the first Libre build
+        long start = 1_791_331_200_000L;
         long span = Math.max(1, System.currentTimeMillis() - start);
         p.since = start + (long) (r.nextDouble() * span);
         p.clan = null;
@@ -693,9 +607,6 @@ public final class PrizmaSocial {
         return 40 + (long) (Math.pow(r.nextDouble(), 2.2) * 4800);
     }
 
-    // ===================== clans =====================
-    // Clans live on Libre Cloud (PrizmaClans); here are the shapes the screens use.
-
     public static final int ROLE_MEMBER = 0, ROLE_OFFICER = 1, ROLE_HEAD = 2;
 
     public static class Clan {
@@ -705,19 +616,19 @@ public final class PrizmaSocial {
         public int color;
         public long createdAt;
         public boolean mine;
-        public int myRole = -1;  // -1 = not a member
+        public int myRole = -1;
         public long ownerId;
         public int members;
         public int level = 1;
         public long rating;
-        public boolean full;     // the member list is loaded
+        public boolean full;
         public final ArrayList<Member> list = new ArrayList<>();
     }
 
     public static class Member {
         public long userId;
         public String name;
-        public String role;      // "Глава", "Офицер", "Участник"
+        public String role;
         public int roleId;
         public int color;
     }
@@ -726,12 +637,10 @@ public final class PrizmaSocial {
         return role == ROLE_HEAD ? "Глава" : role == ROLE_OFFICER ? "Офицер" : "Участник";
     }
 
-    /** My clan as the server last told us (null = none / not known yet). */
     public static Clan myClan() {
         return PrizmaClans.mine();
     }
 
-    /** A clan made before Libre Cloud had clans (kept on the phone) — moved to the server once. */
     static JSONObject legacyClan() {
         String json = prefs().getString("clan", null);
         if (json == null) return null;
@@ -750,10 +659,6 @@ public final class PrizmaSocial {
         touched();
     }
 
-    // ===================== the wall =====================
-    // Posts, comments and likes live on Libre Cloud — see PrizmaWall. Kept here: my wall's settings
-    // (so the profile card knows them before the server answers) and the counter for the achievement.
-
     public static void rememberWallSettings(int who, boolean hidden) {
         if (who == wallWho() && hidden == wallHidden()) return;
         touched();
@@ -766,8 +671,6 @@ public final class PrizmaSocial {
         touched();
         prefs().edit().putInt("my_posts_" + uid, perUser("my_posts", uid) + 1).apply();
     }
-
-    // ===================== photos for posts =====================
 
     public static final int PHOTO_REQUEST = 48231;
     private static Utilities.Callback<String> photoCallback;
@@ -784,7 +687,6 @@ public final class PrizmaSocial {
         }
     }
 
-    /** LaunchActivity.onActivityResult: shrink the picked photo to ≤1280 px and keep a copy. */
     public static void handlePickedPhoto(Activity activity, Uri uri) {
         final Utilities.Callback<String> cb = photoCallback;
         photoCallback = null;

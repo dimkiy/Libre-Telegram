@@ -13,20 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-/*
- * Libre — что это за файл:
- * Стены профилей: записи, комментарии, лайки (на сервере Libre).
- */
-
-/**
- * Prizma: profile walls on Libre Cloud — what one person writes, everyone with Libre sees.
- *
- * Screens read the cached {@link Wall}s and get told through {@link PrizmaCloud}'s listeners when
- * something arrives. Writes are optimistic where it feels better (likes) and confirmed by the
- * server where it matters (posts, deletions).
- */
 public final class PrizmaWall {
-
     private PrizmaWall() {}
 
     private static final long WALL_TTL = 90_000L;
@@ -39,12 +26,12 @@ public final class PrizmaWall {
         public String name = "";
         public String text = "";
         public String photoUrl;
-        public String localPhoto;   // our own photo while it's being sent
+        public String localPhoto;
         public long date;
         public int likes;
         public int comments;
         public boolean liked;
-        public boolean sending;     // shown right away, the server hasn't confirmed it yet
+        public boolean sending;
         public final ArrayList<Comment> last = new ArrayList<>();
     }
 
@@ -66,22 +53,20 @@ public final class PrizmaWall {
         public boolean canComment = true;
         public final HashSet<Long> blocked = new HashSet<>();
         public boolean loaded;
-        public boolean notLibre;    // the owner doesn't use Libre (yet)
-        public boolean failed;      // last load didn't reach the server
+        public boolean notLibre;
+        public boolean failed;
         public boolean hasMore;
-        public boolean moderator;   // may delete anything here (my wall, or a clan wall I run)
+        public boolean moderator;
         long fetchedAt;
         boolean loading;
     }
 
     private static final HashMap<Long, Wall> walls = new HashMap<>();
 
-    /** What we know, without asking. */
     public static Wall peek(long ownerId) {
         return walls.get(ownerId);
     }
 
-    /** What we know; refreshes in the background when old. UI thread. */
     public static Wall get(int account, long ownerId) {
         Wall w = walls.get(ownerId);
         if (w == null || !w.loading && System.currentTimeMillis() - w.fetchedAt > WALL_TTL) {
@@ -91,7 +76,6 @@ public final class PrizmaWall {
         return w;
     }
 
-    /** Human words for a failed request. */
     public static String error(int code, String ownerName) {
         switch (code) {
             case -1: return !PrizmaCloud.configured() ? "Сервер Libre не подключён"
@@ -115,8 +99,6 @@ public final class PrizmaWall {
         TLRPC.User me = UserConfig.getInstance(account).getCurrentUser();
         return me != null ? UserObject.getUserName(me) : "";
     }
-
-    // ===================== reading =====================
 
     public static void load(int account, long ownerId, boolean more, Runnable done) {
         Wall w = walls.get(ownerId);
@@ -164,7 +146,6 @@ public final class PrizmaWall {
                     }
                     wall.hasMore = got.size() >= 20;
                     if (!more) {
-                        // keep posts that are still on their way up
                         ArrayList<Post> sending = new ArrayList<>();
                         for (Post p : wall.posts) if (p.sending) sending.add(p);
                         wall.posts.clear();
@@ -191,7 +172,6 @@ public final class PrizmaWall {
         });
     }
 
-    /** One post with all its comments; {@code failed} gets the HTTP code. */
     public static void loadPost(int account, long postId, Utilities.Callback2<Post, ArrayList<Comment>> done, Utilities.Callback<Integer> failed) {
         PrizmaCloud.call(account, "GET", "/v1/post/" + postId, null, r -> {
             if (r.code != 200 || r.body == null) {
@@ -246,12 +226,6 @@ public final class PrizmaWall {
         return c;
     }
 
-    // ===================== writing =====================
-
-    /**
-     * Puts a post on the wall at once (marked as sending) and sends it. {@code done} gets the
-     * server's copy, or null plus an error text.
-     */
     public static Post addPost(int account, long ownerId, String text, String photoPath, Utilities.Callback2<Post, String> done) {
         final Post draft = new Post();
         draft.id = -System.currentTimeMillis();
@@ -284,7 +258,6 @@ public final class PrizmaWall {
             PrizmaCloud.call(account, "POST", "/v1/wall/" + ownerId, body, r -> {
                 if (r.code == 200 && r.body != null) {
                     try {
-                        // the draft becomes the real post — the screen keeps the same card
                         Post p = post(new JSONObject(r.body));
                         draft.id = p.id;
                         draft.name = p.name;
@@ -292,7 +265,7 @@ public final class PrizmaWall {
                         draft.photoUrl = p.photoUrl;
                         draft.date = p.date;
                         draft.sending = false;
-                        if (photoPath != null && p.photoUrl != null) rememberPhoto(p.photoUrl, photoPath); // no need to download what we just sent
+                        if (photoPath != null && p.photoUrl != null) rememberPhoto(p.photoUrl, photoPath);
                         w.total++;
                         PrizmaSocial.notePostWritten(account);
                         PrizmaCloud.notifyChanged();
@@ -358,7 +331,6 @@ public final class PrizmaWall {
         });
     }
 
-    /** Flips the like at once; the server's answer settles the count. */
     public static void toggleLike(int account, Post p, Runnable changed) {
         final boolean was = p.liked;
         p.liked = !was;
@@ -381,7 +353,6 @@ public final class PrizmaWall {
         });
     }
 
-    /** The post screen and the wall hold separate copies — keep the numbers in step. */
     public static void syncCopies(Post p) {
         Wall w = walls.get(p.ownerId);
         if (w == null) return;
@@ -484,7 +455,7 @@ public final class PrizmaWall {
                     } else {
                         w.blocked.remove(userId);
                     }
-                    w.fetchedAt = 0; // comments under my posts changed too
+                    w.fetchedAt = 0;
                 }
                 PrizmaCloud.notifyChanged();
                 done.run(null);
@@ -494,13 +465,10 @@ public final class PrizmaWall {
         });
     }
 
-    /** «Удалить мои данные» — forget everything cached. */
     public static void clear() {
         walls.clear();
         commentAllowed.clear();
     }
-
-    // ===================== photos =====================
 
     private static final HashMap<String, String> photoFiles = new HashMap<>();
     private static final HashSet<String> photoLoading = new HashSet<>();
@@ -515,7 +483,6 @@ public final class PrizmaWall {
         return d;
     }
 
-    /** A local file for a post's photo, or null while it downloads ({@code ready} runs when it's there). */
     public static String photoPath(Post p, Runnable ready) {
         if (p.localPhoto != null && new File(p.localPhoto).exists()) return p.localPhoto;
         if (p.photoUrl == null) return null;
@@ -542,7 +509,6 @@ public final class PrizmaWall {
         return null;
     }
 
-    /** Photos go up as JPEG ≤ 1600 px. Off the UI thread. */
     private static byte[] readJpeg(String path) {
         try {
             BitmapFactory.Options o = new BitmapFactory.Options();

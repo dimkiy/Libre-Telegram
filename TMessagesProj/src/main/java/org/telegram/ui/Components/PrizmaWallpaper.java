@@ -3,32 +3,12 @@ package org.telegram.ui.Components;
 import org.telegram.messenger.PrizmaConfig;
 import org.telegram.messenger.Utilities;
 
-/*
- * Libre — что это за файл:
- * Свои обои чатов: живой градиент, фото или видео.
- */
-
-/**
- * Prizma: chat wallpapers of our own — the living (continuously shifting) gradient built on
- * {@link MotionBackgroundDrawable}, and a custom photo / video picked by the user.
- *
- * ChatActivity's getNewDrawable() is called on every frame of the chat background, so everything
- * it touches here must be cheap: the setting key is cached per config version and the photo is
- * decoded once (ahead of time on a background thread).
- */
 public class PrizmaWallpaper {
-
-    /** Each palette is 4 colors for the 4-point motion gradient. */
     public static final int[][] PALETTES = new int[][]{
-            // 0 — Призма (переливающийся бренд: розовый/фиолетовый/голубой/синий)
             {0xffFF6FD8, 0xff8A5CFF, 0xff3CC8FF, 0xff5B6CFF},
-            // 1 — Аврора (мятный/бирюзовый/зелёный/голубой)
             {0xff34E0A1, 0xff2AC9D6, 0xff6FE7A8, 0xff3FB6F0},
-            // 2 — Закат (оранжевый/розовый/фиолетовый/коралл)
             {0xffFF9A5A, 0xffFF5E8A, 0xffB15BFF, 0xffFF7E6B},
-            // 3 — Океан (синий/голубой/индиго/бирюза)
             {0xff2E6BFF, 0xff28B6FF, 0xff5E3CFF, 0xff23D5C9},
-            // 4 — Неон (магента/фиолетовый/синий/циан)
             {0xffFF3CAC, 0xff784BA0, 0xff2B86C5, 0xff2BE0C5},
     };
 
@@ -42,18 +22,14 @@ public class PrizmaWallpaper {
         return index;
     }
 
-    /** Builds a small standalone preview drawable for a palette swatch (not animated). */
     public static MotionBackgroundDrawable preview(int paletteIndex) {
         int[] c = PALETTES[clampPalette(paletteIndex)];
         return new MotionBackgroundDrawable(c[0], c[1], c[2], c[3], false);
     }
 
-    /** Called when the palette / lite mode changes so open chats rebuild their wallpaper. */
     public static void invalidate() {
         keyVersion = -1;
     }
-
-    // ===== custom chat wallpaper (own photo / video) =====
 
     public static boolean hasCustom() {
         String p = PrizmaConfig.chatWallpaperPath();
@@ -69,11 +45,9 @@ public class PrizmaWallpaper {
         preload();
     }
 
-    // One decoded bitmap, shared read-only across views (safe); each view wraps it in its own drawable.
     private static android.graphics.Bitmap customBitmap;
     private static String customBitmapPath;
 
-    /** Decodes the custom photo wallpaper in the background so opening a chat never decodes it on the UI thread. */
     public static void preload() {
         if (!hasCustom() || PrizmaConfig.chatWallpaperIsVideo()) {
             return;
@@ -113,13 +87,10 @@ public class PrizmaWallpaper {
         return customBitmap;
     }
 
-    // ===== per-view wallpaper (no cross-window sharing — avoids chat jitter) =====
-
     private static int keyVersion = -1;
     private static boolean keyFancy;
     private static String keyCached;
 
-    /** A key describing the current wallpaper setting; null when there is none. Hosts cache per-view by this. */
     public static String currentKey() {
         final int v = PrizmaConfig.version();
         final boolean fancy = PrizmaConfig.fancyEffects();
@@ -141,7 +112,6 @@ public class PrizmaWallpaper {
         return null;
     }
 
-    /** Builds a FRESH drawable for the current setting, owned by a single view (no sharing → no jitter). */
     public static android.graphics.drawable.Drawable createForView() {
         if (hasCustom()) {
             if (PrizmaConfig.chatWallpaperIsVideo()) {
@@ -158,8 +128,6 @@ public class PrizmaWallpaper {
             int[] c = PALETTES[clampPalette(PrizmaConfig.liveWallpaperPalette())];
             MotionBackgroundDrawable d = new MotionBackgroundDrawable(c[0], c[1], c[2], c[3], false);
             d.setIndeterminateSpeedScale(1.0f);
-            // the endless animation redraws the whole chat background every frame — static gradient
-            // in Lite mode, on weak devices and in battery saver
             d.setIndeterminateAnimation(PrizmaConfig.fancyEffects());
             return d;
         }

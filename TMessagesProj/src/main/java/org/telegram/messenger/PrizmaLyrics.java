@@ -10,20 +10,7 @@ import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/*
- * Libre — что это за файл:
- * Тексты песен (с бесплатного сайта lrclib.net), в том числе с привязкой ко времени.
- */
-
-/**
- * Prizma: fetches song lyrics (synced LRC when available, else plain text) from the
- * free lrclib.net API by track title + artist + duration. Mirrors the cover-art
- * fetch approach: background request, UI-thread callback, in-memory cache.
- *
- * Needs plain internet access to lrclib.net (in a blocked region — via VPN, same as cover art).
- */
 public class PrizmaLyrics {
-
     public static class Line {
         public long timeMs;
         public String text;
@@ -35,13 +22,13 @@ public class PrizmaLyrics {
     }
 
     public static class Lyrics {
-        public boolean synced;          // true if lines carry timestamps
-        public ArrayList<Line> lines;   // for synced: timed lines; for plain: lines with timeMs = -1
-        public String plain;            // full plain text (always set when found)
+        public boolean synced;
+        public ArrayList<Line> lines;
+        public String plain;
     }
 
     public interface Callback {
-        void onResult(Lyrics lyrics); // null => not found / error
+        void onResult(Lyrics lyrics);
     }
 
     private static final HashMap<String, Lyrics> cache = new HashMap<>();
@@ -80,7 +67,6 @@ public class PrizmaLyrics {
             }
             final Lyrics finalResult = result;
             synchronized (cache) {
-                // a miss may be a network error (blocked site, no VPN yet) — retry it later instead of forever
                 if (finalResult != null) {
                     cache.put(key, finalResult);
                     misses.remove(key);
@@ -194,7 +180,7 @@ public class PrizmaLyrics {
     }
 
     private static String httpGet(String url) {
-        return PrizmaNet.get(url, 6000); // through the user's proxy, generic user agent
+        return PrizmaNet.get(url, 6000);
     }
 
     private static String clean(String s) {

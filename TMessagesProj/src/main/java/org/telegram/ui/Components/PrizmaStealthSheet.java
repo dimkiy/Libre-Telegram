@@ -20,13 +20,7 @@ import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.PasscodeActivity;
 
-/*
- * Libre — что это за файл:
- * Хаб Libre: все настройки и переключатели в одном окне.
- */
-
 public class PrizmaStealthSheet {
-
     private interface Toggle {
         void set(boolean value);
     }
@@ -60,7 +54,6 @@ public class PrizmaStealthSheet {
         subtitle.setPadding(AndroidUtilities.dp(6), 0, 0, 0);
         root.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 14));
 
-        // ===== РЕЖИМ ПРИЗРАКА =====
         java.util.ArrayList<View> ghost = new java.util.ArrayList<>();
         ghost.add(toggleRow(context, textColor, grayColor,
                 "Скрывать «онлайн»", "никто не увидит, что вы в сети",
@@ -99,7 +92,6 @@ public class PrizmaStealthSheet {
         addSection(context, root, grayColor, "РЕЖИМ ПРИЗРАКА", ghost,
                 "Скрываете «онлайн» — вы тоже не видите, когда другие в сети: так работает Telegram.");
 
-        // ===== ЗАЩИТА =====
         java.util.ArrayList<View> guard = new java.util.ArrayList<>();
         guard.add(toggleRow(context, textColor, grayColor,
                 "Не беспокоить", "глушить все уведомления Telegram (локально)",
@@ -158,7 +150,6 @@ public class PrizmaStealthSheet {
                 }));
         addSection(context, root, grayColor, "ЗАЩИТА", guard, null);
 
-        // ===== ОФОРМЛЕНИЕ =====
         java.util.ArrayList<View> look = new java.util.ArrayList<>();
         look.add(actionRow(context, textColor, grayColor,
                 "Иконка приложения", "сменить иконку Libre на другую",
@@ -181,7 +172,6 @@ public class PrizmaStealthSheet {
         look.add(toggleRow(context, textColor, grayColor,
                 "Перелив на имени и аватаре", "градиент на имени + свечение вокруг аватара",
                 PrizmaConfig.iridescentName(), PrizmaConfig::setIridescentName));
-        // live wallpaper toggle + palette grouped as one card row (so palette can hide without a stray divider)
         final LinearLayout paletteRow = paletteRow(context);
         paletteRow.setVisibility(PrizmaConfig.liveWallpaper() ? View.VISIBLE : View.GONE);
         LinearLayout wallGroup = new LinearLayout(context);
@@ -234,7 +224,6 @@ public class PrizmaStealthSheet {
         }
         addSection(context, root, grayColor, "ОФОРМЛЕНИЕ", look, null);
 
-        // ===== ПРОФИЛЬ LIBRE =====
         java.util.ArrayList<View> social = new java.util.ArrayList<>();
         social.add(toggleRow(context, textColor, grayColor,
                 "Блок Libre в профилях", "достижения, «в Libre с», клан и стена",
@@ -290,7 +279,6 @@ public class PrizmaStealthSheet {
         addSection(context, root, grayColor, "ПРОФИЛЬ LIBRE", social,
                 "С сервером Libre другие пользователи Libre видят ваш баннер, стену, клан, NFT и открытый плейлист. Переписка на сервер не попадает.");
 
-        // ===== МУЗЫКА =====
         java.util.ArrayList<View> music = new java.util.ArrayList<>();
         music.add(actionRow(context, textColor, grayColor,
                 "Мой плейлист", "лайкнутая музыка — слушать в одном месте", () -> {
@@ -324,7 +312,6 @@ public class PrizmaStealthSheet {
         addSection(context, root, grayColor, "МУЗЫКА", music,
                 "Музыкальный статус выдаёт, что вы сейчас в телефоне — даже при скрытом «онлайн».");
 
-        // ===== ПРОЧЕЕ =====
         java.util.ArrayList<View> misc = new java.util.ArrayList<>();
         misc.add(toggleRow(context, textColor, grayColor,
                 "Скрывать рекламу", "без спонсорских сообщений в каналах и ботах",
@@ -383,7 +370,7 @@ public class PrizmaStealthSheet {
         builder.setCustomView(scroll);
         sheetRef[0] = builder.create();
         try {
-            sheetRef[0].setCanDismissWithSwipe(false); // dismiss via tap-outside/back; stops accidental drag-close
+            sheetRef[0].setCanDismissWithSwipe(false);
         } catch (Throwable ignore) {}
         try { sheetRef[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundGray)); } catch (Throwable ignore) {}
         try { sheetRef[0].setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray)); } catch (Throwable ignore) {}
@@ -447,7 +434,6 @@ public class PrizmaStealthSheet {
         }
     }
 
-    /** Picker for the app launcher icon (uses Telegram's built-in icon aliases, no premium gate). */
     private static void showIconPicker(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
@@ -465,7 +451,6 @@ public class PrizmaStealthSheet {
         root.addView(title);
 
         final BottomSheet[] ref = new BottomSheet[1];
-        // Libre: any picture of your own — as a home-screen icon (Android can't swap the app icon itself for it)
         LinearLayout own = new LinearLayout(context);
         own.setOrientation(LinearLayout.HORIZONTAL);
         own.setGravity(Gravity.CENTER_VERTICAL);
@@ -566,7 +551,6 @@ public class PrizmaStealthSheet {
         return org.telegram.messenger.LocaleController.getString(res);
     }
 
-    /** Slot-machine roller to pick a liked anonymous +888 number. */
     private static void showPhoneRoller(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
@@ -623,7 +607,6 @@ public class PrizmaStealthSheet {
             tick[0] = () -> {
                 boolean done = step[0] >= totalSteps;
                 String s = done ? fin[0] : PrizmaConfig.randomFakePhoneNumber();
-                // slot-machine feel: new value drops in from above with a quick fade
                 numberView.animate().cancel();
                 numberView.setText(s);
                 numberView.setTranslationY(-AndroidUtilities.dp(14));
@@ -639,7 +622,6 @@ public class PrizmaStealthSheet {
                     current[0] = fin[0];
                     spinning[0] = false;
                     rollBtn.setAlpha(1f);
-                    // settle: accent flash + gentle pop
                     numberView.setTextColor(accent);
                     numberView.setScaleX(0.9f); numberView.setScaleY(0.9f);
                     numberView.animate().scaleX(1f).scaleY(1f).setDuration(300)
@@ -648,7 +630,7 @@ public class PrizmaStealthSheet {
                     try { numberView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); } catch (Throwable ignore) {}
                     return;
                 }
-                long delay = 40 + (long) (step[0] * step[0] * 0.9f); // ease-out: slows down near the end
+                long delay = 40 + (long) (step[0] * step[0] * 0.9f);
                 step[0]++;
                 AndroidUtilities.runOnUIThread(tick[0], delay);
             };
@@ -695,7 +677,6 @@ public class PrizmaStealthSheet {
         return t;
     }
 
-    /** Adds a titled group: small caps label, a rounded card holding the rows, and an optional gray hint below. */
     private static void addSection(Context c, LinearLayout root, int grayColor, String label, java.util.List<View> rows, String hint) {
         root.addView(sectionHeader(c, grayColor, label));
         root.addView(card(c, rows), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, hint == null ? 10 : 6));
@@ -709,7 +690,6 @@ public class PrizmaStealthSheet {
         }
     }
 
-    /** Rounded card container with hairline dividers between rows. */
     private static LinearLayout card(Context c, java.util.List<View> rows) {
         LinearLayout card = new LinearLayout(c);
         card.setOrientation(LinearLayout.VERTICAL);

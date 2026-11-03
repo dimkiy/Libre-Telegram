@@ -13,22 +13,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.Map;
 
-/*
- * Libre — что это за файл:
- * Свой шрифт во всём приложении.
- */
-
-/**
- * Prizma: applies a user-chosen custom font across the whole app.
- *
- * Telegram routes its styled text (titles, names, buttons, bold/medium) through
- * {@link AndroidUtilities#getTypeface(String)} and {@link AndroidUtilities#bold()} — we swap those.
- * Plain body text uses the system default, which we replace once at startup via reflection
- * ({@link #applyGlobal()}). Everything is best-effort and wrapped in try/catch so a bad font
- * or a locked-down device can never crash the app.
- */
 public final class PrizmaFonts {
-
     private static Typeface regular;
     private static Typeface bold;
     private static String loadedPath;
@@ -67,7 +52,6 @@ public final class PrizmaFonts {
         }
     }
 
-    /** Returns the custom typeface to use in place of the given built-in asset, or null to keep the asset. */
     public static Typeface forAsset(String assetPath) {
         ensureLoaded();
         if (regular == null) {
@@ -77,7 +61,7 @@ public final class PrizmaFonts {
             return regular;
         }
         if (assetPath.contains("mono")) {
-            return null; // keep monospace for code blocks
+            return null;
         }
         if (assetPath.contains("extrabold") || assetPath.contains("medium") || assetPath.contains("bold")) {
             return bold;
@@ -95,13 +79,11 @@ public final class PrizmaFonts {
         return bold;
     }
 
-    /** Replace the system default fonts so even non-styled text uses the custom font. Best-effort. */
     public static void applyGlobal() {
         ensureLoaded();
         if (regular == null) {
             return;
         }
-        // API 28+: the system keeps a name→Typeface map
         try {
             Field mapField = Typeface.class.getDeclaredField("sSystemFontMap");
             mapField.setAccessible(true);
@@ -118,7 +100,6 @@ public final class PrizmaFonts {
                 }
             }
         } catch (Throwable ignore) {}
-        // Static Typeface.DEFAULT family
         replaceStatic("DEFAULT", regular);
         replaceStatic("DEFAULT_BOLD", bold);
         replaceStatic("SANS_SERIF", regular);
@@ -136,14 +117,11 @@ public final class PrizmaFonts {
         } catch (Throwable ignore) {}
     }
 
-    /** Forget the loaded font so the next access reloads from the (possibly new) path. */
     public static void invalidate() {
         regular = null;
         bold = null;
         loadedPath = null;
     }
-
-    // ===== picking a font file =====
 
     public static final int REQUEST = 48219;
 
@@ -164,7 +142,6 @@ public final class PrizmaFonts {
         }
     }
 
-    /** Copies the picked font into app storage and applies it. Returns true on success. */
     public static boolean handlePicked(Activity activity, Uri uri) {
         if (activity == null || uri == null) {
             return false;
@@ -181,7 +158,7 @@ public final class PrizmaFonts {
             }
             os.close();
             in.close();
-            Typeface test = Typeface.createFromFile(dst); // validate it's a real font
+            Typeface test = Typeface.createFromFile(dst);
             if (test == null) {
                 dst.delete();
                 return false;

@@ -608,7 +608,7 @@ public class SharedConfig {
             playOrderReversed = !shuffleMusic && preferences.getBoolean("playOrderReversed", false);
             inappCamera = preferences.getBoolean("inappCamera", true);
             hasCameraCache = preferences.contains("cameraCache");
-            roundCamera16to9 = false; // Prizma: 4:3 round video crops less → кружки не так сильно «зумятся»
+            roundCamera16to9 = false;
             repeatMode = preferences.getInt("repeatMode", 0);
             fontSize = preferences.getInt("fons_size", AndroidUtilities.isTablet() && !AndroidUtilities.isFold() ? 18 : 16);
             fontSizeIsDefault = !preferences.contains("fons_size");

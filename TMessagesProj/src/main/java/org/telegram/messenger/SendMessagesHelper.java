@@ -2729,7 +2729,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     }
                     req.random_id = randomIds;
                     req.id = ids;
-                    req.drop_author = forwardFromMyName || PrizmaConfig.anonForward(); // Prizma: anonymous forwarding
+                    req.drop_author = forwardFromMyName || PrizmaConfig.anonForward();
                     req.drop_media_captions = hideCaption;
                     req.with_my_score = messages.size() == 1 && messages.get(0).messageOwner.with_my_score;
                     req.from_ephemeral = fwdEphemeral;
@@ -9434,7 +9434,6 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 extension = null;
             }
         }
-        // Prizma: strip EXIF/GPS from images sent as files (works on a copy; keeps orientation)
         path = PrizmaExif.stripIfEnabled(path);
         final File f = new File(path);
         if (!f.exists() || f.length() == 0) {

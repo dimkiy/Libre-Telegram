@@ -55,27 +55,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Random;
 
-/*
- * Libre — что это за файл:
- * Экран обмена контактом касанием телефонов.
- */
-
-/**
- * Prizma: "tap phones" contact exchange (like Apple's NameDrop).
- *
- * Both phones open this screen and touch with their top edges. Each phone alternates between
- * being an NFC card that holds a ONE-TIME code ({@link PrizmaNfcService}) and an NFC reader, so
- * sooner or later each reads the other — the exchange goes both ways. The code is a temporary
- * Telegram contact token: it reveals neither the phone number nor the username, works for one tap
- * and then a fresh one is armed. Phones without NFC get a QR code with the same one-time link.
- *
- * When a tap lands, a wave of light runs down from the top edge (where the phones touched), the
- * ring around the avatar flashes, and the other person's card rises into place.
- */
 public class PrizmaNfcExchange extends Dialog {
-
-    private static final int COLOR_IN = 0xff64D2FF;  // the contact we received
-    private static final int COLOR_OUT = 0xffBF8CFF; // our code went to the other phone
+    private static final int COLOR_IN = 0xff64D2FF;
+    private static final int COLOR_OUT = 0xffBF8CFF;
 
     private final Activity activity;
     private final int account = UserConfig.selectedAccount;
@@ -112,8 +94,6 @@ public class PrizmaNfcExchange extends Dialog {
         this.canShare = adapter != null && activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_NFC_HOST_CARD_EMULATION);
     }
 
-    // ===================== layout =====================
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -130,7 +110,6 @@ public class PrizmaNfcExchange extends Dialog {
         column.setPadding(AndroidUtilities.dp(28), AndroidUtilities.statusBarHeight + AndroidUtilities.dp(12), AndroidUtilities.dp(28), AndroidUtilities.navigationBarHeight + AndroidUtilities.dp(22));
         root.addView(column, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        // top bar: close
         FrameLayout top = new FrameLayout(ctx);
         ImageView close = new ImageView(ctx);
         close.setImageResource(R.drawable.ic_close_white);
@@ -156,7 +135,6 @@ public class PrizmaNfcExchange extends Dialog {
         hint.setLineSpacing(AndroidUtilities.dp(2), 1f);
         column.addView(hint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
 
-        // centre: our avatar (or the QR), the rings live on the Scene behind it
         centerBox = new FrameLayout(ctx);
         avatar = new BackupImageView(ctx);
         avatar.setRoundRadius(AndroidUtilities.dp(60));
@@ -176,7 +154,6 @@ public class PrizmaNfcExchange extends Dialog {
         centerBox.addView(qrView, LayoutHelper.createFrame(230, 230, Gravity.CENTER));
         column.addView(centerBox, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
 
-        // the received contact (hidden until a tap lands)
         card = new LinearLayout(ctx);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -242,8 +219,6 @@ public class PrizmaNfcExchange extends Dialog {
         }
     }
 
-    // ===================== lifecycle =====================
-
     @Override
     public void show() {
         super.show();
@@ -272,11 +247,8 @@ public class PrizmaNfcExchange extends Dialog {
         }
     }
 
-    // ===================== one-time code =====================
-
     private final Runnable rearm = this::requestCode;
 
-    /** A fresh temporary contact token from Telegram: reveals neither number nor username, expires by itself. */
     private void requestCode() {
         if (!alive) return;
         AndroidUtilities.cancelRunOnUIThread(rearm);
@@ -290,7 +262,7 @@ public class PrizmaNfcExchange extends Dialog {
                 if (canShare) {
                     PrizmaNfcService.arm(tokenOf(t.url), SystemClock.elapsedRealtime() + ttl, this::onCodeSent);
                 }
-                AndroidUtilities.runOnUIThread(rearm, Math.max(10_000L, ttl - 8_000L)); // renew before it expires
+                AndroidUtilities.runOnUIThread(rearm, Math.max(10_000L, ttl - 8_000L));
                 if (showingQr) renderQr();
                 if (!received && !importing) updateIdleStatus();
             } else {
@@ -322,7 +294,6 @@ public class PrizmaNfcExchange extends Dialog {
         nfcSettings.setVisibility(adapter != null && !adapter.isEnabled() ? View.VISIBLE : View.GONE);
     }
 
-    /** Our code went to the other phone: the light runs, then a new one-time code is armed. */
     private void onCodeSent() {
         if (!alive) return;
         haptic();
@@ -331,12 +302,6 @@ public class PrizmaNfcExchange extends Dialog {
         AndroidUtilities.runOnUIThread(rearm, 2200);
     }
 
-    // ===================== NFC: card + reader in turns =====================
-
-    /**
-     * A phone can't be a reader and a card at the same moment, so each one flips between the two
-     * at a random rhythm — when they touch, one is reading while the other is answering.
-     */
     private final Runnable duplex = new Runnable() {
         @Override
         public void run() {
@@ -344,11 +309,10 @@ public class PrizmaNfcExchange extends Dialog {
             if (!adapter.isEnabled()) {
                 setReader(false);
                 updateIdleStatus();
-                AndroidUtilities.runOnUIThread(this, 1000); // notice when the user turns NFC on
+                AndroidUtilities.runOnUIThread(this, 1000);
                 return;
             }
             if (ApplicationLoader.mainInterfacePaused) {
-                // in the background: stop answering taps until the screen is back
                 setReader(false);
                 if (!pausedArmed) {
                     pausedArmed = true;
@@ -363,12 +327,12 @@ public class PrizmaNfcExchange extends Dialog {
             }
             if (nfcSettings.getVisibility() == View.VISIBLE) updateIdleStatus();
             if (received) {
-                setReader(false); // got theirs — keep answering so they can get ours
+                setReader(false);
                 AndroidUtilities.runOnUIThread(this, 1000);
                 return;
             }
             if (reading) {
-                AndroidUtilities.runOnUIThread(this, 200); // don't switch off in the middle of a read
+                AndroidUtilities.runOnUIThread(this, 200);
                 return;
             }
             boolean next = !canShare || !readerOn;
@@ -396,7 +360,6 @@ public class PrizmaNfcExchange extends Dialog {
         }
     }
 
-    /** Binder thread: ask the other phone for its one-time code. */
     private void onTag(Tag tag) {
         IsoDep iso = IsoDep.get(tag);
         if (iso == null) return;
@@ -452,8 +415,6 @@ public class PrizmaNfcExchange extends Dialog {
         }
     }
 
-    // ===================== result card =====================
-
     private void showCard(TLRPC.User user) {
         final Context ctx = getContext();
         setQrVisible(false);
@@ -491,7 +452,6 @@ public class PrizmaNfcExchange extends Dialog {
         buttons.addView(profile, LayoutHelper.createLinear(0, 46, 1f, 5, 0, 0, 0));
         card.addView(buttons, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-        // our own avatar steps back, their card rises in
         centerBox.animate().alpha(0f).scaleX(0.86f).scaleY(0.86f).setDuration(260).start();
         card.setVisibility(View.VISIBLE);
         card.setAlpha(0f);
@@ -528,8 +488,6 @@ public class PrizmaNfcExchange extends Dialog {
         last.presentFragment(chat ? new ChatActivity(args) : new ProfileActivity(args));
     }
 
-    // ===================== QR fallback =====================
-
     private void setQrVisible(boolean visible) {
         showingQr = visible;
         qrLink.setText(visible ? "Скрыть QR-код" : "Показать QR-код");
@@ -556,9 +514,6 @@ public class PrizmaNfcExchange extends Dialog {
         }
     }
 
-    // ===================== the light =====================
-
-    /** Black stage: a soft glow, slow rings around the avatar, and the wave that runs on a tap. */
     private class Scene extends View {
         private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -589,7 +544,6 @@ public class PrizmaNfcExchange extends Dialog {
             waveStart = SystemClock.elapsedRealtime();
             flash = 1f;
             int h = Math.max(1, getHeight());
-            // a soft band of light: transparent → colour → white core → colour → transparent
             wavePaint.setShader(new LinearGradient(0, 0, 0, h * 0.42f,
                     new int[]{0x00ffffff, (color & 0x00ffffff) | 0x70000000, 0xb3ffffff, (color & 0x00ffffff) | 0x70000000, 0x00ffffff},
                     new float[]{0f, 0.3f, 0.5f, 0.7f, 1f}, Shader.TileMode.CLAMP));
@@ -621,7 +575,6 @@ public class PrizmaNfcExchange extends Dialog {
 
             boolean animating = false;
 
-            // rings: two slow ripples leaving the avatar (one still ring on weak devices / Lite)
             if (ringsVisible) {
                 float base = AndroidUtilities.dp(66);
                 if (fancy) {
@@ -649,7 +602,6 @@ public class PrizmaNfcExchange extends Dialog {
                 animating = true;
             }
 
-            // the wave: enters at the top edge (where the phones touch) and flows down the screen
             if (waveStart != 0) {
                 float p = (now - waveStart) / 1100f;
                 if (p >= 1f) {
@@ -663,7 +615,6 @@ public class PrizmaNfcExchange extends Dialog {
                     wavePaint.getShader().setLocalMatrix(waveMatrix);
                     wavePaint.setAlpha(alpha);
                     canvas.drawRect(0, Math.max(0, y), w, Math.min(h, y + bandH), wavePaint);
-                    // the contact point keeps glowing for a moment at the top edge
                     float edgeA = p < 0.15f ? p / 0.15f : Math.max(0f, 1f - (p - 0.15f) / 0.5f);
                     edge.setAlpha((int) (255 * edgeA));
                     canvas.drawRect(0, 0, w, AndroidUtilities.dp(90), edge);

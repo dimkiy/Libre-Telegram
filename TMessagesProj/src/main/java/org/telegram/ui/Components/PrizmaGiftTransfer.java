@@ -25,30 +25,13 @@ import org.telegram.ui.DialogsActivity;
 import org.telegram.ui.LaunchActivity;
 import org.telegram.ui.Stars.StarsController;
 
-/*
- * Libre — что это за файл:
- * Передать Libre-NFT другу через сервер Libre.
- */
-
-/**
- * Prizma: hand an NFT from the Libre showcase to a friend. It leaves your showcase and appears in
- * theirs (Libre ↔ Libre, through Libre Cloud).
- *
- * The gift travels as a small description (which gift + its model/backdrop/number). The sender's
- * copy is removed only after the server took it, so nothing gets lost or doubled; the friend's
- * Libre collects its inbox on start and every few minutes while open.
- */
 public final class PrizmaGiftTransfer {
-
     private static final long INBOX_EVERY = 3 * 60_000L;
     private static long inboxCheckedAt;
     private static boolean inboxBusy;
 
     private PrizmaGiftTransfer() {}
 
-    // ===================== sending =====================
-
-    /** Menu «Передать другу»: pick a person, confirm, send. */
     public static void pickAndSend(int account, long instId) {
         if (!PrizmaCloud.configured()) {
             toast("Передача подарков работает через сервер Libre — он не подключён");
@@ -72,7 +55,6 @@ public final class PrizmaGiftTransfer {
         last.presentFragment(picker);
     }
 
-    /** The recipient is already chosen (the «Подарить» sheet in someone's profile). */
     public static void confirm(int account, long instId, long to) {
         if (!PrizmaCloud.configured()) {
             toast("Передача подарков работает через сервер Libre — он не подключён");
@@ -123,7 +105,7 @@ public final class PrizmaGiftTransfer {
                     card = new JSONObject(r.body).optLong("card", 0);
                 } catch (Throwable ignore) {
                 }
-                PrizmaGiftCard.remember(card, gift); // our chat draws the card without asking the server
+                PrizmaGiftCard.remember(card, gift);
                 PrizmaGifts.removeInstance(instId);
                 refreshMyGifts(account);
                 announce(account, to, name, title, card);
@@ -137,10 +119,8 @@ public final class PrizmaGiftTransfer {
         });
     }
 
-    /** A message in the chat, so both see the gift was handed over — then the chat itself. */
     private static void announce(int account, long to, String name, String title, long card) {
         try {
-            // plain text for any Telegram; Libre reads the hidden card number and draws the gift card
             PrizmaGiftCard.watchSent(account);
             SendMessagesHelper.getInstance(account).sendMessage(SendMessagesHelper.SendMessageParams.of(
                     "🎁 Дарю тебе «" + title + "» — подарок уже в твоей витрине Libre" + (card > 0 ? PrizmaGiftCard.hide(card) : ""), to));
@@ -165,13 +145,10 @@ public final class PrizmaGiftTransfer {
         String t = g != null ? g.title : null;
         String num = PrizmaConfig.nftNum(instId);
         if (t == null || t.isEmpty()) t = "Подарок";
-        if (num != null && num.contains("/")) num = num.substring(0, num.indexOf('/')).trim(); // "12/5000" → "12", like Telegram's "#12"
+        if (num != null && num.contains("/")) num = num.substring(0, num.indexOf('/')).trim();
         return num != null && !num.isEmpty() ? t + " #" + num : t;
     }
 
-    // ===================== receiving =====================
-
-    /** LaunchActivity.onResume (and start): collect gifts friends sent us. */
     public static void checkInbox(int account) {
         if (!PrizmaCloud.configured() || inboxBusy) return;
         if (SystemClock.elapsedRealtime() - inboxCheckedAt < INBOX_EVERY && inboxCheckedAt != 0) return;
@@ -190,7 +167,7 @@ public final class PrizmaGiftTransfer {
                     JSONObject g = item.getJSONObject("gift");
                     final long rxId = item.getLong("id");
                     PrizmaGiftCard.remember(g.optLong("card", 0), g);
-                    if (alreadyReceived(rxId)) { // imported before, the ack just didn't reach the server
+                    if (alreadyReceived(rxId)) {
                         PrizmaCloud.call(account, "POST", "/v1/gift/ack/" + rxId, null, ack -> {});
                         continue;
                     }
@@ -207,7 +184,6 @@ public final class PrizmaGiftTransfer {
                         PrizmaConfig.setNftCrafted(inst, g.optBoolean("crafted", false));
                         PrizmaGifts.setUpgraded(inst, true);
                     }
-                    // only now is it safely ours — tell the server to forget it
                     markReceived(rxId);
                     PrizmaCloud.call(account, "POST", "/v1/gift/ack/" + rxId, null, ack -> {});
                     got++;
@@ -248,7 +224,7 @@ public final class PrizmaGiftTransfer {
             if (b != null) b.invalidate(true);
         } catch (Throwable ignore) {
         }
-        PrizmaCloud.syncShowcaseSoon(account); // other people's Libre sees the change too, not only after a profile reload
+        PrizmaCloud.syncShowcaseSoon(account);
     }
 
     private static void toast(String text) {

@@ -296,7 +296,6 @@ public class Browser {
         if (context == null || uri == null) {
             return;
         }
-        // Libre: a clan invite link opens «вступить в клан» right here
         try {
             if (org.telegram.ui.Components.PrizmaClanSheet.handleInviteLink(uri)) return;
         } catch (Throwable ignore) {

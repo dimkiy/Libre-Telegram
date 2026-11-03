@@ -446,17 +446,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         flagSecureReason.attach();
 
         super.onCreate(savedInstanceState);
-        // Prizma: decode the custom chat wallpaper / profile banner in the background now,
-        // so opening a chat or the profile never decodes a photo on the UI thread
         try {
             org.telegram.ui.Components.PrizmaWallpaper.preload();
             org.telegram.ui.Components.PrizmaBanner.preload();
         } catch (Throwable ignore) {}
-        // Libre: music status in the bio and "listen together" follow the player from app start
         try {
             org.telegram.messenger.PrizmaMusicStatus.init();
             org.telegram.ui.Components.PrizmaTogether.init();
-            // Libre Cloud: a banner set while offline / before the server existed goes up quietly
             AndroidUtilities.runOnUIThread(() -> org.telegram.messenger.PrizmaCloud.syncOwnBanner(UserConfig.selectedAccount), 8000);
         } catch (Throwable ignore) {}
         if (Build.VERSION.SDK_INT >= 24) {
@@ -7140,15 +7136,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         super.onResume();
         isResumed = true;
         org.telegram.ui.Components.PrizmaTraces.onAppForeground();
-        // Libre Cloud: a newer Libre? gifts from friends?
         AndroidUtilities.runOnUIThread(() -> {
             if (isFinishing()) return;
             org.telegram.ui.Components.PrizmaUpdater.maybeCheck(this);
             org.telegram.ui.Components.PrizmaGiftTransfer.checkInbox(UserConfig.selectedAccount);
-            org.telegram.messenger.PrizmaSocial.myStatus(UserConfig.selectedAccount); // an expired status clears (and «не беспокоить» with it)
-            org.telegram.messenger.PrizmaPresence.syncAnonNumber(UserConfig.selectedAccount); // анонимный номер (+888) — серверу Libre
+            org.telegram.messenger.PrizmaSocial.myStatus(UserConfig.selectedAccount);
+            org.telegram.messenger.PrizmaPresence.syncAnonNumber(UserConfig.selectedAccount);
             if (org.telegram.messenger.PrizmaPlaylist.publicId() != 0) {
-                org.telegram.messenger.PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount); // открытый плейлист: отправит только если он изменился
+                org.telegram.messenger.PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount);
             }
         }, 4000);
         pipActivityHandler.onResume();

@@ -35,20 +35,9 @@ import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-/*
- * Libre — что это за файл:
- * Облачная копия настроек Libre и экран «что сервер знает обо мне».
- */
-
-/**
- * Prizma: the cloud copy of Libre (settings, themes, playlists, the showcase) and the
- * «что сервер знает обо мне» screen. Sessions and anything from Telegram never go into the copy.
- */
 public final class PrizmaBackup {
-
     private PrizmaBackup() {}
 
-    /** What goes into the copy: Libre's own settings files — never the Libre Cloud login. */
     private static final String[] FILES = {"prizma_cfg", "prizma_playlist", "prizma_eq", "prizma_social", "prizma_cards", "prizma_gifts_rx"};
 
     private static void toast(String s) {
@@ -60,8 +49,6 @@ public final class PrizmaBackup {
         toast("Это работает через сервер Libre — включите его в хабе Libre");
         return false;
     }
-
-    // ===================== the cloud copy =====================
 
     public static void show(Context ctx) {
         if (!ready()) return;
@@ -166,7 +153,6 @@ public final class PrizmaBackup {
         }, 900);
     }
 
-    /** {file: {key: [type, value]}} → gzip. */
     private static byte[] pack() {
         try {
             JSONObject root = new JSONObject();
@@ -229,8 +215,6 @@ public final class PrizmaBackup {
                             case "f": ed.putFloat(k, (float) pair.getDouble(1)); break;
                             case "s": {
                                 String s = pair.getString(1);
-                                // banner, chat wallpaper, font: files of the old phone — on a new one they
-                                // don't exist, and a path to nothing broke the profile header and chats
                                 if (s.startsWith("/") && s.length() < 512 && !new java.io.File(s).exists()) s = "";
                                 ed.putString(k, s);
                                 break;
@@ -245,7 +229,7 @@ public final class PrizmaBackup {
                         }
                     }
                 }
-                ed.commit(); // the process restarts right after — must be on disk
+                ed.commit();
             }
             return true;
         } catch (Throwable e) {
@@ -253,8 +237,6 @@ public final class PrizmaBackup {
             return false;
         }
     }
-
-    // ===================== «что сервер знает обо мне» =====================
 
     public static void showWhatServerKnows(Context ctx) {
         if (!ready()) return;
