@@ -30,7 +30,7 @@ Libre не связан с Telegram FZ-LLC. Он работает через о�
 
 1. Склонировать вместе с подмодулями:
    ```bash
-   git clone --recursive https://github.com/dimkiy/Libre.git
+   git clone --recursive https://github.com/dimkiy/Libre-Telegram.git
    ```
 2. Получить свои `api_id` и `api_hash` на [my.telegram.org](https://my.telegram.org) и дописать в `local.properties` (этот файл не попадает в git):
    ```properties
