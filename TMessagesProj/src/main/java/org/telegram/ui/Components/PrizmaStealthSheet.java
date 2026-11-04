@@ -18,366 +18,16 @@ import org.telegram.messenger.PrizmaConfig;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.PasscodeActivity;
+import org.telegram.ui.PrizmaSettingsActivity;
 
 public class PrizmaStealthSheet {
-    private interface Toggle {
-        void set(boolean value);
-    }
-
-    public static void show(Context context) {
-        show(context, null);
-    }
-
     public static void show(Context context, BaseFragment fragment) {
-        final BottomSheet[] sheetRef = new BottomSheet[1];
-        final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
-        final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
-
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
-        root.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(18), AndroidUtilities.dp(14), AndroidUtilities.dp(20));
-
-        TextView title = new TextView(context);
-        title.setText("Prizma");
-        title.setTextColor(textColor);
-        title.setTextSize(24);
-        title.setTypeface(AndroidUtilities.bold());
-        title.setPadding(AndroidUtilities.dp(6), 0, 0, 0);
-        root.addView(title);
-
-        TextView subtitle = new TextView(context);
-        subtitle.setText("Приватность и оформление");
-        subtitle.setTextColor(grayColor);
-        subtitle.setTextSize(13);
-        subtitle.setPadding(AndroidUtilities.dp(6), 0, 0, 0);
-        root.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 14));
-
-        java.util.ArrayList<View> ghost = new java.util.ArrayList<>();
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Скрывать «онлайн»", "никто не увидит, что вы в сети",
-                PrizmaConfig.hideOnline(), PrizmaConfig::setHideOnline));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Скрывать «печатает»", "не показывать, что вы набираете текст",
-                PrizmaConfig.hideTyping(), PrizmaConfig::setHideTyping));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Всегда в сети", "поддерживать статус «онлайн» (не вместе со «Скрывать онлайн»)",
-                PrizmaConfig.alwaysOnline(), v -> {
-                    PrizmaConfig.setAlwaysOnline(v);
-                    if (v) org.telegram.messenger.PrizmaOnline.start();
-                    else org.telegram.messenger.PrizmaOnline.stop();
-                }));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Невидимое прочтение", "в личных чатах не отправлять «прочитано»",
-                PrizmaConfig.invisibleRead(), PrizmaConfig::setInvisibleRead));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Невидимый просмотр сторис", "смотреть истории, не отмечаясь в просмотрах",
-                PrizmaConfig.stealthStories(), PrizmaConfig::setStealthStories));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Подтверждать звонки", "сначала кнопка звонка, потом «Позвонить» — без случайных звонков",
-                PrizmaConfig.confirmCalls(), PrizmaConfig::setConfirmCalls));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Скрывать IP в звонках", "звонки через сервер — собеседник не видит ваш IP",
-                PrizmaConfig.hideCallIp(), PrizmaConfig::setHideCallIp));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Антиудаление", "удалённые сообщения не исчезают из открытого чата",
-                PrizmaConfig.antiDelete(), PrizmaConfig::setAntiDelete));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Стирать GPS из фото", "убирать геолокацию и мета-данные из отправляемых изображений",
-                PrizmaConfig.stripExif(), PrizmaConfig::setStripExif));
-        ghost.add(toggleRow(context, textColor, grayColor,
-                "Анонимная пересылка", "пересылать без подписи «переслано от …»",
-                PrizmaConfig.anonForward(), PrizmaConfig::setAnonForward));
-        addSection(context, root, grayColor, "РЕЖИМ ПРИЗРАКА", ghost,
-                "Скрываете «онлайн» — вы тоже не видите, когда другие в сети: так работает Telegram.");
-
-        java.util.ArrayList<View> guard = new java.util.ArrayList<>();
-        guard.add(toggleRow(context, textColor, grayColor,
-                "Не беспокоить", "глушить все уведомления Telegram (локально)",
-                PrizmaConfig.dnd(), PrizmaConfig::setDnd));
-        guard.add(toggleRow(context, textColor, grayColor,
-                "Сохранять из защищённых", "скачивание, пересылка и копирование везде",
-                PrizmaConfig.allowSaveRestricted(), PrizmaConfig::setAllowSaveRestricted));
-        guard.add(toggleRow(context, textColor, grayColor,
-                "Анонимный номер +888", "показывать ваш номер как анонимный (только у вас)",
-                PrizmaConfig.fakePhone(), v -> {
-                    PrizmaConfig.setFakePhone(v);
-                    try {
-                        int acc = org.telegram.messenger.UserConfig.selectedAccount;
-                        org.telegram.messenger.NotificationCenter.getInstance(acc).postNotificationName(
-                                org.telegram.messenger.NotificationCenter.updateInterfaces,
-                                org.telegram.messenger.MessagesController.UPDATE_MASK_NAME);
-                    } catch (Throwable ignore) {
-                    }
-                }));
-        guard.add(actionRow(context, textColor, grayColor,
-                "Выбрать +888 номер", "крути, пока не понравится, и выбери свой номер",
-                () -> showPhoneRoller(context)));
-        guard.add(actionRow(context, textColor, grayColor,
-                "Пароль на архив",
-                PrizmaArchiveLock.isLocked() ? "включён — нажмите, чтобы отключить" : "открывать архив только по PIN",
-                () -> {
-                    if (PrizmaArchiveLock.isLocked()) {
-                        PrizmaArchiveLock.verify(context, () -> {
-                            PrizmaArchiveLock.disable();
-                            android.widget.Toast.makeText(context, "Пароль на архив снят", android.widget.Toast.LENGTH_SHORT).show();
-                        });
-                    } else {
-                        PrizmaArchiveLock.setupPin(context, () ->
-                                android.widget.Toast.makeText(context, "Пароль на архив установлен", android.widget.Toast.LENGTH_SHORT).show());
-                    }
-                }));
         if (fragment != null) {
-            guard.add(actionRow(context, textColor, grayColor,
-                    "Блокировка приложения", "пароль и отпечаток на вход, автоблокировка", () -> {
-                        if (sheetRef[0] != null) {
-                            sheetRef[0].dismiss();
-                        }
-                        fragment.presentFragment(new PasscodeActivity(PasscodeActivity.TYPE_MANAGE_CODE_SETTINGS));
-                    }));
+            fragment.presentFragment(new PrizmaSettingsActivity());
         }
-        guard.add(actionRow(context, textColor, grayColor,
-                "Обмен контактом", "поднесите телефоны друг к другу — одноразовый код по NFC", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    PrizmaNfcExchange.show(context);
-                }));
-        guard.add(actionRow(context, textColor, grayColor,
-                "Стереть следы", "поиск, недавние, буфер, кэш — одной кнопкой или сами через 10 минут", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    android.app.Activity activity = AndroidUtilities.findActivity(context);
-                    PrizmaTraces.show(context, activity != null ? activity.getWindow().getDecorView() : null);
-                }));
-        addSection(context, root, grayColor, "ЗАЩИТА", guard, null);
-
-        java.util.ArrayList<View> look = new java.util.ArrayList<>();
-        look.add(actionRow(context, textColor, grayColor,
-                "Иконка приложения", "сменить иконку Libre на другую",
-                () -> showIconPicker(context)));
-        look.add(actionRow(context, textColor, grayColor,
-                "Размер эмодзи", "уменьшить большие эмодзи в сообщениях",
-                () -> showEmojiSize(context)));
-        look.add(actionRow(context, textColor, grayColor,
-                "Форма пузырей", "скругление пузырей сообщений в чатах",
-                () -> showBubbleShape(context)));
-        look.add(toggleRow(context, textColor, grayColor,
-                "Стеклянные пузыри", "полупрозрачные пузыри — сквозь них видно обои",
-                PrizmaConfig.glassBubbles(), PrizmaConfig::setGlassBubbles));
-        look.add(actionRow(context, textColor, grayColor,
-                "Размер стикеров", "уменьшить стикеры и анимированные эмодзи",
-                () -> showStickerSize(context)));
-        look.add(toggleRow(context, textColor, grayColor,
-                "Переливающийся профиль", "анимированный градиент в шапке профиля",
-                PrizmaConfig.iridescentProfile(), PrizmaConfig::setIridescentProfile));
-        look.add(toggleRow(context, textColor, grayColor,
-                "Перелив на имени и аватаре", "градиент на имени + свечение вокруг аватара",
-                PrizmaConfig.iridescentName(), PrizmaConfig::setIridescentName));
-        final LinearLayout paletteRow = paletteRow(context);
-        paletteRow.setVisibility(PrizmaConfig.liveWallpaper() ? View.VISIBLE : View.GONE);
-        LinearLayout wallGroup = new LinearLayout(context);
-        wallGroup.setOrientation(LinearLayout.VERTICAL);
-        wallGroup.addView(toggleRow(context, textColor, grayColor,
-                "Живые обои чата", "переливающийся градиент на фоне переписки",
-                PrizmaConfig.liveWallpaper(), v -> {
-                    PrizmaConfig.setLiveWallpaper(v);
-                    paletteRow.setVisibility(v ? View.VISIBLE : View.GONE);
-                }));
-        wallGroup.addView(paletteRow);
-        look.add(wallGroup);
-        look.add(actionRow(context, textColor, grayColor,
-                "Свои обои чата (фото/видео)", "поставить своё изображение или видео фоном чата", () -> {
-                    if (context instanceof android.app.Activity) {
-                        PrizmaChatWallpaper.pick((android.app.Activity) context);
-                    }
-                }));
-        if (PrizmaChatWallpaper.has()) {
-            look.add(actionRow(context, textColor, grayColor,
-                    "Убрать свои обои", "вернуть обычный фон чата", PrizmaChatWallpaper::clear));
-        }
-        look.add(actionRow(context, textColor, grayColor,
-                "Баннер профиля", "картинка или видео из галереи", () -> {
-                    if (context instanceof android.app.Activity) {
-                        PrizmaBanner.pick((android.app.Activity) context);
-                    }
-                }));
-        if (PrizmaBanner.hasBanner()) {
-            look.add(actionRow(context, textColor, grayColor,
-                    "Убрать баннер", "вернуть обычную шапку профиля", PrizmaBanner::clear));
-        }
-        look.add(actionRow(context, textColor, grayColor,
-                "Витрина подарков", "добавить любые подарки на свой профиль", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    PrizmaGiftsSheet.show(context, null);
-                }));
-        look.add(actionRow(context, textColor, grayColor,
-                "Свой шрифт", "любой шрифт (.ttf/.otf) на весь интерфейс", () -> {
-                    if (context instanceof android.app.Activity) {
-                        org.telegram.messenger.PrizmaFonts.pick((android.app.Activity) context);
-                    }
-                }));
-        if (org.telegram.messenger.PrizmaFonts.hasCustom()) {
-            look.add(actionRow(context, textColor, grayColor,
-                    "Сбросить шрифт", "вернуть стандартный шрифт", () -> {
-                        org.telegram.messenger.PrizmaFonts.clear();
-                        android.widget.Toast.makeText(context, "Шрифт сброшен. Перезапустите приложение", android.widget.Toast.LENGTH_LONG).show();
-                    }));
-        }
-        addSection(context, root, grayColor, "ОФОРМЛЕНИЕ", look, null);
-
-        java.util.ArrayList<View> social = new java.util.ArrayList<>();
-        social.add(toggleRow(context, textColor, grayColor,
-                "Блок Libre в профилях", "достижения, «в Libre с», клан и стена",
-                org.telegram.messenger.PrizmaSocial.cardEnabled(), org.telegram.messenger.PrizmaSocial::setCardEnabled));
-        social.add(actionRow(context, textColor, grayColor,
-                "Моя стена", "записи, комментарии, кто может писать", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    BaseFragment f = fragment != null ? fragment : org.telegram.ui.LaunchActivity.getSafeLastFragment();
-                    if (f != null) {
-                        f.presentFragment(new org.telegram.ui.PrizmaWallActivity(
-                                org.telegram.messenger.UserConfig.getInstance(org.telegram.messenger.UserConfig.selectedAccount).getClientUserId(), 0));
-                    }
-                }));
-        social.add(actionRow(context, textColor, grayColor,
-                "Мой клан", org.telegram.messenger.PrizmaClans.mine(org.telegram.messenger.UserConfig.selectedAccount) != null ? "участники и приглашения" : "создать свой клан с тегом", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    BaseFragment f = fragment != null ? fragment : org.telegram.ui.LaunchActivity.getSafeLastFragment();
-                    if (f != null) {
-                        int acc = org.telegram.messenger.UserConfig.selectedAccount;
-                        PrizmaClanSheet.show(f, acc, org.telegram.messenger.UserConfig.getInstance(acc).getClientUserId(), null);
-                    }
-                }));
-        social.add(toggleRow(context, textColor, grayColor,
-                "Не отмечаться в просмотрах", "ваши визиты не попадут в счётчик чужих профилей",
-                org.telegram.messenger.PrizmaSocial.noViewMark(), org.telegram.messenger.PrizmaSocial::setNoViewMark));
-        social.add(actionRow(context, textColor, grayColor,
-                "Облачная копия Libre", "настройки, темы и плейлисты — вернуть на новом телефоне", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    PrizmaBackup.show(context);
-                }));
-        social.add(actionRow(context, textColor, grayColor,
-                "Что сервер знает обо мне", "всё, что хранится о вас, и выгрузка", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    PrizmaBackup.showWhatServerKnows(context);
-                }));
-        social.add(toggleRow(context, textColor, grayColor,
-                "Показывать анонимный номер", "номер +888 из Fragment видят в вашем профиле все в Libre; обычный номер не показывается никогда",
-                PrizmaConfig.showAnonNumber(), on -> {
-                    PrizmaConfig.setShowAnonNumber(on);
-                    org.telegram.messenger.PrizmaPresence.syncAnonNumber(org.telegram.messenger.UserConfig.selectedAccount);
-                }));
-        social.add(toggleRow(context, textColor, grayColor,
-                "Уведомления из MAX", "сообщения из всех чатов MAX приходят вам от бота Libre в Telegram",
-                PrizmaConfig.maxForward(), on -> {
-                    PrizmaConfig.setMaxForward(on);
-                    if (on) PrizmaMaxSetup.start(context);
-                }));
-        social.add(actionRow(context, textColor, grayColor,
-                "Сервер Libre", PrizmaCloudSetup.status(), () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    PrizmaCloudSetup.show(context);
-                }));
-        addSection(context, root, grayColor, "ПРОФИЛЬ LIBRE", social,
-                "С сервером Libre другие пользователи Libre видят ваш баннер, стену, клан, NFT и открытый плейлист. Переписка на сервер не попадает.");
-
-        java.util.ArrayList<View> music = new java.util.ArrayList<>();
-        music.add(actionRow(context, textColor, grayColor,
-                "Мой плейлист", "лайкнутая музыка — слушать в одном месте", () -> {
-                    PrizmaPlaylistSheet.show(context);
-                }));
-        music.add(actionRow(context, textColor, grayColor,
-                "Звук уведомлений", "свой звук на сообщения из галереи/рингтонов", () -> {
-                    if (context instanceof android.app.Activity) {
-                        org.telegram.messenger.PrizmaSounds.pick((android.app.Activity) context);
-                    }
-                }));
-        final PrizmaTogether together = PrizmaTogether.get();
-        music.add(actionRow(context, textColor, grayColor,
-                together.isHosting() ? "Завершить эфир" : together.isFollowing() ? "Выйти из эфира" : "Слушать вместе",
-                together.isHosting() ? "вы ведёте эфир — друзья слышат синхронно" : together.isFollowing() ? "вы слушаете чужой эфир синхронно" : "друг в Libre слышит то же, что и вы, секунда в секунду", () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    if (together.isHosting()) {
-                        together.stopHosting();
-                    } else if (together.isFollowing()) {
-                        together.leave();
-                    } else {
-                        PrizmaTogether.pickChatAndStart(context);
-                    }
-                }));
-        music.add(toggleRow(context, textColor, grayColor,
-                "Музыкальный статус", "в «О себе» видно всем: 🎧 исполнитель — трек; после музыки вернётся ваш текст",
-                PrizmaConfig.musicStatus(), v -> {
-                    PrizmaConfig.setMusicStatus(v);
-                    org.telegram.messenger.PrizmaMusicStatus.onToggle();
-                }));
-        addSection(context, root, grayColor, "МУЗЫКА", music,
-                "Музыкальный статус выдаёт, что вы сейчас в телефоне — даже при скрытом «онлайн».");
-
-        java.util.ArrayList<View> misc = new java.util.ArrayList<>();
-        misc.add(toggleRow(context, textColor, grayColor,
-                "Скрывать рекламу", "без спонсорских сообщений в каналах и ботах",
-                PrizmaConfig.hideAds(), PrizmaConfig::setHideAds));
-        misc.add(toggleRow(context, textColor, grayColor,
-                "Перевод по тапу", "пункт «Перевести» всегда в меню сообщения",
-                PrizmaConfig.tapTranslate(), PrizmaConfig::setTapTranslate));
-        misc.add(toggleRow(context, textColor, grayColor,
-                "Lite-режим (оптимизация)", "отключить тяжёлые анимации/блюр — меньше лагов",
-                PrizmaConfig.liteMode(), v -> {
-                    if (v) {
-                        PrizmaConfig.setLitePrevFlags(org.telegram.messenger.LiteMode.getValue(true));
-                        org.telegram.messenger.LiteMode.setAllFlags(org.telegram.messenger.LiteMode.PRESET_POWER_SAVER);
-                        PrizmaConfig.setLiteMode(true);
-                    } else {
-                        int prev = PrizmaConfig.litePrevFlags();
-                        org.telegram.messenger.LiteMode.setAllFlags(prev >= 0 ? prev : org.telegram.messenger.LiteMode.PRESET_HIGH);
-                        PrizmaConfig.setLiteMode(false);
-                    }
-                    org.telegram.ui.Components.PrizmaWallpaper.invalidate();
-                }));
-        if (fragment != null) {
-            misc.add(actionRow(context, textColor, grayColor,
-                    "Крипто-кошелёк @walt", "открыть кошелёк — вернули в меню",
-                    () -> {
-                        if (sheetRef[0] != null) sheetRef[0].dismiss();
-                        try {
-                            org.telegram.messenger.MessagesController.getInstance(org.telegram.messenger.UserConfig.selectedAccount)
-                                    .openByUserName("walt", fragment, 0);
-                        } catch (Throwable ignore) {
-                        }
-                    }));
-        }
-        misc.add(actionRow(context, textColor, grayColor,
-                "Проверить обновления", "Libre " + org.telegram.messenger.BuildVars.BUILD_VERSION_STRING, () -> {
-                    if (sheetRef[0] != null) sheetRef[0].dismiss();
-                    android.app.Activity a = AndroidUtilities.findActivity(context);
-                    if (a != null) PrizmaUpdater.checkNow(a);
-                }));
-        addSection(context, root, grayColor, "ПРОЧЕЕ", misc, null);
-
-        ScrollView scroll = new ScrollView(context) {
-            @Override
-            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                int maxH = (int) (AndroidUtilities.displaySize.y * 0.82f);
-                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST));
-            }
-        };
-        scroll.setVerticalScrollBarEnabled(false);
-        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        scroll.setNestedScrollingEnabled(true);
-        scroll.setFillViewport(true);
-        scroll.addView(root, new ScrollView.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        BottomSheet.Builder builder = new BottomSheet.Builder(context);
-        builder.setCustomView(scroll);
-        sheetRef[0] = builder.create();
-        try {
-            sheetRef[0].setCanDismissWithSwipe(false);
-        } catch (Throwable ignore) {}
-        try { sheetRef[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundGray)); } catch (Throwable ignore) {}
-        try { sheetRef[0].setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray)); } catch (Throwable ignore) {}
-        sheetRef[0].show();
     }
 
-    private static LinearLayout paletteRow(Context context) {
+    public static LinearLayout paletteRow(Context context) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -434,7 +84,7 @@ public class PrizmaStealthSheet {
         }
     }
 
-    private static void showIconPicker(Context context) {
+    public static void showIconPicker(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
 
@@ -551,7 +201,7 @@ public class PrizmaStealthSheet {
         return org.telegram.messenger.LocaleController.getString(res);
     }
 
-    private static void showPhoneRoller(Context context) {
+    public static void showPhoneRoller(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
 
@@ -677,41 +327,7 @@ public class PrizmaStealthSheet {
         return t;
     }
 
-    private static void addSection(Context c, LinearLayout root, int grayColor, String label, java.util.List<View> rows, String hint) {
-        root.addView(sectionHeader(c, grayColor, label));
-        root.addView(card(c, rows), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, hint == null ? 10 : 6));
-        if (hint != null) {
-            TextView h = new TextView(c);
-            h.setText(hint);
-            h.setTextColor(grayColor);
-            h.setTextSize(12);
-            h.setPadding(AndroidUtilities.dp(14), 0, AndroidUtilities.dp(14), 0);
-            root.addView(h, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
-        }
-    }
-
-    private static LinearLayout card(Context c, java.util.List<View> rows) {
-        LinearLayout card = new LinearLayout(c);
-        card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(AndroidUtilities.dp(16));
-        bg.setColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        card.setBackground(bg);
-        card.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(2), AndroidUtilities.dp(16), AndroidUtilities.dp(2));
-        int divColor = Theme.getColor(Theme.key_divider);
-        int divH = Math.max(1, (int) (AndroidUtilities.density + 0.5f));
-        for (int i = 0; i < rows.size(); i++) {
-            if (i > 0) {
-                View div = new View(c);
-                div.setBackgroundColor(divColor);
-                card.addView(div, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, divH));
-            }
-            card.addView(rows.get(i), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        }
-        return card;
-    }
-
-    private static void showStickerSize(Context context) {
+    public static void showStickerSize(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int accent = Theme.getColor(Theme.key_featuredStickers_addButton);
         LinearLayout root = new LinearLayout(context);
@@ -739,7 +355,7 @@ public class PrizmaStealthSheet {
         ref[0].show();
     }
 
-    private static void showBubbleShape(Context context) {
+    public static void showBubbleShape(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int accent = Theme.getColor(Theme.key_featuredStickers_addButton);
         LinearLayout root = new LinearLayout(context);
@@ -773,7 +389,7 @@ public class PrizmaStealthSheet {
         ref[0].show();
     }
 
-    private static void showEmojiSize(Context context) {
+    public static void showEmojiSize(Context context) {
         final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
         final int accent = Theme.getColor(Theme.key_featuredStickers_addButton);
         LinearLayout root = new LinearLayout(context);
@@ -806,17 +422,6 @@ public class PrizmaStealthSheet {
         ref[0].show();
     }
 
-    private static TextView sectionHeader(Context context, int grayColor, String title) {
-        TextView t = new TextView(context);
-        t.setText(title);
-        t.setTextColor(grayColor);
-        t.setTextSize(12);
-        t.setLetterSpacing(0.08f);
-        t.setTypeface(AndroidUtilities.bold());
-        t.setPadding(0, AndroidUtilities.dp(18), 0, AndroidUtilities.dp(6));
-        return t;
-    }
-
     private static LinearLayout actionRow(Context context, int textColor, int grayColor,
                                           String name, String desc, Runnable onClick) {
         LinearLayout row = new LinearLayout(context);
@@ -839,41 +444,6 @@ public class PrizmaStealthSheet {
         row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
 
         row.setOnClickListener(v -> onClick.run());
-        return row;
-    }
-
-    private static LinearLayout toggleRow(Context context, int textColor, int grayColor,
-                                          String name, String desc, boolean checked, Toggle toggle) {
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, AndroidUtilities.dp(10), 0, AndroidUtilities.dp(10));
-
-        LinearLayout texts = new LinearLayout(context);
-        texts.setOrientation(LinearLayout.VERTICAL);
-        TextView n = new TextView(context);
-        n.setText(name);
-        n.setTextColor(textColor);
-        n.setTextSize(15);
-        texts.addView(n);
-        TextView d = new TextView(context);
-        d.setText(desc);
-        d.setTextColor(grayColor);
-        d.setTextSize(12);
-        texts.addView(d, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
-        row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
-
-        final Switch sw = new Switch(context);
-        sw.setColors(Theme.key_switchTrackBlue, Theme.key_switchTrackBlueChecked, Theme.key_switchTrackBlueThumb, Theme.key_switchTrackBlueThumbChecked);
-        sw.setChecked(checked, false);
-        row.addView(sw, LayoutHelper.createLinear(37, 20, Gravity.CENTER_VERTICAL));
-
-        row.setOnClickListener(v -> {
-            boolean nv = !sw.isChecked();
-            sw.setChecked(nv, true);
-            toggle.set(nv);
-        });
-
         return row;
     }
 }

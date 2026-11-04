@@ -739,7 +739,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
-        items.add(SettingCell.Factory.of(778, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_privacy, "Prizma", "Все настройки клиента: приватность и оформление"));
+        items.add(SettingCell.Factory.of(778, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_privacy, "Libre", "Плеер, приватность, оформление"));
         items.add(SettingCell.Factory.of(779, IconBackgroundColors.CYAN.top, IconBackgroundColors.CYAN.bottom, R.drawable.search_music_filled, "Мой плейлист", "Лайкнутая музыка в одном месте"));
         items.add(SettingCell.Factory.of(780, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.msg_filled_data_music, "Музыка", "Найти и слушать любой трек из Telegram"));
         items.add(SettingCell.Factory.of(781, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.msg_contacts, "Обмен контактом", "Поднесите телефоны друг к другу — NFC или QR"));

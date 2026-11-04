@@ -3014,6 +3014,155 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         return true;
     }
 
+    private ArrayList<MessageObject> activeList() {
+        return SharedConfig.shuffleMusic ? shuffledPlaylist : playlist;
+    }
+
+    private int nextStep() {
+        return SharedConfig.playOrderReversed ? 1 : -1;
+    }
+
+    public int prizmaQueuePosition() {
+        ArrayList<MessageObject> list = activeList();
+        if (currentPlaylistNum < 0 || currentPlaylistNum >= list.size()) {
+            return 0;
+        }
+        return nextStep() > 0 ? currentPlaylistNum + 1 : list.size() - currentPlaylistNum;
+    }
+
+    public ArrayList<MessageObject> prizmaQueue() {
+        ArrayList<MessageObject> list = activeList();
+        ArrayList<MessageObject> out = new ArrayList<>(list.size());
+        if (list.isEmpty()) {
+            return out;
+        }
+        int at = currentPlaylistNum < 0 || currentPlaylistNum >= list.size() ? 0 : currentPlaylistNum;
+        int step = nextStep();
+        for (int i = 0, n = list.size(); i < n; i++) {
+            out.add(list.get(at));
+            at += step;
+            if (at < 0) {
+                at = n - 1;
+            } else if (at >= n) {
+                at = 0;
+            }
+        }
+        return out;
+    }
+
+    private void applyQueue(ArrayList<MessageObject> ordered) {
+        ArrayList<MessageObject> list = activeList();
+        list.clear();
+        if (nextStep() > 0) {
+            list.addAll(ordered);
+            currentPlaylistNum = 0;
+        } else {
+            for (int i = ordered.size() - 1; i >= 0; i--) {
+                list.add(ordered.get(i));
+            }
+            currentPlaylistNum = list.size() - 1;
+        }
+    }
+
+    public void prizmaMoveInQueue(int from, int to) {
+        ArrayList<MessageObject> ordered = prizmaQueue();
+        if (from <= 0 || to <= 0 || from >= ordered.size() || to >= ordered.size()) {
+            return;
+        }
+        ordered.add(to, ordered.remove(from));
+        applyQueue(ordered);
+    }
+
+    public void prizmaRemoveFromQueue(MessageObject mo) {
+        if (mo == null || isSamePlayingMessage(mo)) {
+            return;
+        }
+        ArrayList<MessageObject> ordered = prizmaQueue();
+        if (!ordered.remove(mo)) {
+            return;
+        }
+        if (SharedConfig.shuffleMusic) {
+            playlist.remove(mo);
+        } else {
+            shuffledPlaylist.remove(mo);
+        }
+        applyQueue(ordered);
+    }
+
+    public void prizmaPlayNext(MessageObject mo) {
+        if (mo == null) {
+            return;
+        }
+        ArrayList<MessageObject> ordered = prizmaQueue();
+        for (int i = ordered.size() - 1; i > 0; i--) {
+            MessageObject other = ordered.get(i);
+            if (other.getId() == mo.getId() && other.getDialogId() == mo.getDialogId()) {
+                ordered.remove(i);
+            }
+        }
+        if (ordered.isEmpty() || isSamePlayingMessage(mo)) {
+            return;
+        }
+        ordered.add(1, mo);
+        if (SharedConfig.shuffleMusic && !playlist.contains(mo)) {
+            playlist.add(0, mo);
+        }
+        if (!SharedConfig.shuffleMusic && !shuffledPlaylist.isEmpty() && !shuffledPlaylist.contains(mo)) {
+            shuffledPlaylist.add(0, mo);
+        }
+        applyQueue(ordered);
+    }
+
+    public void prizmaSortQueue(java.util.Comparator<MessageObject> order) {
+        ArrayList<MessageObject> ordered = prizmaQueue();
+        if (ordered.size() < 3) {
+            return;
+        }
+        MessageObject current = ordered.remove(0);
+        if (order == null) {
+            Collections.reverse(ordered);
+        } else {
+            Collections.sort(ordered, order);
+        }
+        ordered.add(0, current);
+        applyQueue(ordered);
+    }
+
+    public boolean prizmaPlayList(ArrayList<MessageObject> ordered, MessageObject current) {
+        boolean started = setPlaylist(ordered, current, 0, false, null);
+        if (SharedConfig.shuffleMusic) {
+            return started;
+        }
+        int at = ordered.indexOf(current);
+        if (at < 0) {
+            return started;
+        }
+        ArrayList<MessageObject> queue = new ArrayList<>(ordered.size());
+        for (int i = 0, n = ordered.size(); i < n; i++) {
+            MessageObject mo = ordered.get((at + i) % n);
+            if (mo.isMusic()) {
+                queue.add(mo);
+            }
+        }
+        applyQueue(queue);
+        return started;
+    }
+
+    public void prizmaPlayFromQueue(MessageObject mo) {
+        ArrayList<MessageObject> list = activeList();
+        int index = list.indexOf(mo);
+        if (index < 0) {
+            playMessage(mo);
+            return;
+        }
+        currentPlaylistNum = index;
+        playMusicAgain = true;
+        if (playingMessageObject != null && !isSamePlayingMessage(mo)) {
+            playingMessageObject.resetPlayingProgress();
+        }
+        playMessage(mo);
+    }
+
     public void playMessageAtIndex(int index) {
         if (currentPlaylistNum < 0 || currentPlaylistNum >= playlist.size()) {
             return;

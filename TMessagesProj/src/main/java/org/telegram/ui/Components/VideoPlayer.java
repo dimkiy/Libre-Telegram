@@ -1851,9 +1851,12 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             byteBuffer.position(0);
         }
 
+        private int pcmRate = 44100, pcmChannels = 2;
+
         @Override
         public void flush(int sampleRateHz, int channelCount, int encoding) {
-
+            pcmRate = sampleRateHz;
+            pcmChannels = encoding == C.ENCODING_PCM_16BIT ? channelCount : 0;
         }
 
 
@@ -1875,6 +1878,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             if (!audioVisualizerDelegate.needUpdate()) {
                 return;
             }
+            PrizmaBeat.feed(buffer, pcmChannels, pcmRate);
 
             int len = buffer.limit();
             if (len > MAX_BUFFER_SIZE) {

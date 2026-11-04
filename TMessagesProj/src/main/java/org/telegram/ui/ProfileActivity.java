@@ -14133,7 +14133,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     } else if (position == chatRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.ChatSettings), R.drawable.msg2_discussion, true);
                     } else if (position == prizmaSettingsRow) {
-                        textCell.setTextAndIcon("Prizma", R.drawable.msg2_secret, true);
+                        textCell.setTextAndIcon("Libre", R.drawable.msg2_secret, true);
                     } else if (position == filtersRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.Filters), R.drawable.msg2_folder, true);
                     } else if (position == stickersRow) {

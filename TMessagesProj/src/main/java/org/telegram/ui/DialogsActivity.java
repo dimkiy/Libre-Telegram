@@ -504,7 +504,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
     public ActionBarMenuItem searchItem;
-    private ActionBarMenuItem prizmaMusicItem;
     private ActionBarMenuItem optionsItem;
     private ActionBarMenuItem speedItem;
     public static boolean switchingTheme;
@@ -3232,14 +3231,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
         ActionBarMenu menu = actionBar.createMenu();
         menu.setTranslationX(-dp(5));
-        prizmaMusicItem = menu.addItem(10477, R.drawable.msg_played);
-        prizmaMusicItem.setVisibility(View.GONE);
-        prizmaMusicItem.setOnClickListener(v -> {
-            if (getParentActivity() != null) {
-                org.telegram.ui.Components.PrizmaFullPlayer.show(getParentActivity());
-            }
-        });
-        updateMusicButton();
         if (initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect) {
             ActionBarMenuItem blurItem = menu.addItem(10478, R.drawable.msg_blur_linear);
             blurItem.setOnClickListener(v -> org.telegram.ui.Components.PrizmaScreenBlur.show(getParentActivity()));
@@ -4894,7 +4885,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             fragmentContextView = new FragmentContextView(context, this, false) {
                 @Override
                 public void setVisibility(int visibility) {
-                    if (visibility == VISIBLE && getCurrentStyle() == STYLE_AUDIO_PLAYER) {
+                    if (visibility == VISIBLE && getCurrentStyle() == STYLE_AUDIO_PLAYER && !isPrizmaMini()) {
                         topPanelLayout.setViewVisible(fragmentContextViewWrapper, false);
                         return;
                     }
@@ -5706,18 +5697,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
         ViewCompat.setOnApplyWindowInsetsListener(fragmentView, this::onApplyWindowInsets);
         return fragmentView;
-    }
-
-    private void updateMusicButton() {
-        if (prizmaMusicItem == null) {
-            return;
-        }
-        boolean show = false;
-        try {
-            MessageObject mo = org.telegram.messenger.MediaController.getInstance().getPlayingMessageObject();
-            show = mo != null && mo.isMusic();
-        } catch (Throwable ignore) {}
-        prizmaMusicItem.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void setStoriesOvercroll(ViewPage viewPage, float storiesOverscroll) {
@@ -10623,7 +10602,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.messagePlayingDidStart || id == NotificationCenter.messagePlayingDidReset || id == NotificationCenter.messagePlayingPlayStateChanged) {
-            updateMusicButton();
             return;
         }
         if (id == NotificationCenter.dialogsNeedReload) {

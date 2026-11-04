@@ -4291,6 +4291,10 @@ public class AndroidUtilities {
 
     public static boolean openForView(File f, String fileName, String mimeType, final Activity activity, Theme.ResourcesProvider resourcesProvider, boolean restrict) {
         if (f != null && f.exists()) {
+            boolean pdf = "application/pdf".equals(mimeType) || fileName != null && fileName.toLowerCase().endsWith(".pdf");
+            if (pdf && PrizmaConfig.builtInPdf() && org.telegram.ui.Components.PrizmaPdfViewer.open(activity, f, fileName)) {
+                return true;
+            }
             String realMimeType = null;
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);

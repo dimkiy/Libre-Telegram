@@ -457,6 +457,45 @@ public class PrizmaPlaylist {
         return out;
     }
 
+    private static long playingId;
+    private static String playingName;
+
+    public static void setPlaying(long id, String name) {
+        playingId = id;
+        playingName = name;
+    }
+
+    public static String playingName(MessageObject mo) {
+        if (playingId == 0 || mo == null) return null;
+        return containsIn(playingId, mo) ? playingName : null;
+    }
+
+    public static ArrayList<MessageObject> firstMessages(long id, int limit) {
+        ArrayList<MessageObject> out = new ArrayList<>();
+        JSONArray a = roots();
+        int idx = indexOf(a, id);
+        if (idx < 0) return out;
+        JSONArray t = tracksArr(a.optJSONObject(idx));
+        for (int i = 0; i < t.length() && out.size() < limit; i++) {
+            JSONObject o = t.optJSONObject(i);
+            if (o == null) continue;
+            MessageObject live = liveCache.get(key(o.optLong("did"), o.optInt("mid")));
+            if (live != null) {
+                out.add(live);
+                continue;
+            }
+            TLRPC.Message msg = decode(o.optString("data", ""));
+            if (msg != null) {
+                try {
+                    out.add(new MessageObject(UserConfig.selectedAccount, msg, false, false));
+                } catch (Throwable e) {
+                    FileLog.e(e);
+                }
+            }
+        }
+        return out;
+    }
+
     public static boolean inAny(MessageObject mo) {
         if (mo == null) return false;
         for (Playlist p : playlists()) {

@@ -105,6 +105,14 @@ public class PrizmaConfig {
         return fancyCached;
     }
 
+    public static boolean beatEffects() {
+        try {
+            return !liteMode() && !LiteMode.isPowerSaverApplied();
+        } catch (Throwable e) {
+            return !liteMode();
+        }
+    }
+
     public static void nextDecorFrame(android.view.View v) {
         if (AndroidUtilities.screenRefreshRate > 75f) {
             long now = SystemClock.uptimeMillis();
@@ -271,18 +279,6 @@ public class PrizmaConfig {
         done(edit().putString("custom_font_path", v == null ? "" : v));
     }
 
-    public static float islandOffX() {
-        return getFloat("island_off_x", 0f);
-    }
-
-    public static float islandOffY() {
-        return getFloat("island_off_y", 0f);
-    }
-
-    public static void setIslandOffset(float x, float y) {
-        done(edit().putFloat("island_off_x", x).putFloat("island_off_y", y));
-    }
-
     public static int seekStyle() {
         return getInt("seek_style", 0);
     }
@@ -291,27 +287,12 @@ public class PrizmaConfig {
         done(edit().putInt("seek_style", v));
     }
 
-    public static int playerBg() {
-        return getInt("player_bg", 0);
+    public static int playerBackdrop() {
+        return getInt("player_backdrop", 0);
     }
 
-    public static void setPlayerBg(int v) {
-        done(edit().putInt("player_bg", v));
-    }
-
-    public static float[] playerOff(String key) {
-        String s = getString("player_off_" + key, "");
-        if (s != null && s.contains(":")) {
-            try {
-                String[] p = s.split(":");
-                return new float[]{Float.parseFloat(p[0]), Float.parseFloat(p[1])};
-            } catch (Throwable ignore) {}
-        }
-        return new float[]{0f, 0f};
-    }
-
-    public static void setPlayerOff(String key, float x, float y) {
-        done(edit().putString("player_off_" + key, x + ":" + y));
+    public static void setPlayerBackdrop(int v) {
+        done(edit().putInt("player_backdrop", v));
     }
 
     public static boolean glassBubbles() {
@@ -341,12 +322,132 @@ public class PrizmaConfig {
         done(edit().putBoolean("cover_parallax", v));
     }
 
-    public static boolean betaPlayer() {
-        return getBool("beta_player", false);
+    public static boolean coverColorsBig() {
+        return getBool("cover_colors_big", true);
     }
 
-    public static void setBetaPlayer(boolean v) {
-        done(edit().putBoolean("beta_player", v));
+    public static void setCoverColorsBig(boolean v) {
+        done(edit().putBoolean("cover_colors_big", v));
+    }
+
+    public static boolean coverColorsMini() {
+        return getBool("cover_colors_mini", true);
+    }
+
+    public static void setCoverColorsMini(boolean v) {
+        done(edit().putBoolean("cover_colors_mini", v));
+    }
+
+    public static boolean playerBgBeat() {
+        return getBool("player_bg_beat", true);
+    }
+
+    public static void setPlayerBgBeat(boolean v) {
+        done(edit().putBoolean("player_bg_beat", v));
+    }
+
+    public static boolean playerSparks() {
+        return getBool("player_sparks", false);
+    }
+
+    public static void setPlayerSparks(boolean v) {
+        done(edit().putBoolean("player_sparks", v));
+    }
+
+    public static boolean playerRings() {
+        return getBool("player_rings", true);
+    }
+
+    public static void setPlayerRings(boolean v) {
+        done(edit().putBoolean("player_rings", v));
+    }
+
+    public static boolean playerCoverKick() {
+        return getBool("player_cover_kick", true);
+    }
+
+    public static void setPlayerCoverKick(boolean v) {
+        done(edit().putBoolean("player_cover_kick", v));
+    }
+
+    public static boolean playerHaptics() {
+        return getBool("player_haptics", false);
+    }
+
+    public static void setPlayerHaptics(boolean v) {
+        done(edit().putBoolean("player_haptics", v));
+    }
+
+    public static boolean playerClips() {
+        return getBool("player_clips", true);
+    }
+
+    public static void setPlayerClips(boolean v) {
+        done(edit().putBoolean("player_clips", v));
+    }
+
+    public static boolean playerArtistClips() {
+        return getBool("player_artist_clips", true);
+    }
+
+    public static void setPlayerArtistClips(boolean v) {
+        done(edit().putBoolean("player_artist_clips", v));
+    }
+
+    public static boolean playerClipsMobile() {
+        return getBool("player_clips_mobile", false);
+    }
+
+    public static void setPlayerClipsMobile(boolean v) {
+        done(edit().putBoolean("player_clips_mobile", v));
+    }
+
+    public static boolean lyricsOnline() {
+        return getBool("lyrics_online", false);
+    }
+
+    public static void setLyricsOnline(boolean v) {
+        done(edit().putBoolean("lyrics_online", v));
+    }
+
+    public static boolean lyricsAsked() {
+        return getBool("lyrics_asked", false);
+    }
+
+    public static void setLyricsAsked(boolean v) {
+        done(edit().putBoolean("lyrics_asked", v));
+    }
+
+    public static int lyricsFill() {
+        return getInt("lyrics_fill", 1);
+    }
+
+    public static void setLyricsFill(int v) {
+        done(edit().putInt("lyrics_fill", v));
+    }
+
+    public static boolean dockTabs() {
+        return getBool("dock_tabs", true);
+    }
+
+    public static void setDockTabs(boolean v) {
+        done(edit().putBoolean("dock_tabs", v));
+    }
+
+    public static boolean inputCalc() {
+        return getBool("input_calc", true);
+    }
+
+    public static void setInputCalc(boolean v) {
+        done(edit().putBoolean("input_calc", v));
+    }
+
+    public static boolean builtInPdf() {
+        return getBool("builtin_pdf", true);
+    }
+
+    public static void setBuiltInPdf(boolean v) {
+        done(edit().putBoolean("builtin_pdf", v));
     }
 
     public static float playerCoverScale() {
@@ -355,12 +456,6 @@ public class PrizmaConfig {
 
     public static void setPlayerCoverScale(float v) {
         done(edit().putFloat("player_cover_scale", v));
-    }
-
-    public static void clearPlayerOffsets() {
-        if (values().containsKey("player_off_controls") || values().containsKey("player_off_queue")) {
-            done(edit().remove("player_off_controls").remove("player_off_queue"));
-        }
     }
 
     public static void resetPlayerLayout() {

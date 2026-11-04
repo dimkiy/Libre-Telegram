@@ -23,6 +23,7 @@ public class PrizmaLyrics {
 
     public static class Lyrics {
         public boolean synced;
+        public boolean instrumental;
         public ArrayList<Line> lines;
         public String plain;
     }
@@ -59,9 +60,14 @@ public class PrizmaLyrics {
         Utilities.globalQueue.postRunnable(() -> {
             Lyrics result = null;
             try {
-                result = requestGet(track, artist, durationSec);
-                if (result == null) {
-                    result = requestSearch(track, artist);
+                String answer = PrizmaCloud.enabled() ? askServer(track, artist, durationSec) : null;
+                if (answer != null) {
+                    result = parseEntry(new JSONObject(answer));
+                } else {
+                    result = requestGet(track, artist, durationSec);
+                    if (result == null) {
+                        result = requestSearch(track, artist);
+                    }
                 }
             } catch (Throwable ignore) {
             }
@@ -76,6 +82,32 @@ public class PrizmaLyrics {
             }
             AndroidUtilities.runOnUIThread(() -> callback.onResult(finalResult));
         });
+    }
+
+    public static Lyrics fromTags(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return null;
+        }
+        ArrayList<Line> timed = parseLrc(text);
+        Lyrics l = new Lyrics();
+        if (!timed.isEmpty()) {
+            l.synced = true;
+            l.lines = timed;
+            l.plain = stripToPlain(timed);
+            return l;
+        }
+        l.lines = new ArrayList<>();
+        for (String s : text.split("\n")) {
+            l.lines.add(new Line(-1, s.trim()));
+        }
+        l.plain = text;
+        return l;
+    }
+
+    private static String askServer(String track, String artist, int durationSec) throws Exception {
+        String url = PrizmaCloud.host() + "/v1/lyrics?title=" + URLEncoder.encode(track, "UTF-8")
+                + "&artist=" + URLEncoder.encode(artist, "UTF-8") + "&dur=" + durationSec;
+        return PrizmaNet.get(url, 14000);
     }
 
     private static Lyrics requestGet(String track, String artist, int durationSec) throws Exception {
@@ -113,8 +145,15 @@ public class PrizmaLyrics {
         if (obj == null) {
             return null;
         }
-        String synced = obj.optString("syncedLyrics", "");
-        String plain = obj.optString("plainLyrics", "");
+        if (obj.optBoolean("instrumental", false)) {
+            Lyrics l = new Lyrics();
+            l.instrumental = true;
+            l.lines = new ArrayList<>();
+            l.plain = "";
+            return l;
+        }
+        String synced = obj.isNull("syncedLyrics") ? "" : obj.optString("syncedLyrics", "");
+        String plain = obj.isNull("plainLyrics") ? "" : obj.optString("plainLyrics", "");
         if (synced != null && synced.length() > 0) {
             ArrayList<Line> lines = parseLrc(synced);
             if (!lines.isEmpty()) {

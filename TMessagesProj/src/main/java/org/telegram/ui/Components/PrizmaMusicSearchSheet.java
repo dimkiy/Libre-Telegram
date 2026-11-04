@@ -88,7 +88,7 @@ public class PrizmaMusicSearchSheet {
 
             TextView title = new TextView(context);
             PrizmaPlaylist.Playlist pl = PrizmaPlaylist.get(playlistId);
-            title.setText(pl != null ? "Добавить в «" + pl.name + "»" : "Добавить треки");
+            title.setText(playlistId == 0 ? "Добавить в очередь" : pl != null ? "Добавить в «" + pl.name + "»" : "Добавить треки");
             title.setTextColor(textColor);
             title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 19);
             title.setTypeface(AndroidUtilities.bold());
@@ -265,6 +265,12 @@ public class PrizmaMusicSearchSheet {
         }
 
         void toggle(MessageObject mo, ImageView button) {
+            if (playlistId == 0) {
+                MediaController.getInstance().prizmaPlayNext(mo);
+                button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+                setAddState(button, true);
+                return;
+            }
             boolean in = PrizmaPlaylist.containsIn(playlistId, mo);
             boolean ok = in ? PrizmaPlaylist.removeFrom(playlistId, mo) : PrizmaPlaylist.addTo(playlistId, mo);
             if (!ok) return;

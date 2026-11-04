@@ -22,6 +22,9 @@ DB_PATH = os.path.join(DATA, "db", "libre.db")
 BANNERS = os.path.join(DATA, "media", "b")
 WALL_PHOTOS = os.path.join(DATA, "media", "w")
 BACKUPS = os.path.join(DATA, "backup")
+CLIPS = os.path.join(DATA, "media", "c")
+CLIP_MAX = 40 * 1024 * 1024
+CLIPS_TOTAL = int(os.environ.get("CLIPS_MAX_MB", "4096")) * 1024 * 1024
 MAX_BANNER = 16 * 1024 * 1024
 TOKEN_TTL = 180 * 86400
 INIT_DATA_TTL = 86400
@@ -33,6 +36,7 @@ os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 os.makedirs(BANNERS, exist_ok=True)
 os.makedirs(WALL_PHOTOS, exist_ok=True)
 os.makedirs(BACKUPS, exist_ok=True)
+os.makedirs(CLIPS, exist_ok=True)
 
 db = sqlite3.connect(DB_PATH, isolation_level=None, check_same_thread=False)
 db.execute("PRAGMA journal_mode=WAL")
@@ -1703,6 +1707,7 @@ p,li{color:#c9c7cc}code{background:#222225;padding:1px 6px;border-radius:6px}</s
 <li>переписка, контакты, номер телефона и юзернейм;</li>
 <li>список тех, кто смотрел ваш профиль: для подсчёта хранится только необратимый хеш, и только двое суток;</li>
 <li>журналы запросов и IP-адреса — они отключены.</li>
+<li>какую музыку вы слушаете. Запросы клипов, текстов и курсов валют идут без входа, а в кэше лежит только сам клип или текст, без связи с человеком.</li>
 </ul>
 <h2>Как удалить данные</h2>
 <p>Посмотреть всё, что хранится о вас: хаб Libre → «Что сервер знает обо мне».</p>
@@ -1733,6 +1738,231 @@ async def health(request):
     return web.json_response({"ok": True, "users": db.execute("SELECT COUNT(*) FROM users").fetchone()[0]})
 
 
+UPSTREAM_TIMEOUT = 12
+HIT_TTL = 45 * 86400
+MISS_TTL = 86400
+_side_session = None
+_side_locks: dict = {}
+_rates = {"at": 0, "body": None}
+
+db.executescript("""
+CREATE TABLE IF NOT EXISTS clip_cache (
+    key     TEXT PRIMARY KEY,
+    file    TEXT,
+    exact   INTEGER NOT NULL DEFAULT 0,
+    created INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lyrics_cache (
+    key     TEXT PRIMARY KEY,
+    body    TEXT,
+    created INTEGER NOT NULL
+);
+""")
+
+
+def side_session():
+    global _side_session
+    import aiohttp
+    if _side_session is None or _side_session.closed:
+        _side_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=UPSTREAM_TIMEOUT),
+            headers={"User-Agent": "Libre/1 (+https://github.com/dimkiy/Libre-Telegram)"})
+    return _side_session
+
+
+def side_lock(key):
+    lock = _side_locks.get(key)
+    if lock is None:
+        if len(_side_locks) > 2000:
+            _side_locks.clear()
+        lock = _side_locks[key] = asyncio.Lock()
+    return lock
+
+
+def hit_key(request, scope):
+    ip = request.headers.get("X-Real-IP", request.remote or "")
+    return scope, hashlib.sha256(VIEW_SALT + ip.encode()).hexdigest()[:16]
+
+
+def track_key(artist, title):
+    return sha(squash(artist) + "|" + squash(title))
+
+
+def squash(text):
+    return re.sub(r"[\W_]+", "", (text or "").lower(), flags=re.UNICODE)
+
+
+def track_args(request):
+    artist = (request.query.get("artist") or "").strip()[:160]
+    title = (request.query.get("title") or "").strip()[:200]
+    return artist, title
+
+
+async def side_json(url, params):
+    try:
+        async with side_session().get(url, params=params) as r:
+            if r.status != 200:
+                return None
+            return await r.json(content_type=None)
+    except Exception as e:
+        log.warning("side request: %s", type(e).__name__)
+        return None
+
+
+def pick_clip(rows, artist, title):
+    want_title, want_artist = squash(title), squash(artist)
+    fallback = None
+    for row in rows or []:
+        preview = row.get("previewUrl") or ""
+        if not preview:
+            continue
+        has_artist = squash(row.get("artistName"))
+        if not has_artist or not (want_artist in has_artist or has_artist in want_artist):
+            continue
+        has_title = squash(row.get("trackName"))
+        if has_title.startswith(want_title) or (len(has_title) > 3 and want_title.startswith(has_title)):
+            return preview, True
+        fallback = fallback or preview
+    return (fallback, False) if fallback else (None, False)
+
+
+async def find_clip(artist, title):
+    base = "https://itunes.apple.com/search"
+    data = await side_json(base, {"entity": "musicVideo", "limit": 12, "term": f"{artist} {title}"})
+    url, exact = pick_clip((data or {}).get("results"), artist, title)
+    if url and exact:
+        return url, True
+    data = await side_json(base, {"entity": "musicVideo", "limit": 12, "attribute": "artistTerm", "term": artist})
+    more, more_exact = pick_clip((data or {}).get("results"), artist, title)
+    return (more, more_exact) if more else (url, exact)
+
+
+async def save_clip(url):
+    import aiohttp
+    name = sha(url)[:32] + ".m4v"
+    path = os.path.join(CLIPS, name)
+    if os.path.exists(path):
+        return name
+    part = path + ".part"
+    total = 0
+    try:
+        async with side_session().get(url, timeout=aiohttp.ClientTimeout(total=45)) as r:
+            if r.status != 200:
+                return None
+            with open(part, "wb") as f:
+                async for chunk in r.content.iter_chunked(64 * 1024):
+                    total += len(chunk)
+                    if total > CLIP_MAX:
+                        raise ValueError("too big")
+                    f.write(chunk)
+        os.replace(part, path)
+        return name
+    except Exception as e:
+        log.warning("clip save: %s", type(e).__name__)
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        return None
+
+
+def clip_reply(name, exact):
+    if not name:
+        return web.json_response({"url": ""})
+    return web.json_response({"url": f"{PUBLIC_URL}/media/c/{name}", "exact": bool(exact)})
+
+
+async def get_clip(request: web.Request):
+    artist, title = track_args(request)
+    if not artist or not title:
+        return web.json_response({"url": ""})
+    if limited(hit_key(request, "clip"), 40):
+        return web.json_response({"error": "slow down"}, status=429)
+    key = track_key(artist, title)
+    async with side_lock("c" + key):
+        row = db.execute("SELECT file, exact, created FROM clip_cache WHERE key=?", (key,)).fetchone()
+        if row:
+            alive = row[0] and os.path.exists(os.path.join(CLIPS, row[0]))
+            if alive and now() - row[2] < HIT_TTL:
+                return clip_reply(row[0], row[1])
+            if not row[0] and now() - row[2] < MISS_TTL:
+                return clip_reply(None, 0)
+        url, exact = await find_clip(artist, title)
+        name = await save_clip(url) if url else None
+        db.execute("INSERT OR REPLACE INTO clip_cache(key, file, exact, created) VALUES(?,?,?,?)",
+                   (key, name, 1 if exact else 0, now()))
+        return clip_reply(name, exact)
+
+
+async def find_lyrics(artist, title, duration):
+    base = "https://lrclib.net/api"
+    params = {"track_name": title, "artist_name": artist}
+    if duration > 0:
+        params["duration"] = duration
+    data = await side_json(f"{base}/get", params)
+    if isinstance(data, dict) and (data.get("syncedLyrics") or data.get("plainLyrics") or data.get("instrumental")):
+        return data
+    rows = await side_json(f"{base}/search", {"q": f"{title} {artist}"})
+    for row in rows if isinstance(rows, list) else []:
+        if row.get("syncedLyrics") or row.get("plainLyrics") or row.get("instrumental"):
+            return row
+    return None
+
+
+async def get_lyrics(request: web.Request):
+    artist, title = track_args(request)
+    if not title:
+        return web.json_response({})
+    if limited(hit_key(request, "lyrics"), 60):
+        return web.json_response({"error": "slow down"}, status=429)
+    duration = int_or0(request.query.get("dur"))
+    key = track_key(artist, title)
+    async with side_lock("l" + key):
+        row = db.execute("SELECT body, created FROM lyrics_cache WHERE key=?", (key,)).fetchone()
+        if row and now() - row[1] < (HIT_TTL if row[0] else MISS_TTL):
+            return web.json_response(json.loads(row[0]) if row[0] else {})
+        data = await find_lyrics(artist, title, duration)
+        body = None
+        if data:
+            body = json.dumps({"syncedLyrics": data.get("syncedLyrics"), "plainLyrics": data.get("plainLyrics"),
+                               "instrumental": bool(data.get("instrumental"))}, ensure_ascii=False)
+        db.execute("INSERT OR REPLACE INTO lyrics_cache(key, body, created) VALUES(?,?,?)", (key, body, now()))
+        return web.json_response(json.loads(body) if body else {})
+
+
+async def get_rates(request: web.Request):
+    if limited(hit_key(request, "rates"), 30):
+        return web.json_response({"error": "slow down"}, status=429)
+    if not _rates["body"] or now() - _rates["at"] > 6 * 3600:
+        data = await side_json("https://open.er-api.com/v6/latest/USD", {})
+        if isinstance(data, dict) and isinstance(data.get("rates"), dict):
+            _rates["body"] = {"base": "USD", "rates": data["rates"]}
+            _rates["at"] = now()
+    return web.json_response(_rates["body"] or {"rates": {}}, headers={"Cache-Control": "public, max-age=3600"})
+
+
+def trim_clips():
+    stamp = now()
+    db.execute("DELETE FROM lyrics_cache WHERE created < ?", (stamp - HIT_TTL,))
+    db.execute("DELETE FROM clip_cache WHERE created < ?", (stamp - HIT_TTL,))
+    keep = {r[0] for r in db.execute("SELECT file FROM clip_cache WHERE file IS NOT NULL")}
+    files = []
+    for name in os.listdir(CLIPS):
+        path = os.path.join(CLIPS, name)
+        if name not in keep and not name.endswith(".part"):
+            os.remove(path)
+        elif name in keep:
+            info = os.stat(path)
+            files.append((info.st_mtime, info.st_size, name, path))
+    total = sum(f[1] for f in files)
+    for _, size, name, path in sorted(files):
+        if total <= CLIPS_TOTAL:
+            break
+        os.remove(path)
+        db.execute("DELETE FROM clip_cache WHERE file=?", (name,))
+        total -= size
+
+
 async def housekeeping(app):
     async def loop():
         while True:
@@ -1744,6 +1974,7 @@ async def housekeeping(app):
                 db.execute("DELETE FROM cards WHERE created < ?", (now() - 365 * 86400,))
                 db.execute("DELETE FROM relay_wait WHERE created < ?", (now() - 86400,))
                 drop_orphan_photos()
+                trim_clips()
                 for key in list(_together):
                     together_fresh(key)
             except Exception as e:
@@ -1811,6 +2042,9 @@ def main():
     app.router.add_get("/privacy", privacy_page)
     app.router.add_get("/health", health)
     app.router.add_get("/v1/update", update_info)
+    app.router.add_get("/v1/clip", get_clip)
+    app.router.add_get("/v1/lyrics", get_lyrics)
+    app.router.add_get("/v1/rates", get_rates)
     app.on_startup.append(housekeeping)
     app.on_startup.append(bot_updates)
     log.info("Libre Cloud on 127.0.0.1:%s, public %s", PORT, PUBLIC_URL)

@@ -1185,6 +1185,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         if (topPadding > 0 && topPadding != AndroidUtilities.dp2(getStyleHeight())) {
             setTopPadding(AndroidUtilities.dp2(getStyleHeight()));
         }
+        updatePrizmaMini();
         if (style == STYLE_LIVE_STORY) {
             selector.setBackground(Theme.getSelectorDrawable(false));
             frameLayout.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] { getThemedColor(Theme.key_stories_circle_live1), getThemedColor(Theme.key_stories_circle_live2) }));
@@ -1608,7 +1609,52 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
     float micAmplitude;
 
     public int getStyleHeight() {
+        if (isPrizmaMini()) {
+            return PrizmaMiniPlayer.HEIGHT;
+        }
         return currentStyle == STYLE_INACTIVE_GROUP_CALL ? 48 : 36;
+    }
+
+    private PrizmaMiniPlayer prizmaMini;
+    private int prizmaHeight;
+
+    public boolean isPrizmaMini() {
+        if (currentStyle != STYLE_AUDIO_PLAYER || isLocation) {
+            return false;
+        }
+        MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+        return mo != null && mo.isMusic();
+    }
+
+    private void updatePrizmaMini() {
+        boolean show = isPrizmaMini();
+        if (show && prizmaMini == null) {
+            prizmaMini = new PrizmaMiniPlayer(getContext());
+            addView(prizmaMini, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, PrizmaMiniPlayer.HEIGHT, Gravity.TOP | Gravity.LEFT));
+        }
+        if (prizmaMini != null) {
+            prizmaMini.setVisibility(show ? VISIBLE : GONE);
+            if (show) {
+                prizmaMini.refresh();
+            }
+        }
+        int height = getStyleHeight();
+        if (height != prizmaHeight && frameLayout != null) {
+            prizmaHeight = height;
+            frameLayout.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, height, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
+            if (topPadding > 0) {
+                setTopPadding(AndroidUtilities.dp2(height));
+            }
+            requestLayout();
+        }
+    }
+
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (prizmaMini != null && prizmaMini.getVisibility() == VISIBLE && child != prizmaMini) {
+            return false;
+        }
+        return super.drawChild(canvas, child, drawingTime);
     }
 
     public boolean isCallTypeVisible() {
@@ -2009,6 +2055,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                 stringBuilder.setSpan(span, 0, messageObject.getMusicAuthor().length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
                 titleTextView.setText(stringBuilder, !create && wasVisible && isMusic);
             }
+            updatePrizmaMini();
         }
     }
 
@@ -2659,7 +2706,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         }
         super.dispatchDraw(canvas);
 
-        if (currentStyle == STYLE_AUDIO_PLAYER) {
+        if (currentStyle == STYLE_AUDIO_PLAYER && !isPrizmaMini()) {
             MessageObject playingMessageObject = MediaController.getInstance().getPlayingMessageObject();
             if (playingMessageObject != null) {
                 final float left = -dpf2(1);

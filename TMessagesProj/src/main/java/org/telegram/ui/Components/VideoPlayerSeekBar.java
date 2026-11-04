@@ -456,13 +456,48 @@ public class VideoPlayerSeekBar {
             drawProgressBar(canvas, rect, strokePaint);
         }
         setPaintColor(ColorUtils.blendARGB(progressColor, smallLineColor, transitionProgress), 1f);
-        drawProgressBar(canvas, rect, paint);
+        if (!drawWavy(canvas)) {
+            drawProgressBar(canvas, rect, paint);
+        }
 
         // circle
         setPaintColor(ColorUtils.blendARGB(circleColor, getProgress() == 0 ? Color.TRANSPARENT : smallLineColor, transitionProgress), 1f - transitionProgress);
         canvas.drawCircle(rect.right, rect.centerY(), circleRadius * (1f - loopBack), paint);
 
         drawTimestampLabel(canvas);
+    }
+
+    private Path wavyPath;
+
+    private boolean drawWavy(Canvas canvas) {
+        float length = rect.width();
+        if (transitionProgress > 0f || timestamps != null && !timestamps.isEmpty() || length < AndroidUtilities.dp(10) || !org.telegram.messenger.PrizmaConfig.beatEffects()) {
+            return false;
+        }
+        if (wavyPath == null) {
+            wavyPath = new Path();
+        }
+        wavyPath.rewind();
+        float cy = rect.centerY();
+        float amplitude = AndroidUtilities.dpf2(1.7f);
+        float wave = AndroidUtilities.dpf2(24);
+        float step = AndroidUtilities.dpf2(2);
+        float phase = -rect.right / wave;
+        wavyPath.moveTo(rect.left, cy + amplitude * (float) Math.sin(2 * Math.PI * (rect.left / wave + phase)));
+        for (float x = rect.left + step; x < rect.right; x += step) {
+            wavyPath.lineTo(x, cy + amplitude * (float) Math.sin(2 * Math.PI * (x / wave + phase)));
+        }
+        Paint.Style style = paint.getStyle();
+        float strokeWidth = paint.getStrokeWidth();
+        Paint.Cap cap = paint.getStrokeCap();
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(rect.height());
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        canvas.drawPath(wavyPath, paint);
+        paint.setStyle(style);
+        paint.setStrokeWidth(strokeWidth);
+        paint.setStrokeCap(cap);
+        return true;
     }
 
     private float timestampsAppearing = 0;

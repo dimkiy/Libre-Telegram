@@ -18,7 +18,10 @@
 | `PrizmaMaxListener` | Уведомления из MAX → бот Libre |
 | `PrizmaPlaylist` | Плейлисты |
 | `PrizmaEqualizer` | Эквалайзер, бас, объём |
-| `PrizmaLyrics` | Тексты песен (lrclib.net) |
+| `PrizmaLyrics` | Тексты песен: теги файла, сервер Libre, lrclib.net |
+| `PrizmaClips` | Клипы к трекам: открытый iTunes Search API через сервер Libre, свои клипы, кэш |
+| `PrizmaWaveform` | Настоящая волна трека для перемотки |
+| `PrizmaInputCalc` | Подсказки в поле ввода: примеры, валюты, единицы, часовые пояса |
 | `PrizmaSleepTimer` | Таймер сна |
 | `PrizmaMusicStatus` | Трек в «О себе», пока играет музыка |
 | `PrizmaNet` | HTTP-запросы через прокси Telegram |
@@ -33,12 +36,24 @@
 
 | Файл | Что делает |
 |---|---|
-| `PrizmaStealthSheet` | Хаб Libre: все настройки и переключатели |
+| `PrizmaStealthSheet` | Окна выбора из настроек: иконка, номер +888, размеры |
 | `PrizmaProfileCard` | Блок Libre в профиле: даты, достижения, статус |
 | `PrizmaStatusSheet` | Выбор статуса (не беспокоить, нет на месте…) |
 | `PrizmaClanSheet` | Экран клана |
-| `PrizmaFullPlayer`, `PrizmaCardPlayer` | Большой плеер и «Новый плеер (бета)» |
-| `PrizmaPlaylistSheet`, `PrizmaPublicPlaylistSheet` | Плейлисты, свои и чужие |
+| `PrizmaFullPlayer` | Большой плеер: обложка, текст, очередь, меню |
+| `PrizmaMiniPlayer` | Мини-плеер в списке чатов и в чате |
+| `PrizmaSeekBars` | Перемотка: настоящая волна, волна от бита, лупа под пальцем |
+| `PrizmaPlayerBackdrop` | Фон плеера, кольца и искры под бит |
+| `PrizmaBeat` | Определение ударов по данным визуализатора |
+| `PrizmaPalette` | Цвета плеера из обложки |
+| `PrizmaClipView` | Видео клипа вместо обложки |
+| `PrizmaLyricsView` | Текст песни с заливкой строки |
+| `PrizmaQueuePanel` | Очередь: поиск, порядок, перетаскивание |
+| `PrizmaPlayerSettings` | Настройки плеера |
+| `PrizmaPopup`, `PrizmaSwitch`, `PrizmaSpring` | Меню «зажать и потянуть», переключатель, пружины |
+| `PrizmaLibrary`, `PrizmaPlaylistSheet`, `PrizmaPublicPlaylistSheet` | Экран «Моя музыка», добавление в плейлист, чужие плейлисты |
+| `PrizmaPdfViewer` | Просмотр PDF внутри приложения |
+| `PrizmaCalcChip` | Подсказка над полем ввода |
 | `PrizmaEqualizerSheet` | Экран эквалайзера |
 | `PrizmaLyricsSheet` | Экран текста песни |
 | `PrizmaMusicSearchSheet` | Поиск музыки по Telegram |
@@ -59,12 +74,12 @@
 | `PrizmaDialogColors` | Цветные метки чатов |
 | `PrizmaGlass`, `PrizmaSlider`, `PrizmaEntrance`, `PrizmaWaveBars`, `PrizmaVisualizerData` | Общие элементы интерфейса и анимации |
 
-Стена профиля открывается отдельным экраном: `ui/PrizmaWallActivity.java`.
+Стена профиля открывается отдельным экраном: `ui/PrizmaWallActivity.java`. Настройки Libre: `ui/PrizmaSettingsActivity.java`.
 
 ## Правки в коде Telegram
 
 Наши вставки есть, например, в этих файлах (искать по `Prizma`, полный список даёт история git):
-`ChatActivity`, `ProfileActivity`, `DialogsActivity`, `LaunchActivity`, `SettingsActivity`, `MessagesController`, `MediaController`, `NotificationsController`, `ChatMessageCell`, `DialogCell`, `StarGiftSheet`, `VoIPHelper`, `LauncherIconController`, `AndroidManifest.xml`, `strings.xml`.
+`ChatActivity`, `ProfileActivity`, `DialogsActivity`, `LaunchActivity`, `SettingsActivity`, `MainTabsLayout`, `GlassTabView`, `FragmentContextView`, `VideoPlayerSeekBar`, `MessagesController`, `MediaController`, `MediaDataController`, `NotificationsController`, `ChatMessageCell`, `DialogCell`, `StarGiftSheet`, `VoIPHelper`, `LauncherIconController`, `AndroidManifest.xml`, `strings.xml`.
 
 `BuildVars.java` берёт `api_id`/`api_hash` из `local.properties`, а настройки сборки `armLibre` лежат в `TMessagesProj_App/build.gradle`.
 

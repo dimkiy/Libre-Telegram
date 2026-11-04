@@ -616,6 +616,7 @@ public class ChatActivity extends BaseFragment implements
     private FrameLayout searchContainer;
     private ImageView searchCalendarButton;
     private ImageView searchUserButton;
+    private ImageView prizmaSearchFilterButton;
     private AnimatedTextView searchCountText;
     private AnimatedTextView searchExpandList;
     private AnimatedTextView searchOtherButton;
@@ -700,6 +701,7 @@ public class ChatActivity extends BaseFragment implements
     public String quickReplyShortcut;
     private int chatMode;
     private org.telegram.ui.Components.PrizmaTogetherBar prizmaTogetherBar;
+    private org.telegram.ui.Components.PrizmaCalcChip prizmaCalcChip;
     private int scheduledMessagesCount = -1;
     public boolean isSubscriberSuggestions;
 
@@ -2272,6 +2274,9 @@ public class ChatActivity extends BaseFragment implements
         @Override
         public void onTextChanged(final CharSequence text, boolean bigChange, boolean fromDraft) {
             MediaController.getInstance().setInputFieldHasText(!TextUtils.isEmpty(text) || chatActivityEnterView.isEditingMessage());
+            if (prizmaCalcChip != null) {
+                prizmaCalcChip.update(text);
+            }
             if (mentionContainer != null && mentionContainer.getAdapter() != null) {
                 mentionContainer.getAdapter().searchUsernameOrHashtag(text, chatActivityEnterView.getCursorPosition(), messages, false, false);
             }
@@ -7213,6 +7218,13 @@ public class ChatActivity extends BaseFragment implements
             prizmaTogetherBar = new org.telegram.ui.Components.PrizmaTogetherBar(context, this);
             final int indexToAdd = chatActivityFadeView != null ? contentView.indexOfChild(chatActivityFadeView) : -1;
             contentView.addView(prizmaTogetherBar, indexToAdd, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 62, 0, 62, 0));
+            prizmaCalcChip = new org.telegram.ui.Components.PrizmaCalcChip(context, themeDelegate, text -> {
+                if (chatActivityEnterView != null) {
+                    chatActivityEnterView.setFieldText(text);
+                    chatActivityEnterView.setSelection(text.length());
+                }
+            });
+            contentView.addView(prizmaCalcChip, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM, 12, 0, 62, 0));
         }
 
         updateMessageListAccessibilityVisibility();
@@ -10572,6 +10584,32 @@ public class ChatActivity extends BaseFragment implements
         tagSelector.setTranslationY(contentPanTranslation + (actionBarSearchTags != null ? actionBarSearchTags.getCurrentHeight() : 0));
     }
 
+    private void showPrizmaSearchFilter(View anchor) {
+        if (searchItem != null) {
+            AndroidUtilities.hideKeyboard(searchItem.getSearchField());
+        }
+        ItemOptions options = ItemOptions.makeOptions(this, anchor);
+        options.add(R.drawable.msg_list, "Все сообщения", () -> applyPrizmaSearchFilter(null));
+        options.add(R.drawable.msg_photos, "Фото", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterPhotos()));
+        options.add(R.drawable.msg_video, "Видео", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterVideo()));
+        options.add(R.drawable.msg_folders, "Файлы", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterDocument()));
+        options.add(R.drawable.msg_voicechat, "Голосовые и кружки", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterRoundVoice()));
+        options.add(R.drawable.prizma_ic_music, "Музыка", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterMusic()));
+        options.add(R.drawable.msg_link, "Ссылки", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterUrl()));
+        options.add(R.drawable.msg_gif, "GIF", () -> applyPrizmaSearchFilter(new TLRPC.TL_inputMessagesFilterGif()));
+        options.setGravity(Gravity.LEFT);
+        options.show();
+    }
+
+    private void applyPrizmaSearchFilter(TLRPC.MessagesFilter filter) {
+        getMediaDataController().prizmaSearchFilter = filter;
+        if (prizmaSearchFilterButton != null) {
+            int color = getThemedColor(filter == null ? Theme.key_chat_searchPanelIcons : Theme.key_windowBackgroundWhiteBlueText2);
+            prizmaSearchFilterButton.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+        }
+        getMediaDataController().searchMessagesInChat(searchingQuery == null ? "" : searchingQuery, dialog_id, mergeDialogId, classGuid, 0, threadMessageId, false, searchingUserMessages, searchingChatMessages, true, searchingReaction);
+    }
+
     private void createSearchContainer() {
         if (searchContainer != null || getContext() == null) {
             return;
@@ -10588,6 +10626,18 @@ public class ChatActivity extends BaseFragment implements
                     }
                     if (searchUserButton != null && searchUserButton.getVisibility() != GONE) {
                         leftMargin += 48;
+                    }
+                    if (prizmaSearchFilterButton != null) {
+                        leftMargin += 48;
+                    }
+                    ((MarginLayoutParams) child.getLayoutParams()).leftMargin = AndroidUtilities.dp(leftMargin);
+                } else if (child == prizmaSearchFilterButton) {
+                    float leftMargin = 2.66f;
+                    if (searchCalendarButton != null && searchCalendarButton.getVisibility() != GONE) {
+                        leftMargin += 46;
+                    }
+                    if (searchUserButton != null && searchUserButton.getVisibility() != GONE) {
+                        leftMargin += 46;
                     }
                     ((MarginLayoutParams) child.getLayoutParams()).leftMargin = AndroidUtilities.dp(leftMargin);
                 }
@@ -10673,6 +10723,14 @@ public class ChatActivity extends BaseFragment implements
             searchCalendarButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_searchPanelIcons), PorterDuff.Mode.MULTIPLY));
             searchCalendarButton.setBackgroundDrawable(Theme.createSelectorDrawable(getThemedColor(Theme.key_actionBarActionModeDefaultSelector), 1));
             searchContainer.addView(searchCalendarButton, LayoutHelper.createFrame(44, 44, Gravity.LEFT | Gravity.TOP, 2.66f, 0, 0, 0));
+            prizmaSearchFilterButton = new ImageView(getContext());
+            prizmaSearchFilterButton.setScaleType(ImageView.ScaleType.CENTER);
+            prizmaSearchFilterButton.setImageResource(R.drawable.msg_media);
+            prizmaSearchFilterButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_searchPanelIcons), PorterDuff.Mode.SRC_IN));
+            prizmaSearchFilterButton.setBackgroundDrawable(Theme.createSelectorDrawable(getThemedColor(Theme.key_actionBarActionModeDefaultSelector), 1));
+            prizmaSearchFilterButton.setContentDescription("Фильтр по типу");
+            prizmaSearchFilterButton.setOnClickListener(this::showPrizmaSearchFilter);
+            searchContainer.addView(prizmaSearchFilterButton, LayoutHelper.createFrame(44, 44, Gravity.LEFT | Gravity.TOP, 2.66f, 0, 0, 0));
             searchCalendarButton.setOnClickListener(view -> {
                 if (getParentActivity() == null) {
                     return;
@@ -10989,6 +11047,9 @@ public class ChatActivity extends BaseFragment implements
             sideControlsButtonsLayout.setTranslationY(baseTranslationY2);
             if (prizmaTogetherBar != null) {
                 prizmaTogetherBar.setTranslationY(baseTranslationY2 - dp(4));
+            }
+            if (prizmaCalcChip != null) {
+                prizmaCalcChip.setTranslationY(baseTranslationY2 - dp(6));
             }
         }
 
@@ -38965,6 +39026,12 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void onSearchCollapse() {
+            if (getMediaDataController().prizmaSearchFilter != null) {
+                getMediaDataController().prizmaSearchFilter = null;
+                if (prizmaSearchFilterButton != null) {
+                    prizmaSearchFilterButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_searchPanelIcons), PorterDuff.Mode.SRC_IN));
+                }
+            }
             searching = false;
             updatePagedownButtonVisibility(true);
             updateSearchUpDownButtonVisibility(true);

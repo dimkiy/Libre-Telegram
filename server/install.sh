@@ -27,11 +27,11 @@ fi
 
 echo "== пользователь и папки"
 id libre >/dev/null 2>&1 || useradd --system --home /var/lib/libre --shell /usr/sbin/nologin libre
-mkdir -p /opt/libre /var/lib/libre/db /var/lib/libre/media/b /var/lib/libre/media/w /var/lib/libre/media/app /var/backups/libre
+mkdir -p /opt/libre /var/lib/libre/db /var/lib/libre/media/b /var/lib/libre/media/w /var/lib/libre/media/app /var/lib/libre/media/c /var/backups/libre
 cp server.py /opt/libre/server.py
 cp publish-update.sh /root/publish-update.sh
 chown -R libre:libre /var/lib/libre
-chmod 755 /var/lib/libre /var/lib/libre/media /var/lib/libre/media/b /var/lib/libre/media/w /var/lib/libre/media/app
+chmod 755 /var/lib/libre /var/lib/libre/media /var/lib/libre/media/b /var/lib/libre/media/w /var/lib/libre/media/app /var/lib/libre/media/c
 chmod 700 /var/lib/libre/db
 
 echo "== python"

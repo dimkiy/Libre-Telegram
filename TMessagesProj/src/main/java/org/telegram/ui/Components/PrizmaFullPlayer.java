@@ -1,134 +1,82 @@
 package org.telegram.ui.Components;
 
+import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.LinearGradient;
+import android.graphics.Outline;
 import android.graphics.Paint;
-import android.graphics.Rect;
+import android.graphics.Path;
 import android.graphics.RectF;
-import android.graphics.Shader;
-import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.text.TextPaint;
+import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
+import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.core.content.FileProvider;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.PrizmaClips;
+import org.telegram.messenger.PrizmaConfig;
 import org.telegram.messenger.PrizmaLyrics;
+import org.telegram.messenger.PrizmaPlaylist;
 import org.telegram.messenger.PrizmaSleepTimer;
+import org.telegram.messenger.PrizmaWaveform;
 import org.telegram.messenger.R;
-import org.telegram.ui.ActionBar.BottomSheet;
+import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ChatActivity;
+import org.telegram.ui.LaunchActivity;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 
-public class PrizmaFullPlayer extends Dialog {
-    private final Context ctx;
-    private BackupImageView cover;
-    private PrizmaWaveBars waveBars;
-    private TextView titleView;
-    private PrizmaLyrics.Lyrics currentLyrics;
-    private TextView authorView;
-    private TextView timeCur;
-    private TextView timeDur;
-    private AppleSeek seek;
-    private ImageView playButton;
-    private ImageView likeButton;
-    private PlayPauseDrawable playPauseDrawable;
-    private LyricsPanel lyricsPanel;
-    private QueueView queueView;
-    private FrameLayout root;
-    private ImageView repeatButton;
-    private ImageView shuffleButton;
-    private ImageView shareButtonTop;
-    private BeatBackground beatBg;
-    private int accentColor = ACCENT;
-
-    private LinearLayout controls;
-    private LinearLayout nextBar;
-    private TextView nextBarLabel;
-    private LinearLayout togetherBar;
-    private TextView togetherEyebrow, togetherLabel, togetherButton;
-    private String togetherKey = "";
-    private TextView nextEyebrow;
-    private BackupImageView nextCover;
-    private int coverBaseSide;
-    private boolean editMode;
-    private static boolean lite() {
-        try { return !org.telegram.messenger.PrizmaConfig.fancyEffects(); } catch (Throwable e) { return false; }
-    }
-    private LinearLayout editBar;
-
-    private boolean userSeeking;
-    private long loadedMsgId = Long.MIN_VALUE;
-    private long lyricsForMsgId = Long.MIN_VALUE;
-    private boolean running;
-
-    private Bitmap blurBg;
-    private Bitmap blurSrcRef;
-    private long blurForMsgId = Long.MIN_VALUE;
-    private boolean coverWaiting;
-    private final Paint bgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-    private final Paint scrimPaint = new Paint();
-    private int scrimForHeight = -1;
-    private final Rect bgDst = new Rect();
-    private final Rect bgSrc = new Rect();
-    private final Paint themePaint = new Paint();
-    private int themeForH = -1;
-    private final Paint accentBgPaint = new Paint();
-    private int accentBgForH = -1, accentBgColor = 0;
-
-    private float beatAmp, beatAmpTarget;
-    private long beatLastTime;
-    private final Paint edgePaint = new Paint();
-    private LinearGradient edgeLeft, edgeRight;
-    private int edgeW = -1;
-    private int edgeAccent = 0;
-    private final PrizmaVisualizerData.Listener beatListener = (playing, animate, values) -> {
-        float m = 0;
-        if (values != null) {
-            for (float v : values) m = Math.max(m, v);
-        }
-        beatAmpTarget = playing ? Math.max(0f, Math.min(1f, m)) : 0f;
-        if (root != null) root.postInvalidateOnAnimation();
-    };
+public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
+    private static final int PAGE_COVER = 0, PAGE_LYRICS = 1, PAGE_QUEUE = 2;
+    private static final int TEXT = 0xfff2f1ee, TEXT_2 = 0xa6f2f1ee, TEXT_3 = 0x66f2f1ee;
 
     private static boolean open;
+    private static PrizmaFullPlayer instance;
 
     public static boolean isOpen() {
         return open;
     }
 
     public static void show(Context context) {
-        if (context == null || MediaController.getInstance().getPlayingMessageObject() == null) {
-            return;
-        }
-        if (open) {
-            return;
-        }
-        if (org.telegram.messenger.PrizmaConfig.betaPlayer()) {
-            PrizmaCardPlayer.show(context);
+        if (context == null || open || MediaController.getInstance().getPlayingMessageObject() == null) {
             return;
         }
         try {
@@ -137,8 +85,83 @@ public class PrizmaFullPlayer extends Dialog {
         }
     }
 
+    private final Context ctx;
+    private DragRoot root;
+    private LinearLayout column;
+    private PrizmaPlayerBackdrop backdrop;
+    private TextView topTitle, topSubtitle;
+    private LinearLayout togetherBar;
+    private TextView togetherEyebrow, togetherLabel, togetherButton;
+    private String togetherKey = "";
+    private FrameLayout stage;
+    private LyricsPanel lyricsPanel;
+    private PrizmaQueuePanel queuePanel;
+    private FrameLayout coverBox, coverInner;
+    private BackupImageView cover;
+    private PrizmaClipView clipView;
+    private FrameLayout titleRow;
+    private LinearLayout titles;
+    private TextView titleView, authorView;
+    private HeartButton heart;
+    private PrizmaSeekBars seek;
+    private TextView timeCur, timeDur;
+    private DotIcon shuffleButton, repeatButton;
+    private PillButton prevButton, playButton, nextButton;
+    private PlayPauseDrawable playPause;
+    private TextView speedButton;
+    private GroupButton lyricsButton, queueButton;
+    private ImageView optionsButton;
+
+    private PrizmaPalette palette = PrizmaPalette.fallback();
+    private int lastSeed;
+    private long loadedKey = Long.MIN_VALUE;
+    private long lyricsKey = Long.MIN_VALUE;
+    private long clipKey = Long.MIN_VALUE;
+    private long blurKey = Long.MIN_VALUE;
+    private long wavePeaksKey = Long.MIN_VALUE;
+    private long waveRetryAt;
+    private boolean running;
+    private boolean coverWaiting;
+    private boolean closing;
+    private Bitmap blurBitmap, blurSource;
+
+    private int page = PAGE_COVER;
+    private float pageProgress;
+    private float lyricsAlpha, queueAlpha;
+    private int coverSide;
+    private float bigX, bigY, smallX, smallY;
+    private int smallSize;
+    private boolean titlesInset;
+    private PrizmaLyrics.Lyrics currentLyrics;
+    private boolean lyricsAnswered;
+
+    private final PrizmaSpring pageSpring = new PrizmaSpring(0f, 380f, 0.84f, v -> {
+        pageProgress = v;
+        applyPage();
+    });
+    private final PrizmaSpring lyricsSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 1f, v -> {
+        lyricsAlpha = v;
+        applyPanels();
+    });
+    private final PrizmaSpring queueSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 1f, v -> {
+        queueAlpha = v;
+        applyPanels();
+    });
+    private final PrizmaSpring kick = new PrizmaSpring(1f, 520f, 0.42f, v -> {
+        if (coverInner != null) {
+            coverInner.setScaleX(v);
+            coverInner.setScaleY(v);
+        }
+    });
+    private final PrizmaSpring swipe = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.78f, v -> {
+        if (coverInner != null) {
+            coverInner.setTranslationX(v);
+            coverInner.setRotation(coverSide == 0 ? 0f : v / coverSide * 7f);
+        }
+    });
+
     public PrizmaFullPlayer(Context context) {
-        super(context);
+        super(context, R.style.TransparentDialog);
         this.ctx = context;
     }
 
@@ -146,165 +169,150 @@ public class PrizmaFullPlayer extends Dialog {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+        if (org.telegram.ui.ActionBar.Theme.playPauseAnimator == null) org.telegram.ui.ActionBar.Theme.createChatResources(ctx, false);
 
-        root = new FrameLayout(ctx) {
-            @Override
-            protected void onDetachedFromWindow() {
-                super.onDetachedFromWindow();
-                release();
-            }
-
-            @Override
-            protected void onDraw(Canvas canvas) {
-                int w = getWidth(), h = getHeight();
-                long now = System.currentTimeMillis();
-                float dt = beatLastTime == 0 ? 16 : Math.min(40, now - beatLastTime);
-                beatLastTime = now;
-                beatAmp += (beatAmpTarget - beatAmp) * Math.min(1f, dt / 170f * 2f);
-
-                int mode;
-                try { mode = org.telegram.messenger.PrizmaConfig.playerBg(); } catch (Throwable e) { mode = 0; }
-
-                try {
-                    if (mode == 2) {
-                        drawThemeBg(canvas, w, h);
-                    } else if (mode == 3) {
-                        drawAccentBg(canvas, w, h);
-                    } else if (mode == 1 && blurSrcRef != null && !blurSrcRef.isRecycled()) {
-                        float s = 1f + 0.02f * beatAmp;
-                        drawCenterCrop(canvas, blurSrcRef, w, h, s);
-                    } else if (blurBg != null && !blurBg.isRecycled()) {
-                        float s = 1f + 0.028f * beatAmp;
-                        int ex = (int) (w * (s - 1f) / 2f), ey = (int) (h * (s - 1f) / 2f);
-                        bgDst.set(-ex, -ey, w + ex, h + ey);
-                        canvas.drawBitmap(blurBg, null, bgDst, bgPaint);
-                    } else {
-                        canvas.drawColor(0xff0e0e12);
-                    }
-                } catch (Throwable e) {
-                    canvas.drawColor(0xff0e0e12);
-                }
-                if (scrimForHeight != h) {
-                    scrimForHeight = h;
-                    scrimPaint.setShader(new LinearGradient(0, 0, 0, h,
-                            new int[]{0x55000000, 0x22000000, 0x66000000, 0xdd000000},
-                            new float[]{0f, 0.35f, 0.7f, 1f}, Shader.TileMode.CLAMP));
-                }
-                canvas.drawRect(0, 0, w, h, scrimPaint);
-
-                float glow = (float) Math.pow(Math.max(0f, Math.min(1f, beatAmp)), 0.7f);
-                if (!lite() && glow > 0.015f && w > 0) {
-                    int edgeWidth = (int) (w * 0.34f);
-                    float hue = (now / 70f) % 360f;
-                    int bucket = (int) (hue / 8f);
-                    if (edgeW != w || edgeAccent != bucket) {
-                        edgeW = w;
-                        edgeAccent = bucket;
-                        int c0 = Color.HSVToColor(new float[]{hue, 0.52f, 1f});
-                        int cMid = (c0 & 0x00ffffff) | 0x30000000;
-                        int c1 = c0 & 0x00ffffff;
-                        edgeLeft = new LinearGradient(0, 0, edgeWidth, 0,
-                                new int[]{c0, cMid, c1}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP);
-                        edgeRight = new LinearGradient(w - edgeWidth, 0, w, 0,
-                                new int[]{c1, cMid, c0}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
-                    }
-                    int a = (int) (58 * glow);
-                    edgePaint.setShader(edgeLeft);
-                    edgePaint.setAlpha(a);
-                    canvas.drawRect(0, 0, edgeWidth, h, edgePaint);
-                    edgePaint.setShader(edgeRight);
-                    edgePaint.setAlpha(a);
-                    canvas.drawRect(w - edgeWidth, 0, w, h, edgePaint);
-                    org.telegram.messenger.PrizmaConfig.nextDecorFrame(this);
-                } else if (Math.abs(beatAmpTarget - beatAmp) > 0.01f) {
-                    postInvalidateOnAnimation();
-                }
-            }
-        };
-        root.setWillNotDraw(false);
-
-        LinearLayout column = new LinearLayout(ctx);
-        column.setOrientation(LinearLayout.VERTICAL);
-        column.setPadding(AndroidUtilities.dp(26), AndroidUtilities.dp(10) + AndroidUtilities.statusBarHeight, AndroidUtilities.dp(26), AndroidUtilities.dp(18) + AndroidUtilities.navigationBarHeight);
-        column.setClipChildren(false);
-        column.setClipToPadding(false);
+        root = new DragRoot(ctx);
         root.setClipChildren(false);
 
-        ImageView close = new ImageView(ctx);
-        close.setImageResource(R.drawable.arrow_more);
-        close.setColorFilter(0xffffffff);
-        close.setScaleType(ImageView.ScaleType.CENTER);
-        close.setOnClickListener(v -> dismiss());
-        FrameLayout topBar = new FrameLayout(ctx);
-        topBar.addView(close, LayoutHelper.createFrame(40, 40, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+        backdrop = new PrizmaPlayerBackdrop(ctx);
+        backdrop.beatSink = this::onBeat;
+        root.addView(backdrop, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        LinearLayout rightBar = new LinearLayout(ctx);
-        rightBar.setOrientation(LinearLayout.HORIZONTAL);
-        rightBar.setGravity(Gravity.CENTER_VERTICAL);
+        column = new LinearLayout(ctx);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setClipChildren(false);
+        column.setClipToPadding(false);
+        column.setPadding(AndroidUtilities.dp(20), AndroidUtilities.statusBarHeight, AndroidUtilities.dp(20), AndroidUtilities.dp(12) + AndroidUtilities.navigationBarHeight);
+        root.addView(column, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        shareButtonTop = new ImageView(ctx);
-        shareButtonTop.setImageResource(R.drawable.msg_share);
-        shareButtonTop.setColorFilter(0xffffffff);
-        shareButtonTop.setScaleType(ImageView.ScaleType.CENTER);
-        shareButtonTop.setOnClickListener(v -> shareCurrentTrack());
-        rightBar.addView(shareButtonTop, LayoutHelper.createLinear(40, 40, Gravity.CENTER_VERTICAL, 0, 0, 4, 0));
+        column.addView(buildTopBar(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 56));
+        column.addView(buildTogetherBar(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 6));
 
-        likeButton = new ImageView(ctx);
-        likeButton.setScaleType(ImageView.ScaleType.CENTER);
-        likeButton.setImageDrawable(addDrawable = new AddDrawable());
-        likeButton.setContentDescription("Добавить в плейлист");
-        likeButton.setOnClickListener(v -> {
+        stage = new FrameLayout(ctx);
+        lyricsPanel = new LyricsPanel(ctx);
+        lyricsPanel.setVisibility(View.GONE);
+        stage.addView(lyricsPanel, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        queuePanel = new PrizmaQueuePanel(ctx, this);
+        queuePanel.setVisibility(View.GONE);
+        stage.addView(queuePanel, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        column.addView(stage, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
+
+        column.addView(buildTitleRow(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 68, 0, 8, 0, 0));
+
+        seek = new PrizmaSeekBars(ctx);
+        seek.listener = (progress, committed) -> {
             MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
             if (mo == null) return;
-            PrizmaPlaylistSheet.showAddToPlaylist(ctx, root, accentColor, mo, () -> {
-                boolean in = org.telegram.messenger.PrizmaPlaylist.inAny(mo);
-                if (in && !addDrawable.isChecked()) popAddButton();
-                updateLikeIcon(in);
-            });
-        });
-        rightBar.addView(likeButton, LayoutHelper.createLinear(40, 40, Gravity.CENTER_VERTICAL, 0, 0, 4, 0));
+            timeCur.setText(formatTime((int) (mo.getDuration() * progress)));
+            if (committed) MediaController.getInstance().seekToProgress(mo, progress);
+        };
+        column.addView(seek, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 2, 0, 0));
 
-        ImageView options = new ImageView(ctx);
-        options.setImageResource(R.drawable.ic_ab_other);
-        options.setColorFilter(0xffffffff);
-        options.setScaleType(ImageView.ScaleType.CENTER);
-        options.setOnClickListener(v -> showOptions());
-        rightBar.addView(options, LayoutHelper.createLinear(40, 40, Gravity.CENTER_VERTICAL));
+        FrameLayout times = new FrameLayout(ctx);
+        timeCur = timeLabel();
+        timeDur = timeLabel();
+        times.addView(timeCur, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT));
+        times.addView(timeDur, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT));
+        column.addView(times, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
 
-        topBar.addView(rightBar, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
-        column.addView(topBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 10, 0, 8));
+        column.addView(buildControls(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 76, 0, 10, 0, 0));
+        column.addView(buildBottomRow(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 12, 0, 0));
 
+        coverBox = new FrameLayout(ctx);
+        coverBox.setClipChildren(false);
+        coverBox.setPivotX(0);
+        coverBox.setPivotY(0);
+        coverInner = new FrameLayout(ctx);
+        cover = new BackupImageView(ctx);
+        cover.setRoundRadius(AndroidUtilities.dp(28));
+        coverInner.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        clipView = new PrizmaClipView(ctx);
+        clipView.setRadius(AndroidUtilities.dp(28));
+        coverInner.addView(clipView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        coverBox.addView(coverInner, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        attachCoverGestures();
+        root.addView(coverBox, new FrameLayout.LayoutParams(AndroidUtilities.dp(200), AndroidUtilities.dp(200)));
+
+        setContentView(root, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setupWindow();
+
+        column.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> root.post(this::measureStage));
+        root.setTranslationY(AndroidUtilities.displaySize.y);
+        applyPalette(PrizmaPalette.fallback(), false);
+        updateTrack(true);
+    }
+
+    private void setupWindow() {
+        Window window = getWindow();
+        PrizmaGlass.fullBleed(window);
+        if (window != null) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        }
+    }
+
+    private View buildTopBar() {
+        FrameLayout bar = new FrameLayout(ctx);
+        ImageView close = iconButton(R.drawable.arrow_more, TEXT);
+        close.setContentDescription("Свернуть плеер");
+        close.setOnClickListener(v -> dismiss());
+        bar.addView(close, LayoutHelper.createFrame(44, 44, Gravity.LEFT | Gravity.CENTER_VERTICAL, -10, 0, 0, 0));
+
+        LinearLayout center = new LinearLayout(ctx);
+        center.setOrientation(LinearLayout.VERTICAL);
+        center.setGravity(Gravity.CENTER_HORIZONTAL);
+        topTitle = new TextView(ctx);
+        topTitle.setTextColor(TEXT);
+        topTitle.setTextSize(15);
+        topTitle.setTypeface(AndroidUtilities.bold());
+        topTitle.setSingleLine(true);
+        topTitle.setEllipsize(TextUtils.TruncateAt.END);
+        center.addView(topTitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
+        topSubtitle = new TextView(ctx);
+        topSubtitle.setTextColor(TEXT_3);
+        topSubtitle.setTextSize(12.5f);
+        topSubtitle.setSingleLine(true);
+        center.addView(topSubtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 1, 0, 0));
+        center.setOnClickListener(v -> setPage(page == PAGE_QUEUE ? PAGE_COVER : PAGE_QUEUE));
+        bar.addView(center, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 44, 0, 44, 0));
+
+        optionsButton = iconButton(R.drawable.ic_ab_other, TEXT);
+        optionsButton.setContentDescription("Ещё");
+        PrizmaPopup.attachHold(optionsButton, this::openMenu);
+        bar.addView(optionsButton, LayoutHelper.createFrame(44, 44, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, -10, 0));
+        return bar;
+    }
+
+    private View buildTogetherBar() {
         togetherBar = new LinearLayout(ctx);
         togetherBar.setOrientation(LinearLayout.HORIZONTAL);
         togetherBar.setGravity(Gravity.CENTER_VERTICAL);
         togetherBar.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8));
-        GradientDrawable tbBg = new GradientDrawable();
-        tbBg.setCornerRadius(AndroidUtilities.dp(16));
-        tbBg.setColor(0x26ffffff);
-        togetherBar.setBackground(tbBg);
-        LinearLayout tbTexts = new LinearLayout(ctx);
-        tbTexts.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(AndroidUtilities.dp(18));
+        bg.setColor(0x1fffffff);
+        togetherBar.setBackground(bg);
+        LinearLayout texts = new LinearLayout(ctx);
+        texts.setOrientation(LinearLayout.VERTICAL);
         togetherEyebrow = new TextView(ctx);
-        togetherEyebrow.setTextSize(9.5f);
+        togetherEyebrow.setTextSize(12);
         togetherEyebrow.setTypeface(AndroidUtilities.bold());
-        togetherEyebrow.setLetterSpacing(0.14f);
-        tbTexts.addView(togetherEyebrow);
+        texts.addView(togetherEyebrow);
         togetherLabel = new TextView(ctx);
         togetherLabel.setTextColor(0xe6ffffff);
         togetherLabel.setTextSize(13.5f);
         togetherLabel.setMaxLines(1);
-        togetherLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        tbTexts.addView(togetherLabel, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
-        togetherBar.addView(tbTexts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
+        togetherLabel.setEllipsize(TextUtils.TruncateAt.END);
+        texts.addView(togetherLabel, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
+        togetherBar.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
         togetherButton = new TextView(ctx);
         togetherButton.setTextColor(0xffffffff);
         togetherButton.setTextSize(13);
         togetherButton.setTypeface(AndroidUtilities.bold());
         togetherButton.setPadding(AndroidUtilities.dp(13), AndroidUtilities.dp(6), AndroidUtilities.dp(13), AndroidUtilities.dp(6));
-        GradientDrawable tbBtnBg = new GradientDrawable();
-        tbBtnBg.setCornerRadius(AndroidUtilities.dp(14));
-        tbBtnBg.setColor(0x33ffffff);
-        togetherButton.setBackground(tbBtnBg);
+        GradientDrawable button = new GradientDrawable();
+        button.setCornerRadius(AndroidUtilities.dp(14));
+        button.setColor(0x33ffffff);
+        togetherButton.setBackground(button);
         togetherButton.setOnClickListener(v -> {
             PrizmaTogether t = PrizmaTogether.get();
             if (t.isHosting()) {
@@ -316,147 +324,78 @@ public class PrizmaFullPlayer extends Dialog {
         });
         togetherBar.addView(togetherButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 10, 0, 0, 0));
         togetherBar.setVisibility(View.GONE);
-        column.addView(togetherBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
+        return togetherBar;
+    }
 
-        nextBar = new LinearLayout(ctx);
-        nextBar.setOrientation(LinearLayout.HORIZONTAL);
-        nextBar.setGravity(Gravity.CENTER_VERTICAL);
-        nextBar.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(7), AndroidUtilities.dp(12), AndroidUtilities.dp(7));
-        GradientDrawable nbBg = new GradientDrawable();
-        nbBg.setCornerRadius(AndroidUtilities.dp(16));
-        nbBg.setColor(0x26ffffff);
-        nextBar.setBackground(nbBg);
-
-        nextCover = new BackupImageView(ctx);
-        nextCover.setRoundRadius(AndroidUtilities.dp(8));
-        nextBar.addView(nextCover, LayoutHelper.createLinear(34, 34, Gravity.CENTER_VERTICAL, 0, 0, 10, 0));
-
-        LinearLayout nbTexts = new LinearLayout(ctx);
-        nbTexts.setOrientation(LinearLayout.VERTICAL);
-        nextEyebrow = new TextView(ctx);
-        nextEyebrow.setText("ДАЛЕЕ");
-        nextEyebrow.setTextColor(accentColor);
-        nextEyebrow.setTextSize(9.5f);
-        nextEyebrow.setTypeface(AndroidUtilities.bold());
-        nextEyebrow.setLetterSpacing(0.14f);
-        nbTexts.addView(nextEyebrow);
-        nextBarLabel = new TextView(ctx);
-        nextBarLabel.setTextColor(0xe6ffffff);
-        nextBarLabel.setTextSize(13.5f);
-        nextBarLabel.setMaxLines(1);
-        nextBarLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        nbTexts.addView(nextBarLabel, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
-        nextBar.addView(nbTexts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
-
-        TextView nbChevron = new TextView(ctx);
-        nbChevron.setText("›");
-        nbChevron.setTextColor(0x99ffffff);
-        nbChevron.setTextSize(20);
-        nextBar.addView(nbChevron, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
-        nextBar.setOnClickListener(v -> {
-            if (queueView != null) queueView.showFull();
-        });
-        column.addView(nextBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
-
-        cover = new BackupImageView(ctx);
-        cover.setRoundRadius(AndroidUtilities.dp(18));
-        int side = Math.min(AndroidUtilities.displaySize.x - AndroidUtilities.dp(72), (int) (AndroidUtilities.displaySize.y * 0.34f));
-        coverBaseSide = side;
-        LinearLayout.LayoutParams coverLp = new LinearLayout.LayoutParams(side, side);
-        coverLp.gravity = Gravity.CENTER_HORIZONTAL;
-        coverLp.topMargin = AndroidUtilities.dp(6);
-        coverLp.bottomMargin = AndroidUtilities.dp(14);
-        column.addView(cover, coverLp);
-
-        final android.view.GestureDetector coverGestures = new android.view.GestureDetector(ctx, new android.view.GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onDown(MotionEvent e) {
-                return true;
-            }
-
-            @Override
-            public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
-                if (e1 == null || e2 == null) return false;
-                float dx = e2.getX() - e1.getX();
-                float dy = e2.getY() - e1.getY();
-                if (Math.abs(dy) > Math.abs(dx) && dy > AndroidUtilities.dp(60)) {
-                    dismiss();
-                    return true;
-                }
-                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > AndroidUtilities.dp(60)) {
-                    if (dx < 0) MediaController.getInstance().playNextMessage();
-                    else MediaController.getInstance().playPreviousMessage();
-                    return true;
-                }
-                return false;
-            }
-        });
-        cover.setOnTouchListener((v, ev) -> coverGestures.onTouchEvent(ev));
-
+    private View buildTitleRow() {
+        titleRow = new FrameLayout(ctx);
+        titles = new LinearLayout(ctx);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setGravity(Gravity.CENTER_VERTICAL);
         titleView = new TextView(ctx);
-        titleView.setTextColor(0xffffffff);
-        titleView.setTextSize(24);
+        titleView.setTextColor(TEXT);
+        titleView.setTextSize(23);
         titleView.setTypeface(AndroidUtilities.bold());
-        titleView.setMaxLines(1);
-        titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        column.addView(titleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
+        titleView.setSingleLine(true);
+        titleView.setEllipsize(TextUtils.TruncateAt.END);
+        titles.addView(titleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         authorView = new TextView(ctx);
-        authorView.setTextColor(0xb3ffffff);
-        authorView.setTextSize(15);
-        authorView.setMaxLines(1);
-        authorView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        column.addView(authorView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 10));
+        authorView.setTextColor(TEXT_2);
+        authorView.setTextSize(15.5f);
+        authorView.setSingleLine(true);
+        authorView.setEllipsize(TextUtils.TruncateAt.END);
+        titles.addView(authorView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
+        titleRow.addView(titles, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT, 0, 0, 52, 0));
 
-        seek = new AppleSeek(ctx);
-        seek.onSeek = (progress, committed) -> {
-            userSeeking = !committed;
-            if (committed) {
-                MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
-                if (mo != null) {
-                    MediaController.getInstance().seekToProgress(mo, progress);
-                }
-            }
-        };
-        column.addView(seek, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 40));
-
-        LinearLayout times = new LinearLayout(ctx);
-        times.setOrientation(LinearLayout.HORIZONTAL);
-        timeCur = timeLabel(Gravity.LEFT);
-        timeDur = timeLabel(Gravity.RIGHT);
-        times.addView(timeCur, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
-        times.addView(timeDur, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
-        column.addView(times, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 8));
-
-        controls = new LinearLayout(ctx);
-        controls.setOrientation(LinearLayout.HORIZONTAL);
-        controls.setGravity(Gravity.CENTER);
-
-        shuffleButton = new ImageView(ctx);
-        shuffleButton.setScaleType(ImageView.ScaleType.CENTER);
-        shuffleButton.setImageResource(R.drawable.player_new_shuffle);
-        shuffleButton.setOnClickListener(v -> {
-            boolean on = org.telegram.messenger.SharedConfig.shuffleMusic;
-            try { MediaController.getInstance().setPlaybackOrderType(on ? 0 : 2); } catch (Throwable ignore) {}
-            updateShuffleIcon();
-            updateNextBar();
+        heart = new HeartButton(ctx);
+        heart.setContentDescription("Добавить в плейлист");
+        heart.setOnClickListener(v -> {
+            MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+            if (mo == null) return;
+            PrizmaPlaylistSheet.showAddToPlaylist(ctx, root, palette.accent, mo, () -> heart.setChecked(PrizmaPlaylist.inAny(mo), true));
         });
-        controls.addView(shuffleButton, LayoutHelper.createLinear(44, 44, Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
+        titleRow.addView(heart, LayoutHelper.createFrame(48, 48, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, -6, 0));
+        return titleRow;
+    }
 
-        RLottieImageView prev = new RLottieImageView(ctx);
-        prev.setAnimation(R.raw.player_prev, 32, 32);
-        tintLottie(prev);
-        prev.setScaleType(ImageView.ScaleType.CENTER);
-        prev.setOnClickListener(v -> MediaController.getInstance().playPreviousMessage());
-        controls.addView(prev, LayoutHelper.createLinear(62, 62, Gravity.CENTER_VERTICAL, 0, 0, 22, 0));
+    private View buildControls() {
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        row.setClipChildren(false);
 
-        playButton = new ImageView(ctx);
-        playButton.setScaleType(ImageView.ScaleType.CENTER);
-        playPauseDrawable = new PlayPauseDrawable(48);
-        playPauseDrawable.setPause(!MediaController.getInstance().isMessagePaused(), false);
-        playButton.setImageDrawable(playPauseDrawable);
-        playButton.setColorFilter(0xffffffff);
+        shuffleButton = new DotIcon(ctx, R.drawable.player_new_shuffle);
+        shuffleButton.setContentDescription("Перемешать");
+        shuffleButton.setOnClickListener(v -> {
+            boolean on = SharedConfig.shuffleMusic;
+            try {
+                MediaController.getInstance().setPlaybackOrderType(on ? 0 : 2);
+            } catch (Throwable ignore) {
+            }
+            updateShuffle();
+            if (queuePanel != null) queuePanel.refresh();
+            updateTopBar();
+        });
+        row.addView(shuffleButton, LayoutHelper.createLinear(44, 44, Gravity.CENTER_VERTICAL));
+
+        prevButton = new PillButton(ctx);
+        prevButton.setContentDescription("Предыдущий трек");
+        prevButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_prev).mutate());
+        prevButton.setOnClickListener(v -> {
+            press(v);
+            prevButton.nudge(-1f);
+            MediaController.getInstance().playPreviousMessage();
+        });
+        row.addView(prevButton, LayoutHelper.createLinear(0, 62, 1f, Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
+
+        playButton = new PillButton(ctx);
+        playPause = new PlayPauseDrawable(30);
+        playPause.setPause(!MediaController.getInstance().isMessagePaused(), false);
+        playButton.setIcon(playPause);
+        playButton.setContentDescription("Пауза или воспроизведение");
+        playButton.neighbors(prevButton, null);
         playButton.setOnClickListener(v -> {
+            press(v);
             MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
             if (mo == null) return;
             if (MediaController.getInstance().isMessagePaused()) {
@@ -465,476 +404,278 @@ public class PrizmaFullPlayer extends Dialog {
                 MediaController.getInstance().pauseMessage(mo);
             }
         });
-        controls.addView(playButton, LayoutHelper.createLinear(84, 84, Gravity.CENTER_VERTICAL));
+        row.addView(playButton, LayoutHelper.createLinear(0, 74, 1.5f, Gravity.CENTER_VERTICAL, 6, 0, 6, 0));
 
-        RLottieImageView next = new RLottieImageView(ctx);
-        next.setAnimation(R.raw.player_prev, 32, 32);
-        tintLottie(next);
-        next.setScaleType(ImageView.ScaleType.CENTER);
-        next.setScaleX(-1f);
-        next.setOnClickListener(v -> MediaController.getInstance().playNextMessage());
-        controls.addView(next, LayoutHelper.createLinear(62, 62, Gravity.CENTER_VERTICAL, 22, 0, 0, 0));
+        nextButton = new PillButton(ctx);
+        nextButton.setContentDescription("Следующий трек");
+        nextButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_next).mutate());
+        nextButton.setOnClickListener(v -> {
+            press(v);
+            nextButton.nudge(1f);
+            MediaController.getInstance().playNextMessage();
+        });
+        playButton.neighbors(prevButton, nextButton);
+        row.addView(nextButton, LayoutHelper.createLinear(0, 62, 1f, Gravity.CENTER_VERTICAL, 0, 0, 8, 0));
 
-        repeatButton = new ImageView(ctx);
-        repeatButton.setScaleType(ImageView.ScaleType.CENTER);
+        repeatButton = new DotIcon(ctx, R.drawable.player_new_repeatall);
+        repeatButton.setContentDescription("Повтор");
         repeatButton.setOnClickListener(v -> {
-            int m = (org.telegram.messenger.SharedConfig.repeatMode + 1) % 3;
-            org.telegram.messenger.SharedConfig.setRepeatMode(m);
-            updateRepeatIcon();
+            SharedConfig.setRepeatMode((SharedConfig.repeatMode + 1) % 3);
+            updateRepeat();
         });
-        controls.addView(repeatButton, LayoutHelper.createLinear(44, 44, Gravity.CENTER_VERTICAL, 14, 0, 0, 0));
-
-        updateRepeatIcon();
-        updateShuffleIcon();
-
-        column.addView(controls, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 4, 0, 8));
-
-        lyricsPanel = new LyricsPanel(ctx);
-        lyricsPanel.onSeekToMs = (ms) -> {
-            MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
-            int dur = mo == null ? 0 : (int) (mo.getDuration() * 1000);
-            if (mo != null && dur > 0) {
-                MediaController.getInstance().seekToProgress(mo, ms / (float) dur);
-            }
-        };
-        column.addView(lyricsPanel, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        queueView = new QueueView(ctx);
-        View spacer = new View(ctx);
-        column.addView(spacer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
-
-        beatBg = new BeatBackground(ctx);
-        root.addView(beatBg, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        root.addView(column, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        setContentView(root, new FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-
-        Window window = getWindow();
-        if (window != null) {
-            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
-            window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.BLACK));
-            window.setDimAmount(0f);
-            try {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-                window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-                window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-                window.setStatusBarColor(0x00000000);
-                window.setNavigationBarColor(0x00000000);
-                window.getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-            } catch (Throwable ignore) {}
-        }
-
-        updateTrack(true);
-        root.post(this::applyCustomization);
+        row.addView(repeatButton, LayoutHelper.createLinear(44, 44, Gravity.CENTER_VERTICAL));
+        return row;
     }
 
-    private MessageObject nextTrack() {
-        try {
-            ArrayList<MessageObject> pl = MediaController.getInstance().getPlaylist();
-            if (pl == null || pl.size() < 2) return null;
-            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-            int curId = cur == null ? Integer.MIN_VALUE : cur.getId();
-            int n = pl.size();
-            int curIndex = -1;
-            for (int i = 0; i < n; i++) {
-                MessageObject m = pl.get(i);
-                if (m != null && m.getId() == curId) { curIndex = i; break; }
-            }
-            if (curIndex < 0) return null;
-            if (org.telegram.messenger.SharedConfig.shuffleMusic) return null;
-            int dir = org.telegram.messenger.SharedConfig.playOrderReversed ? 1 : -1;
-            int idx = curIndex + dir;
-            if (idx < 0) idx = n - 1; else if (idx >= n) idx = 0;
-            return pl.get(idx);
-        } catch (Throwable e) {
-            return null;
-        }
+    private View buildBottomRow() {
+        FrameLayout row = new FrameLayout(ctx);
+        speedButton = new TextView(ctx);
+        speedButton.setTextColor(TEXT);
+        speedButton.setTextSize(14);
+        speedButton.setTypeface(AndroidUtilities.bold());
+        speedButton.setGravity(Gravity.CENTER);
+        speedButton.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
+        speedButton.setMinWidth(AndroidUtilities.dp(62));
+        speedButton.setContentDescription("Скорость воспроизведения");
+        GradientDrawable pill = new GradientDrawable();
+        pill.setCornerRadius(AndroidUtilities.dp(18));
+        pill.setStroke(AndroidUtilities.dp(1.4f), 0x59ffffff);
+        speedButton.setBackground(pill);
+        speedButton.setOnClickListener(this::openSpeed);
+        row.addView(speedButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 36, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+
+        LinearLayout group = new LinearLayout(ctx);
+        group.setOrientation(LinearLayout.HORIZONTAL);
+        lyricsButton = new GroupButton(ctx, true);
+        lyricsButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_lyrics).mutate());
+        lyricsButton.setContentDescription("Текст песни");
+        lyricsButton.setOnClickListener(v -> setPage(page == PAGE_LYRICS ? PAGE_COVER : PAGE_LYRICS));
+        group.addView(lyricsButton, LayoutHelper.createLinear(70, 48));
+        queueButton = new GroupButton(ctx, false);
+        queueButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_queue).mutate());
+        queueButton.setContentDescription("Очередь");
+        queueButton.setOnClickListener(v -> setPage(page == PAGE_QUEUE ? PAGE_COVER : PAGE_QUEUE));
+        group.addView(queueButton, LayoutHelper.createLinear(70, 48, 3, 0, 0, 0));
+        row.addView(group, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 48, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
+        return row;
     }
 
-    private void updateTogetherBar() {
-        if (togetherBar == null) return;
-        PrizmaTogether t = PrizmaTogether.get();
-        boolean hosting = t.isHosting(), following = t.isFollowing();
-        String key;
-        if (hosting) {
-            key = "H" + t.getHostChatName() + "|" + t.audienceNames();
-        } else if (following) {
-            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-            boolean waiting = cur == null || cur.getId() != t.getGuestMsgId();
-            key = "G" + t.getGuestHostName() + "|" + t.getAudience().size() + (waiting ? "|w" : "");
-        } else {
-            key = "";
-        }
-        if (key.equals(togetherKey)) return;
-        boolean modeChanged = togetherKey.isEmpty() != key.isEmpty() || (!togetherKey.isEmpty() && togetherKey.charAt(0) != key.charAt(0));
-        togetherKey = key;
-        if (key.isEmpty()) {
-            togetherBar.setVisibility(View.GONE);
-        } else if (hosting) {
-            String name = t.getHostChatName();
-            togetherEyebrow.setText("● ВЫ ВЕДЁТЕ ЭФИР");
-            togetherEyebrow.setTextColor(0xffff5a5f);
-            String who = t.audienceNames();
-            togetherLabel.setText(!who.isEmpty() ? "Слушают: " + who
-                    : (name.isEmpty() ? "" : "Чат: " + name + " · ") + "пока никто не подключился");
-            togetherButton.setText("Стоп");
-            togetherBar.setVisibility(View.VISIBLE);
-        } else {
-            String name = t.getGuestHostName();
-            togetherEyebrow.setText("● СЛУШАЕТЕ ВМЕСТЕ");
-            togetherEyebrow.setTextColor(accentColor);
-            int others = t.getAudience().size();
-            togetherLabel.setText((name.isEmpty() ? "Эфир" : "Ведёт: " + name)
-                    + (key.endsWith("|w") ? " · ждём следующий трек…" : others > 0 ? " · с вами ещё " + others : " · синхронно"));
-            togetherButton.setText("Выйти");
-            togetherBar.setVisibility(View.VISIBLE);
-        }
-        if (modeChanged) updateNextBar();
+    private ImageView iconButton(int icon, int color) {
+        ImageView v = new ImageView(ctx);
+        v.setImageResource(icon);
+        v.setColorFilter(color);
+        v.setScaleType(ImageView.ScaleType.CENTER);
+        v.setBackground(org.telegram.ui.ActionBar.Theme.createSelectorDrawable(0x22ffffff, 1, AndroidUtilities.dp(22)));
+        return v;
     }
 
-    private void updateNextBar() {
-        if (nextBar == null) return;
-        MessageObject nx = PrizmaTogether.get().isFollowing() ? null : nextTrack();
-        if (nx == null) {
-            nextBar.setVisibility(View.GONE);
-            return;
-        }
-        String t = nx.getMusicTitle();
-        String a = nx.getMusicAuthor();
-        String name = (t == null || t.isEmpty()) ? "Неизвестный трек" : t;
-        if (a != null && !a.isEmpty()) name += " — " + a;
-        nextBarLabel.setText(name);
-
-        int total = 0;
-        try {
-            ArrayList<MessageObject> pl = MediaController.getInstance().getPlaylist();
-            total = pl == null ? 0 : pl.size();
-        } catch (Throwable ignore) {}
-        int more = Math.max(0, total - 1);
-        if (nextEyebrow != null) {
-            nextEyebrow.setText(more > 1 ? ("ДАЛЕЕ · +" + more) : "ДАЛЕЕ");
-            nextEyebrow.setTextColor(accentColor);
-        }
-        loadMiniCover(nextCover, nx);
-        nextBar.setVisibility(View.VISIBLE);
-    }
-
-    private void loadMiniCover(BackupImageView iv, MessageObject mo) {
-        if (iv == null || mo == null) return;
-        try {
-            String artworkUrl = mo.getArtworkUrl(true);
-            ImageLocation thumbLoc = thumbLocation(mo);
-            GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xff2a2d3a, 0xff15161c});
-            ph.setCornerRadius(AndroidUtilities.dp(8));
-            if (artworkUrl != null && !artworkUrl.isEmpty()) {
-                iv.setImage(ImageLocation.getForPath(artworkUrl), "40_40", thumbLoc, null, ph, null, 0, 1, mo);
-            } else if (thumbLoc != null) {
-                iv.setImage(null, null, thumbLoc, null, ph, null, 0, 1, mo);
-            } else {
-                iv.setImageDrawable(ph);
-            }
-        } catch (Throwable ignore) {}
-    }
-
-    private void applyCustomization() {
-        try {
-            org.telegram.messenger.PrizmaConfig.clearPlayerOffsets();
-            applyCoverSize();
-        } catch (Throwable ignore) {}
-    }
-
-    private void applyCoverSize() {
-        if (cover == null || coverBaseSide <= 0) return;
-        float scale = org.telegram.messenger.PrizmaConfig.playerCoverScale();
-        scale = Math.max(0.6f, Math.min(1.3f, scale));
-        int s = (int) (coverBaseSide * scale);
-        android.view.ViewGroup.LayoutParams lp = cover.getLayoutParams();
-        if (lp != null) {
-            lp.width = s;
-            lp.height = s;
-            cover.setLayoutParams(lp);
-        }
-    }
-
-    private ScaleGestureDetector pinch;
-    private View pinchShield;
-    private PrizmaSlider sizeSlider;
-
-    private static final float COVER_MIN = 0.6f, COVER_MAX = 1.3f;
-
-    private void enterEditMode() {
-        if (editMode) return;
-        editMode = true;
-        if (cover != null) {
-            cover.setRotationX(0);
-            cover.setRotationY(0);
-        }
-        pinchShield = new View(ctx);
-        pinch = new ScaleGestureDetector(ctx, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            @Override
-            public boolean onScale(ScaleGestureDetector detector) {
-                setCoverScale(org.telegram.messenger.PrizmaConfig.playerCoverScale() * detector.getScaleFactor());
-                return true;
-            }
-        });
-        pinchShield.setOnTouchListener((v, e) -> {
-            pinch.onTouchEvent(e);
-            return true;
-        });
-        root.addView(pinchShield, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        showEditBar();
-    }
-
-    private void exitEditMode() {
-        editMode = false;
-        if (pinchShield != null) {
-            try { root.removeView(pinchShield); } catch (Throwable ignore) {}
-            pinchShield = null;
-        }
-        if (editBar != null) {
-            final View bar = editBar;
-            editBar = null;
-            bar.animate().alpha(0f).translationY(AndroidUtilities.dp(24)).setDuration(160)
-                    .withEndAction(() -> { try { root.removeView(bar); } catch (Throwable ignore) {} }).start();
-        }
-        sizeSlider = null;
-    }
-
-    private void setCoverScale(float scale) {
-        float nv = Math.max(COVER_MIN, Math.min(COVER_MAX, scale));
-        org.telegram.messenger.PrizmaConfig.setPlayerCoverScale(nv);
-        applyCoverSize();
-        if (sizeSlider != null) sizeSlider.setValue((nv - COVER_MIN) / (COVER_MAX - COVER_MIN));
-    }
-
-    private void showEditBar() {
-        LinearLayout bar = new LinearLayout(ctx);
-        bar.setOrientation(LinearLayout.VERTICAL);
-        bar.setBackground(new PrizmaGlass.GlassDrawable(AndroidUtilities.dp(26)));
-        bar.setPadding(AndroidUtilities.dp(18), AndroidUtilities.dp(14), AndroidUtilities.dp(18), AndroidUtilities.dp(14));
-        bar.setClickable(true);
-
-        TextView title = new TextView(ctx);
-        title.setText("Размер обложки");
-        title.setTextColor(PrizmaGlass.TEXT);
-        title.setTextSize(16);
-        title.setTypeface(AndroidUtilities.bold());
-        bar.addView(title);
-        TextView hint = new TextView(ctx);
-        hint.setText("Разведите пальцы, чтобы приблизить, сведите — чтобы отдалить");
-        hint.setTextColor(PrizmaGlass.TEXT_2);
-        hint.setTextSize(13);
-        bar.addView(hint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 6));
-
-        LinearLayout sliderRow = new LinearLayout(ctx);
-        sliderRow.setOrientation(LinearLayout.HORIZONTAL);
-        sliderRow.setGravity(Gravity.CENTER_VERTICAL);
-        sliderRow.addView(editChip("−", () -> setCoverScale(org.telegram.messenger.PrizmaConfig.playerCoverScale() - 0.1f)),
-                LayoutHelper.createLinear(40, 40, Gravity.CENTER_VERTICAL));
-        sizeSlider = new PrizmaSlider(ctx);
-        sizeSlider.setColors(accentColor, 0x2effffff);
-        sizeSlider.setValue((org.telegram.messenger.PrizmaConfig.playerCoverScale() - COVER_MIN) / (COVER_MAX - COVER_MIN));
-        sizeSlider.setOnChange((v, fromUser) -> {
-            if (!fromUser) return;
-            org.telegram.messenger.PrizmaConfig.setPlayerCoverScale(COVER_MIN + v * (COVER_MAX - COVER_MIN));
-            applyCoverSize();
-        });
-        sliderRow.addView(sizeSlider, LayoutHelper.createLinear(0, 40, 1f, Gravity.CENTER_VERTICAL, 4, 0, 4, 0));
-        sliderRow.addView(editChip("+", () -> setCoverScale(org.telegram.messenger.PrizmaConfig.playerCoverScale() + 0.1f)),
-                LayoutHelper.createLinear(40, 40, Gravity.CENTER_VERTICAL));
-        bar.addView(sliderRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        LinearLayout buttons = new LinearLayout(ctx);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
-        TextView reset = editChip("Как было", () -> setCoverScale(1f));
-        buttons.addView(reset, LayoutHelper.createLinear(0, 44, 1f, 0, 0, 5, 0));
-        TextView done = editChip("Готово", this::exitEditMode);
-        done.setTextColor(0xff111114);
-        done.setBackground(new PrizmaGlass.GlassDrawable(AndroidUtilities.dp(22)).setGlassTint(0xf2ffffff));
-        buttons.addView(done, LayoutHelper.createLinear(0, 44, 1f, 5, 0, 0, 0));
-        bar.addView(buttons, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 10, 0, 0));
-
-        FrameLayout.LayoutParams lp = LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM);
-        lp.leftMargin = lp.rightMargin = AndroidUtilities.dp(12);
-        lp.bottomMargin = AndroidUtilities.dp(12) + AndroidUtilities.navigationBarHeight;
-        root.addView(bar, lp);
-        bar.setAlpha(0f);
-        bar.setTranslationY(AndroidUtilities.dp(40));
-        bar.animate().alpha(1f).translationY(0).setDuration(380).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
-        editBar = bar;
-    }
-
-    private TextView editChip(String text, Runnable onClick) {
+    private TextView timeLabel() {
         TextView t = new TextView(ctx);
-        t.setText(text);
-        t.setTextColor(PrizmaGlass.TEXT);
-        t.setTextSize(15);
-        t.setTypeface(AndroidUtilities.bold());
-        t.setGravity(Gravity.CENTER);
-        t.setBackground(new PrizmaGlass.GlassDrawable(AndroidUtilities.dp(20)));
-        t.setOnClickListener(v -> onClick.run());
-        PrizmaGlass.pressable(t);
-        return t;
-    }
-
-    private AddDrawable addDrawable;
-
-    private void popAddButton() {
-        if (likeButton == null) return;
-        try { likeButton.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); } catch (Throwable ignore) {}
-        likeButton.animate().cancel();
-        likeButton.setScaleX(0.72f);
-        likeButton.setScaleY(0.72f);
-        likeButton.animate().scaleX(1f).scaleY(1f)
-                .setInterpolator(new OvershootInterpolator(3f)).setDuration(420).start();
-    }
-
-    private static class AddDrawable extends android.graphics.drawable.Drawable {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private float progress;
-        private boolean checked;
-        private android.animation.ValueAnimator animator;
-
-        AddDrawable() {
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setStrokeWidth(AndroidUtilities.dpf2(2.2f));
-            paint.setColor(0xffffffff);
-        }
-
-        boolean isChecked() {
-            return checked;
-        }
-
-        void setColor(int color) {
-            paint.setColor(color);
-            invalidateSelf();
-        }
-
-        void setChecked(boolean value, boolean animated) {
-            if (animator != null) {
-                animator.cancel();
-                animator = null;
-            }
-            checked = value;
-            float target = value ? 1f : 0f;
-            if (!animated) {
-                progress = target;
-                invalidateSelf();
-                return;
-            }
-            animator = android.animation.ValueAnimator.ofFloat(progress, target);
-            animator.addUpdateListener(an -> {
-                progress = (float) an.getAnimatedValue();
-                invalidateSelf();
-            });
-            animator.setDuration(320);
-            animator.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-            animator.start();
-        }
-
-        @Override
-        public void draw(Canvas canvas) {
-            Rect b = getBounds();
-            float cx = b.exactCenterX(), cy = b.exactCenterY();
-            float h = AndroidUtilities.dpf2(9f);
-            float t = progress;
-            float ax = cx - h, ay = cy, bx = cx + h, by = cy;
-            float tax = cx - h * 0.9f, tay = cy + h * 0.05f, tbx = cx - h * 0.25f, tby = cy + h * 0.7f;
-            canvas.drawLine(lerp(ax, tax, t), lerp(ay, tay, t), lerp(bx, tbx, t), lerp(by, tby, t), paint);
-            float cx1 = cx, cy1 = cy - h, cx2 = cx, cy2 = cy + h;
-            float tcx1 = cx + h * 0.95f, tcy1 = cy - h * 0.65f, tcx2 = cx - h * 0.25f, tcy2 = cy + h * 0.7f;
-            canvas.drawLine(lerp(cx1, tcx1, t), lerp(cy1, tcy1, t), lerp(cx2, tcx2, t), lerp(cy2, tcy2, t), paint);
-        }
-
-        private static float lerp(float a, float b, float t) {
-            return a + (b - a) * t;
-        }
-
-        @Override
-        public int getIntrinsicWidth() {
-            return AndroidUtilities.dp(24);
-        }
-
-        @Override
-        public int getIntrinsicHeight() {
-            return AndroidUtilities.dp(24);
-        }
-
-        @Override
-        public void setAlpha(int alpha) {}
-
-        @Override
-        public void setColorFilter(android.graphics.ColorFilter colorFilter) {}
-
-        @Override
-        public int getOpacity() {
-            return android.graphics.PixelFormat.TRANSLUCENT;
-        }
-    }
-
-    private void drawThemeBg(Canvas canvas, int w, int h) {
-        if (themeForH != h) {
-            themeForH = h;
-            themePaint.setShader(new LinearGradient(0, 0, 0, h,
-                    new int[]{0xff1b1c22, 0xff121318, 0xff0b0b0e}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
-        }
-        canvas.drawRect(0, 0, w, h, themePaint);
-    }
-
-    private void drawAccentBg(Canvas canvas, int w, int h) {
-        int top = (accentColor & 0x00ffffff);
-        if (accentBgForH != h || accentBgColor != accentColor) {
-            accentBgForH = h;
-            accentBgColor = accentColor;
-            int c0 = 0xcc000000 | top;
-            int c1 = 0xff0c0c10;
-            accentBgPaint.setShader(new LinearGradient(0, 0, 0, h,
-                    new int[]{c0, 0xaa000000 | top, c1}, new float[]{0f, 0.4f, 1f}, Shader.TileMode.CLAMP));
-        }
-        canvas.drawRect(0, 0, w, h, accentBgPaint);
-    }
-
-    private void drawCenterCrop(Canvas canvas, Bitmap bmp, int w, int h, float zoom) {
-        int bw = bmp.getWidth(), bh = bmp.getHeight();
-        if (bw <= 0 || bh <= 0) { canvas.drawColor(0xff0e0e12); return; }
-        float scale = Math.max(w / (float) bw, h / (float) bh) * zoom;
-        float dw = bw * scale, dh = bh * scale;
-        int left = (int) ((w - dw) / 2f), top = (int) ((h - dh) / 2f);
-        bgDst.set(left, top, (int) (left + dw), (int) (top + dh));
-        bgSrc.set(0, 0, bw, bh);
-        canvas.drawBitmap(bmp, bgSrc, bgDst, bgPaint);
-    }
-
-    private TextView timeLabel(int gravity) {
-        TextView t = new TextView(ctx);
-        t.setTextColor(0x99ffffff);
+        t.setTextColor(TEXT_2);
         t.setTextSize(12);
-        t.setGravity(gravity);
+        t.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MONO));
         return t;
     }
 
-    private static void tintLottie(RLottieImageView v) {
-        v.setLayerColor("Triangle 3", 0xffffffff);
-        v.setLayerColor("Triangle 4", 0xffffffff);
-        v.setLayerColor("Rectangle 4", 0xffffffff);
+    private static void press(View v) {
+        v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+    }
+
+    private void measureStage() {
+        if (root == null || stage == null) return;
+        int w = root.getWidth(), stageH = stage.getHeight();
+        if (w == 0 || stageH == 0) return;
+        float scale = Math.max(0.6f, Math.min(1f, PrizmaConfig.playerCoverScale()));
+        int base = Math.min(w - AndroidUtilities.dp(40), stageH - AndroidUtilities.dp(10));
+        int side = Math.max(AndroidUtilities.dp(120), (int) (base * scale));
+        if (side != coverSide) {
+            coverSide = side;
+            ViewGroup.LayoutParams lp = coverBox.getLayoutParams();
+            lp.width = side;
+            lp.height = side;
+            coverBox.setLayoutParams(lp);
+            coverInner.setPivotX(side / 2f);
+            coverInner.setPivotY(side / 2f);
+            cover.setCameraDistance(ctx.getResources().getDisplayMetrics().density * 1800);
+        }
+        smallSize = AndroidUtilities.dp(54);
+        bigX = (w - side) / 2f;
+        bigY = stage.getTop() + (stageH - side) / 2f;
+        smallX = AndroidUtilities.dp(20);
+        smallY = titleRow.getTop() + (titleRow.getHeight() - smallSize) / 2f;
+        applyPage();
+    }
+
+    private void applyPage() {
+        if (coverSide == 0) return;
+        float p = pageProgress;
+        float scale = AndroidUtilities.lerp(1f, smallSize / (float) coverSide, p);
+        float x = AndroidUtilities.lerp(bigX, smallX, p);
+        float y = AndroidUtilities.lerp(bigY, smallY, p);
+        coverBox.setScaleX(scale);
+        coverBox.setScaleY(scale);
+        coverBox.setTranslationX(x);
+        coverBox.setTranslationY(y);
+        float clamped = Math.max(0f, Math.min(1f, p));
+        int radius = (int) (AndroidUtilities.lerp(AndroidUtilities.dpf2(28), AndroidUtilities.dpf2(14), clamped) / Math.max(0.05f, scale));
+        cover.setRoundRadius(radius);
+        clipView.setRadius(radius);
+
+        float inset = smallSize + AndroidUtilities.dp(12);
+        boolean wantInset = page != PAGE_COVER;
+        if (wantInset && !titlesInset) {
+            titlesInset = true;
+            titles.setPadding((int) inset, 0, 0, 0);
+        } else if (!wantInset && titlesInset && p < 0.004f) {
+            titlesInset = false;
+            titles.setPadding(0, 0, 0, 0);
+        }
+        titles.setTranslationX(titlesInset ? (clamped - 1f) * inset : 0f);
+
+        float side = coverSide * scale;
+        backdrop.setCoverRect(x, y, x + side, y + side, AndroidUtilities.dpf2(28) * Math.max(0.3f, 1f - clamped), clamped < 0.2f);
+    }
+
+    private void applyPanels() {
+        fadePanel(lyricsPanel, lyricsAlpha);
+        fadePanel(queuePanel, queueAlpha);
+    }
+
+    private static void fadePanel(View panel, float a) {
+        if (panel == null) return;
+        float v = Math.max(0f, Math.min(1f, a));
+        panel.setAlpha(v);
+        panel.setTranslationY((1f - v) * AndroidUtilities.dp(20));
+        panel.setVisibility(v <= 0.01f ? View.GONE : View.VISIBLE);
+    }
+
+    private void setPage(int next) {
+        if (next == page) return;
+        page = next;
+        if (next == PAGE_QUEUE) {
+            queuePanel.refresh();
+            queuePanel.scrollToStart();
+        } else {
+            queuePanel.hideKeyboard();
+        }
+        if (next == PAGE_LYRICS) {
+            MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+            if (mo != null) loadLyrics(mo);
+        }
+        pageSpring.to(next == PAGE_COVER ? 0f : 1f);
+        lyricsSpring.to(next == PAGE_LYRICS ? 1f : 0f);
+        queueSpring.to(next == PAGE_QUEUE ? 1f : 0f);
+        lyricsButton.setSelectedState(next == PAGE_LYRICS);
+        queueButton.setSelectedState(next == PAGE_QUEUE);
+        applyPage();
+    }
+
+    @SuppressWarnings("ClickableViewAccessibility")
+    private void attachCoverGestures() {
+        final int slop = ViewConfiguration.get(ctx).getScaledTouchSlop();
+        final float[] down = new float[2];
+        final boolean[] moving = new boolean[1];
+        coverInner.setOnTouchListener((v, e) -> {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = e.getRawX();
+                    down[1] = e.getRawY();
+                    moving[0] = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE: {
+                    if (page != PAGE_COVER) return true;
+                    float dx = e.getRawX() - down[0], dy = e.getRawY() - down[1];
+                    if (!moving[0] && Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+                        moving[0] = true;
+                        coverInner.getParent().requestDisallowInterceptTouchEvent(true);
+                        root.requestDisallowInterceptTouchEvent(true);
+                    }
+                    if (moving[0]) {
+                        swipe.snap(dx * 0.72f);
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_UP: {
+                    float dx = e.getRawX() - down[0];
+                    if (page != PAGE_COVER) {
+                        setPage(PAGE_COVER);
+                    } else if (moving[0] && Math.abs(dx) > coverSide * 0.26f) {
+                        if (dx < 0) {
+                            MediaController.getInstance().playNextMessage();
+                        } else {
+                            MediaController.getInstance().playPreviousMessage();
+                        }
+                        AndroidUtilities.runOnUIThread(() -> swipe.to(0f), 320);
+                    } else {
+                        swipe.to(0f);
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_CANCEL:
+                    swipe.to(0f);
+                    return true;
+            }
+            return false;
+        });
+    }
+
+    private void onBeat(float strength) {
+        if (!PrizmaConfig.beatEffects()) return;
+        if (PrizmaConfig.playerCoverKick() && page == PAGE_COVER) {
+            kick.snap(1f + 0.032f * strength);
+            kick.to(1f);
+        }
+        if (lyricsPanel != null && page == PAGE_LYRICS) {
+            lyricsPanel.view.bump(strength);
+        }
+        if (PrizmaConfig.playerHaptics() && strength > 0.4f) {
+            try {
+                root.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+            } catch (Throwable ignore) {
+            }
+        }
     }
 
     @Override
     public void show() {
         super.show();
         open = true;
+        instance = this;
         running = true;
-        PrizmaVisualizerData.setListener(beatListener);
-        AndroidUtilities.runOnUIThread(ticker, 100);
+        AndroidUtilities.runOnUIThread(ticker, 60);
         startParallax();
+        root.post(() -> {
+            root.setTranslationY(root.getHeight() == 0 ? AndroidUtilities.displaySize.y : root.getHeight());
+            root.settle();
+        });
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (PrizmaPopup.closeIfOpen() || PrizmaPlayerSettings.closeIfOpen()) return;
+        if (page != PAGE_COVER) {
+            setPage(PAGE_COVER);
+            return;
+        }
+        dismiss();
     }
 
     @Override
     public void dismiss() {
+        if (closing) return;
+        closing = true;
         release();
+        if (root == null) {
+            realDismiss();
+            return;
+        }
+        root.animate().cancel();
+        root.animate().translationY(root.getHeight()).setDuration(230)
+                .setInterpolator(CubicBezierInterpolator.EASE_IN)
+                .withEndAction(this::realDismiss).start();
+    }
+
+    private void realDismiss() {
         try {
             super.dismiss();
         } catch (Throwable ignore) {
@@ -944,80 +685,10 @@ public class PrizmaFullPlayer extends Dialog {
     private void release() {
         open = false;
         running = false;
-        PrizmaVisualizerData.clearListener(beatListener);
+        if (instance == this) instance = null;
         AndroidUtilities.cancelRunOnUIThread(ticker);
         stopParallax();
-    }
-
-    private android.hardware.SensorManager parallaxSensors;
-    private android.hardware.Sensor parallaxSensor;
-    private boolean parallaxBaselineSet;
-    private float parallaxBaseX, parallaxBaseY;
-    private float parallaxRx, parallaxRy;
-
-    private final android.hardware.SensorEventListener parallaxListener = new android.hardware.SensorEventListener() {
-        @Override
-        public void onSensorChanged(android.hardware.SensorEvent e) {
-            if (cover == null || editMode) return;
-            float gx = e.values[0];
-            float gy = e.values[1];
-            if (!parallaxBaselineSet) {
-                parallaxBaseX = gx;
-                parallaxBaseY = gy;
-                parallaxBaselineSet = true;
-            }
-            final float MAX = 10f;
-            final float K = 1.6f;
-            final float DEAD = 0.35f;
-            float dx = deadZone(gx - parallaxBaseX, DEAD);
-            float dy = deadZone(gy - parallaxBaseY, DEAD);
-            float targetRy = Math.max(-MAX, Math.min(MAX, -dx * K));
-            float targetRx = Math.max(-MAX, Math.min(MAX, dy * K));
-            parallaxRy += (targetRy - parallaxRy) * 0.08f;
-            parallaxRx += (targetRx - parallaxRx) * 0.08f;
-            cover.setRotationX(parallaxRx);
-            cover.setRotationY(parallaxRy);
-        }
-
-        @Override
-        public void onAccuracyChanged(android.hardware.Sensor sensor, int accuracy) {}
-    };
-
-    private static float deadZone(float v, float dead) {
-        if (v > dead) return v - dead;
-        if (v < -dead) return v + dead;
-        return 0f;
-    }
-
-    private void startParallax() {
-        try {
-            if (lite() || !org.telegram.messenger.PrizmaConfig.coverParallax()) return;
-            if (cover != null) {
-                cover.setCameraDistance(ctx.getResources().getDisplayMetrics().density * 1800);
-            }
-            parallaxSensors = (android.hardware.SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
-            if (parallaxSensors != null) {
-                parallaxSensor = parallaxSensors.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER);
-                if (parallaxSensor != null) {
-                    parallaxBaselineSet = false;
-                    parallaxSensors.registerListener(parallaxListener, parallaxSensor, android.hardware.SensorManager.SENSOR_DELAY_GAME);
-                }
-            }
-        } catch (Throwable ignore) {}
-    }
-
-    private void stopParallax() {
-        try {
-            if (parallaxSensors != null) {
-                parallaxSensors.unregisterListener(parallaxListener);
-            }
-        } catch (Throwable ignore) {}
-        parallaxSensors = null;
-        parallaxSensor = null;
-        if (cover != null) {
-            cover.setRotationX(0);
-            cover.setRotationY(0);
-        }
+        PrizmaPlayerSettings.closeIfOpen();
     }
 
     private final Runnable ticker = new Runnable() {
@@ -1027,20 +698,83 @@ public class PrizmaFullPlayer extends Dialog {
             if (!ApplicationLoader.isScreenOn || ApplicationLoader.mainInterfacePaused) {
                 if (parallaxSensors != null) {
                     stopParallax();
-                    parallaxPausedInBackground = true;
+                    parallaxPaused = true;
                 }
+                clipView.setPaused(true);
                 AndroidUtilities.runOnUIThread(this, 500);
                 return;
             }
-            if (parallaxPausedInBackground) {
-                parallaxPausedInBackground = false;
+            if (parallaxPaused) {
+                parallaxPaused = false;
                 startParallax();
             }
             updateTrack(false);
-            AndroidUtilities.runOnUIThread(this, 60);
+            AndroidUtilities.runOnUIThread(this, page == PAGE_LYRICS ? 33 : 66);
         }
     };
-    private boolean parallaxPausedInBackground;
+
+    private android.hardware.SensorManager parallaxSensors;
+    private boolean parallaxPaused;
+    private boolean parallaxBaseSet;
+    private float parallaxBaseX, parallaxBaseY, parallaxRx, parallaxRy;
+
+    private final android.hardware.SensorEventListener parallaxListener = new android.hardware.SensorEventListener() {
+        @Override
+        public void onSensorChanged(android.hardware.SensorEvent e) {
+            if (cover == null) return;
+            float gx = e.values[0], gy = e.values[1];
+            if (!parallaxBaseSet) {
+                parallaxBaseX = gx;
+                parallaxBaseY = gy;
+                parallaxBaseSet = true;
+            }
+            float dx = deadZone(gx - parallaxBaseX), dy = deadZone(gy - parallaxBaseY);
+            float wantY = Math.max(-10f, Math.min(10f, -dx * 1.6f));
+            float wantX = Math.max(-10f, Math.min(10f, dy * 1.6f));
+            parallaxRy += (wantY - parallaxRy) * 0.08f;
+            parallaxRx += (wantX - parallaxRx) * 0.08f;
+            float k = 1f - Math.max(0f, Math.min(1f, pageProgress));
+            coverInner.setRotationX(parallaxRx * k);
+            coverInner.setRotationY(parallaxRy * k);
+        }
+
+        @Override
+        public void onAccuracyChanged(android.hardware.Sensor sensor, int accuracy) {
+        }
+    };
+
+    private static float deadZone(float v) {
+        if (v > 0.35f) return v - 0.35f;
+        if (v < -0.35f) return v + 0.35f;
+        return 0f;
+    }
+
+    private void startParallax() {
+        try {
+            if (!PrizmaConfig.fancyEffects() || !PrizmaConfig.coverParallax() || parallaxSensors != null) return;
+            parallaxSensors = (android.hardware.SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+            if (parallaxSensors != null) {
+                android.hardware.Sensor s = parallaxSensors.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER);
+                if (s != null) {
+                    parallaxBaseSet = false;
+                    parallaxSensors.registerListener(parallaxListener, s, android.hardware.SensorManager.SENSOR_DELAY_GAME);
+                }
+            }
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private void stopParallax() {
+        try {
+            if (parallaxSensors != null) parallaxSensors.unregisterListener(parallaxListener);
+        } catch (Throwable ignore) {
+        }
+        parallaxSensors = null;
+        if (coverInner != null) {
+            coverInner.setRotationX(0);
+            coverInner.setRotationY(0);
+        }
+    }
 
     private void updateTrack(boolean force) {
         MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
@@ -1048,523 +782,104 @@ public class PrizmaFullPlayer extends Dialog {
             dismiss();
             return;
         }
-        if (force || trackKey(mo) != loadedMsgId) {
-            boolean animate = !force && loadedMsgId != Long.MIN_VALUE;
-            loadedMsgId = trackKey(mo);
+        long key = trackKey(mo);
+        if (force || key != loadedKey) {
+            boolean animate = !force && loadedKey != Long.MIN_VALUE;
+            loadedKey = key;
             if (animate) {
                 animateTrackChange(mo);
             } else {
                 applyTrack(mo);
             }
-            updateNextBar();
         }
         checkLateCover();
         tryBuildBlur(mo);
         updateTogetherBar();
+        checkWave(mo);
+        checkTagLyrics(mo);
 
         boolean paused = MediaController.getInstance().isMessagePaused();
-        playPauseDrawable.setPause(!paused, true);
-        if (!userSeeking) {
+        playPause.setPause(!paused, true);
+        playButton.setRounded(paused);
+        clipView.setPaused(paused);
+        if (!seek.isDragging()) {
             seek.setValue(mo.audioProgress);
+            timeCur.setText(formatTime(mo.audioProgressSec));
         }
-        timeCur.setText(formatTime(mo.audioProgressSec));
-        int dur = (int) (mo.getDuration() * 1000);
-        lyricsPanel.setPosition((long) (mo.audioProgress * dur) + 450);
+        float speed = MediaController.getInstance().getPlaybackSpeed(true);
+        String label = formatSpeed(speed) + "x";
+        if (!label.contentEquals(speedButton.getText())) speedButton.setText(label);
+        if (page == PAGE_LYRICS) {
+            lyricsPanel.view.setPosition((long) (mo.audioProgress * mo.getDuration() * 1000) + 220);
+        }
     }
 
     private void applyTrack(MessageObject mo) {
         loadCover(mo);
-        String t = mo.getMusicTitle();
-        String a = mo.getMusicAuthor();
-        titleView.setText(t == null || t.isEmpty() ? "Неизвестный трек" : t);
+        String t = mo.getMusicTitle(), a = mo.getMusicAuthor();
+        titleView.setText(TextUtils.isEmpty(t) ? "Неизвестный трек" : t);
         authorView.setText(a == null ? "" : a);
-        timeDur.setText(formatTime((int) mo.getDuration()));
-        updateLikeIcon(org.telegram.messenger.PrizmaPlaylist.inAny(mo));
+        int dur = (int) mo.getDuration();
+        timeDur.setText(formatTime(dur));
+        seek.setDuration(dur);
+        seek.setPeaks(null, false);
+        wavePeaksKey = Long.MIN_VALUE;
+        waveRetryAt = 0;
+        heart.setChecked(PrizmaPlaylist.inAny(mo), false);
+        updateTopBar();
+        updateShuffle();
+        updateRepeat();
+        if (page == PAGE_QUEUE) queuePanel.refresh();
         loadLyrics(mo);
+        loadClip(mo);
     }
 
-    private void showOptions() {
-        final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
-        final int grayColor = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
-        LinearLayout root = new LinearLayout(ctx);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(8), AndroidUtilities.dp(10), AndroidUtilities.dp(10));
-
-        final BottomSheet[] ref = new BottomSheet[1];
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_message, "Текст песни", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showFullLyrics();
-        }));
-        float sp = 1f;
-        try { sp = MediaController.getInstance().getPlaybackSpeed(true); } catch (Throwable ignore) {}
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_speed, "Скорость · " + formatSpeed(sp) + "x", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showSpeed();
-        }));
-        root.addView(optionRow(ctx, textColor, R.drawable.media_settings, "Эквалайзер", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            PrizmaEqualizerSheet.show(ctx, root, accentColor);
-        }));
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_autodelete, PrizmaSleepTimer.isActive() ? "Таймер сна (вкл)" : "Таймер сна", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showSleepTimer();
-        }));
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_fave, "Мой плейлист", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            PrizmaPlaylistSheet.show(ctx);
-        }));
-        final MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
-        if (playing != null) {
-            final int account = playing.currentAccount;
-            final boolean onProfile = PrizmaProfileMusic.isSaved(account, playing);
-            root.addView(optionRow(ctx, textColor, onProfile ? R.drawable.msg_delete : R.drawable.left_status_profile,
-                    onProfile ? "Убрать из профиля Telegram" : "Добавить в профиль Telegram", () -> {
-                if (ref[0] != null) ref[0].dismiss();
-                PrizmaProfileMusic.toggle(account, playing, text ->
-                        android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_SHORT).show());
-            }));
-        }
-        final PrizmaTogether together = PrizmaTogether.get();
-        if (together.isHosting()) {
-            root.addView(optionRow(ctx, accentColor, R.drawable.msg_leave, "Завершить эфир", () -> {
-                if (ref[0] != null) ref[0].dismiss();
-                together.stopHosting();
-            }));
-        } else if (together.isFollowing()) {
-            root.addView(optionRow(ctx, accentColor, R.drawable.msg_leave, "Выйти из эфира", () -> {
-                if (ref[0] != null) ref[0].dismiss();
-                together.leave();
-            }));
-        } else {
-            root.addView(optionRow(ctx, textColor, R.drawable.msg_groups, "Слушать вместе…", () -> {
-                if (ref[0] != null) ref[0].dismiss();
-                dismiss();
-                PrizmaTogether.pickChatAndStart(ctx);
-            }));
-        }
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_photo_settings, "Фон плеера", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showPlayerBg();
-        }));
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_reorder, "Размер обложки", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            enterEditMode();
-        }));
-        boolean par = false;
-        try { par = org.telegram.messenger.PrizmaConfig.coverParallax(); } catch (Throwable ignore) {}
-        root.addView(optionRow(ctx, par ? accentColor : textColor, R.drawable.msg_photo_settings, "3D-обложка (наклон)" + (par ? "  ✓" : ""), () -> {
-            boolean nv = !org.telegram.messenger.PrizmaConfig.coverParallax();
-            org.telegram.messenger.PrizmaConfig.setCoverParallax(nv);
-            if (nv) startParallax(); else stopParallax();
-            if (ref[0] != null) ref[0].dismiss();
-        }));
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_photo_settings, "Стиль перемотки", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showSeekStyle();
-        }));
-        root.addView(optionRow(ctx, textColor, R.drawable.msg_media, "Новый плеер (бета)", () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            org.telegram.messenger.PrizmaConfig.setBetaPlayer(true);
-            dismiss();
-            AndroidUtilities.runOnUIThread(() -> PrizmaCardPlayer.show(ctx), 220);
-        }));
-
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-        b.setCustomView(root);
-        ref[0] = b.create();
-        try { ref[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
-        ref[0].show();
-    }
-
-    private LinearLayout optionRow(Context c, int textColor, int icon, String text, Runnable onClick) {
-        LinearLayout row = new LinearLayout(c);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(13), AndroidUtilities.dp(14), AndroidUtilities.dp(13));
-        row.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), 2));
-        ImageView iv = new ImageView(c);
-        iv.setImageResource(icon);
-        iv.setColorFilter(textColor);
-        iv.setScaleType(ImageView.ScaleType.CENTER);
-        row.addView(iv, LayoutHelper.createLinear(26, 26, Gravity.CENTER_VERTICAL, 0, 0, 16, 0));
-        TextView tv = new TextView(c);
-        tv.setText(text);
-        tv.setTextColor(textColor);
-        tv.setTextSize(16);
-        row.addView(tv, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-        row.setOnClickListener(v -> onClick.run());
-        return row;
-    }
-
-    private void showSleepTimer() {
-        final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
-        LinearLayout root = new LinearLayout(ctx);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(8), AndroidUtilities.dp(10), AndroidUtilities.dp(10));
-        final BottomSheet[] ref = new BottomSheet[1];
-        int[] mins = {15, 30, 45, 60};
-        for (int m : mins) {
-            final int mm = m;
-            root.addView(optionRow(ctx, textColor, R.drawable.msg_autodelete, "Через " + m + " мин", () -> {
-                PrizmaSleepTimer.schedule(mm);
-                if (ref[0] != null) ref[0].dismiss();
-                android.widget.Toast.makeText(ctx, "Таймер сна: " + mm + " мин", android.widget.Toast.LENGTH_SHORT).show();
-            }));
-        }
-        if (PrizmaSleepTimer.isActive()) {
-            root.addView(optionRow(ctx, 0xffff5e5e, R.drawable.msg_delete, "Выключить таймер", () -> {
-                PrizmaSleepTimer.cancel();
-                if (ref[0] != null) ref[0].dismiss();
-                android.widget.Toast.makeText(ctx, "Таймер сна выключен", android.widget.Toast.LENGTH_SHORT).show();
-            }));
-        }
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-        b.setCustomView(root);
-        ref[0] = b.create();
-        try { ref[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
-        ref[0].show();
-    }
-
-    private void showSeekStyle() {
-        final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
-        LinearLayout root = new LinearLayout(ctx);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(8), AndroidUtilities.dp(10), AndroidUtilities.dp(10));
-        final BottomSheet[] ref = new BottomSheet[1];
-        String[] names = {"Дефолтный", "Горящий", "Переливающийся"};
-        int[] icons = {R.drawable.msg_media, R.drawable.filled_fire, R.drawable.msg_photo_settings};
-        for (int i = 0; i < names.length; i++) {
-            final int style = i;
-            boolean selected = org.telegram.messenger.PrizmaConfig.seekStyle() == style;
-            root.addView(optionRow(ctx, selected ? ACCENT : textColor, icons[i], names[i] + (selected ? "  ✓" : ""), () -> {
-                org.telegram.messenger.PrizmaConfig.setSeekStyle(style);
-                if (seek != null) seek.invalidate();
-                if (ref[0] != null) ref[0].dismiss();
-            }));
-        }
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-        b.setCustomView(root);
-        ref[0] = b.create();
-        try { ref[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
-        ref[0].show();
-    }
-
-    private static String formatSpeed(float s) {
-        if (Math.abs(s - Math.round(s)) < 0.01f) return String.valueOf(Math.round(s));
-        String r = String.valueOf(Math.round(s * 10f) / 10f);
-        return r;
-    }
-
-    private void showSpeed() {
-        final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
-        LinearLayout root = new LinearLayout(ctx);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(8), AndroidUtilities.dp(10), AndroidUtilities.dp(10));
-        final BottomSheet[] ref = new BottomSheet[1];
-        float cur = 1f;
-        try { cur = MediaController.getInstance().getPlaybackSpeed(true); } catch (Throwable ignore) {}
-        float[] speeds = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f};
-        for (float sp : speeds) {
-            final float s = sp;
-            boolean selected = Math.abs(cur - s) < 0.025f;
-            root.addView(optionRow(ctx, selected ? accentColor : textColor, R.drawable.msg_speed,
-                    formatSpeed(s) + "x" + (selected ? "  ✓" : ""), () -> {
-                        try { MediaController.getInstance().setPlaybackSpeed(true, s); } catch (Throwable ignore) {}
-                        if (ref[0] != null) ref[0].dismiss();
-                    }));
-        }
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-        b.setCustomView(root);
-        ref[0] = b.create();
-        try { ref[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
-        ref[0].show();
-    }
-
-    private void showPlayerBg() {
-        final int textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
-        LinearLayout root = new LinearLayout(ctx);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(8), AndroidUtilities.dp(10), AndroidUtilities.dp(10));
-        final BottomSheet[] ref = new BottomSheet[1];
-        String[] names = {"Размытая обложка", "Чёткая обложка", "Тёмная тема", "Градиент под трек"};
-        int[] icons = {R.drawable.msg_photo_settings, R.drawable.msg_media, R.drawable.msg_theme, R.drawable.msg_colors};
-        int cur = org.telegram.messenger.PrizmaConfig.playerBg();
-        for (int i = 0; i < names.length; i++) {
-            final int m = i;
-            boolean selected = cur == m;
-            root.addView(optionRow(ctx, selected ? accentColor : textColor, icons[i], names[i] + (selected ? "  ✓" : ""), () -> {
-                org.telegram.messenger.PrizmaConfig.setPlayerBg(m);
-                if (this.root != null) this.root.invalidate();
-                if (ref[0] != null) ref[0].dismiss();
-            }));
-        }
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-        b.setCustomView(root);
-        ref[0] = b.create();
-        try { ref[0].fixNavigationBar(Theme.getColor(Theme.key_windowBackgroundWhite)); } catch (Throwable ignore) {}
-        ref[0].show();
-    }
-
-    private void showFullLyrics() {
-        final PrizmaLyrics.Lyrics lyr = currentLyrics;
-        if (lyr == null || lyr.lines == null || lyr.lines.isEmpty()) {
-            android.widget.Toast.makeText(ctx, "Текст песни не найден", android.widget.Toast.LENGTH_SHORT).show();
-            return;
-        }
-        final ArrayList<PrizmaLyrics.Line> lines = lyr.lines;
-        final boolean synced = lyr.synced;
-
-        LinearLayout sheetRoot = new LinearLayout(ctx);
-        sheetRoot.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable rbg = new GradientDrawable();
-        rbg.setColor(0xff121216);
-        rbg.setCornerRadii(new float[]{AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16), 0, 0, 0, 0});
-        sheetRoot.setBackground(rbg);
-        sheetRoot.setPadding(AndroidUtilities.dp(22), AndroidUtilities.dp(18), AndroidUtilities.dp(22), AndroidUtilities.dp(12));
-
-        MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
-        TextView head = new TextView(ctx);
-        String tt = mo == null ? "" : mo.getMusicTitle();
-        head.setText(tt == null || tt.isEmpty() ? "Текст песни" : tt);
-        head.setTextColor(0xffffffff);
-        head.setTextSize(19);
-        head.setTypeface(AndroidUtilities.bold());
-        head.setMaxLines(1);
-        head.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        sheetRoot.addView(head, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 2));
-
-        TextView sub = new TextView(ctx);
-        sub.setText(synced ? "караоке · нажми на строку для перехода" : "текст без синхронизации");
-        sub.setTextColor(0x80ffffff);
-        sub.setTextSize(12);
-        sheetRoot.addView(sub, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
-
-        final ScrollView sc = new ScrollView(ctx) {
-            @Override
-            protected void onMeasure(int ws, int hs) {
-                int maxH = (int) (AndroidUtilities.displaySize.y * 0.66f);
-                super.onMeasure(ws, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST));
-            }
-        };
-        sc.setVerticalScrollBarEnabled(false);
-        final LinearLayout col = new LinearLayout(ctx);
-        col.setOrientation(LinearLayout.VERTICAL);
-        sc.addView(col, new FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        final TextView[] rowViews = new TextView[lines.size()];
-        for (int i = 0; i < lines.size(); i++) {
-            final PrizmaLyrics.Line ln = lines.get(i);
-            TextView tv = new TextView(ctx);
-            String txt = ln.text == null || ln.text.isEmpty() ? "♪" : ln.text;
-            tv.setText(txt);
-            tv.setTextColor(0x66ffffff);
-            tv.setTextSize(17);
-            tv.setLineSpacing(AndroidUtilities.dp(3), 1f);
-            tv.setPadding(0, AndroidUtilities.dp(7), 0, AndroidUtilities.dp(7));
-            if (synced && ln.timeMs >= 0) {
-                final long seekMs = ln.timeMs;
-                tv.setOnClickListener(v -> {
-                    MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-                    int dur = cur == null ? 0 : (int) (cur.getDuration() * 1000);
-                    if (cur != null && dur > 0) {
-                        MediaController.getInstance().seekToProgress(cur, seekMs / (float) dur);
-                    }
-                });
-            }
-            rowViews[i] = tv;
-            col.addView(tv, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        }
-        sheetRoot.addView(sc, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-        b.setCustomView(sheetRoot);
-        final BottomSheet sheet = b.create();
-        try { sheet.setBackgroundColor(0xff121216); } catch (Throwable ignore) {}
-        try { sheet.fixNavigationBar(0xff121216); } catch (Throwable ignore) {}
-
-        if (synced) {
-            final int[] last = {-1};
-            final Runnable[] hl = new Runnable[1];
-            hl[0] = () -> {
-                if (!sheet.isShowing()) return;
-                MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-                if (cur != null) {
-                    long pos = (long) (cur.audioProgress * cur.getDuration() * 1000) + 300;
-                    int idx = 0;
-                    for (int i = 0; i < lines.size(); i++) {
-                        if (lines.get(i).timeMs <= pos) idx = i; else break;
-                    }
-                    if (idx != last[0]) {
-                        if (last[0] >= 0 && last[0] < rowViews.length) {
-                            rowViews[last[0]].setTextColor(0x66ffffff);
-                            rowViews[last[0]].setTypeface(Typeface.DEFAULT);
-                        }
-                        final TextView now = rowViews[idx];
-                        now.setTextColor(accentColor);
-                        now.setTypeface(AndroidUtilities.bold());
-                        now.animate().cancel();
-                        now.setScaleX(0.98f); now.setScaleY(0.98f);
-                        now.setPivotX(0);
-                        now.animate().scaleX(1f).scaleY(1f).setDuration(260)
-                                .setInterpolator(new OvershootInterpolator(2f)).start();
-                        final int target = idx;
-                        sc.post(() -> {
-                            View child = target < col.getChildCount() ? col.getChildAt(target) : null;
-                            if (child != null) {
-                                int y = child.getTop() - sc.getHeight() / 2 + child.getHeight();
-                                sc.smoothScrollTo(0, Math.max(0, y));
-                            }
-                        });
-                        last[0] = idx;
-                    }
-                }
-                AndroidUtilities.runOnUIThread(hl[0], 120);
-            };
-            sheet.setOnDismissListener(d -> AndroidUtilities.cancelRunOnUIThread(hl[0]));
-            AndroidUtilities.runOnUIThread(hl[0], 150);
-        }
-        sheet.show();
-    }
-
-    private void updateLikeIcon(boolean inPlaylist) {
-        if (likeButton == null || addDrawable == null) return;
-        addDrawable.setChecked(inPlaylist, likeButton.isAttachedToWindow());
-        addDrawable.setColor(inPlaylist ? accentColor : 0xffffffff);
-    }
-
-    private void updateShuffleIcon() {
-        if (shuffleButton == null) return;
-        boolean on = org.telegram.messenger.SharedConfig.shuffleMusic;
-        shuffleButton.setColorFilter(on ? accentColor : 0x66ffffff);
-    }
-
-    private void updateRepeatIcon() {
-        if (repeatButton == null) return;
-        int m = org.telegram.messenger.SharedConfig.repeatMode;
-        if (m == 2) {
-            repeatButton.setImageResource(R.drawable.player_new_repeatone);
-            repeatButton.setColorFilter(accentColor);
-        } else if (m == 1) {
-            repeatButton.setImageResource(R.drawable.player_new_repeatall);
-            repeatButton.setColorFilter(accentColor);
-        } else {
-            repeatButton.setImageResource(R.drawable.player_new_repeatall);
-            repeatButton.setColorFilter(0x66ffffff);
-        }
-    }
-
-    private void shareCurrentTrack() {
+    private void updateTopBar() {
         MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
         if (mo == null) return;
-        try {
-            ArrayList<MessageObject> list = new ArrayList<>();
-            list.add(mo);
-            new ShareAlert(ctx, list, null, false, null, false).show();
-        } catch (Throwable ignore) {}
+        topTitle.setText(sourceName(mo));
+        int total = MediaController.getInstance().getPlaylist().size();
+        int position = MediaController.getInstance().prizmaQueuePosition();
+        topSubtitle.setText(total > 1 && position > 0 ? "Трек " + position + " из " + total : "Один трек");
     }
 
-    private void applyAccent(int color) {
-        accentColor = color;
-        if (seek != null) seek.setAccent(color);
-        if (beatBg != null) beatBg.setAccent(color);
-        updateNextBar();
-        updateRepeatIcon();
-        updateShuffleIcon();
-        MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
-        if (mo != null) updateLikeIcon(org.telegram.messenger.PrizmaPlaylist.inAny(mo));
-    }
-
-    private int dominantColor(Bitmap src) {
+    private String sourceName(MessageObject mo) {
+        String playlist = PrizmaPlaylist.playingName(mo);
+        if (playlist != null) return playlist;
         try {
-            Bitmap small = Bitmap.createScaledBitmap(src, 24, 24, true);
-            long br = 0, bg = 0, bb = 0;
-            float bestScore = 0;
-            int bestColor = ACCENT;
-            float[] hsv = new float[3];
-            for (int y = 0; y < small.getHeight(); y++) {
-                for (int x = 0; x < small.getWidth(); x++) {
-                    int c = small.getPixel(x, y);
-                    Color.colorToHSV(c, hsv);
-                    float sat = hsv[1], val = hsv[2];
-                    float score = sat * (0.4f + 0.6f * val);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestColor = c;
-                    }
-                }
+            long did = mo.getDialogId();
+            MessagesController mc = MessagesController.getInstance(mo.currentAccount);
+            if (DialogObject.isUserDialog(did)) {
+                TLRPC.User u = mc.getUser(did);
+                if (u != null) return org.telegram.messenger.UserObject.getUserName(u);
+            } else {
+                TLRPC.Chat c = mc.getChat(-did);
+                if (c != null) return c.title;
             }
-            if (bestScore < 0.15f) {
-                return ACCENT;
-            }
-            Color.colorToHSV(bestColor, hsv);
-            if (hsv[2] < 0.5f) hsv[2] = 0.6f;
-            if (hsv[1] < 0.45f) hsv[1] = 0.55f;
-            return Color.HSVToColor(hsv);
-        } catch (Throwable e) {
-            return ACCENT;
+        } catch (Throwable ignore) {
         }
+        return "Сейчас играет";
     }
 
     private void animateTrackChange(MessageObject mo) {
-        final CubicBezierInterpolator ease = CubicBezierInterpolator.EASE_OUT_QUINT;
-        final OvershootInterpolator overshoot = new OvershootInterpolator(1.6f);
-        final View[] texts = new View[]{titleView, authorView};
-        final float off = AndroidUtilities.dp(90);
-        final float textUp = AndroidUtilities.dp(10);
-
+        final View[] texts = {titleView, authorView};
+        final float dir = coverInner.getTranslationX() > AndroidUtilities.dp(1) ? 1f : -1f;
+        final float off = coverSide * 0.5f;
         for (View v : texts) {
             v.animate().cancel();
-            v.animate().alpha(0f).translationY(-textUp).setDuration(150).setInterpolator(ease).start();
+            v.animate().alpha(0f).translationY(-AndroidUtilities.dp(8)).setDuration(130).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
         }
-
-        cover.animate().cancel();
-        cover.animate()
-                .alpha(0f)
-                .translationX(-off)
-                .rotation(-12f)
-                .scaleX(0.82f).scaleY(0.82f)
-                .setDuration(190)
-                .setInterpolator(ease)
-                .withEndAction(() -> {
-                    applyTrack(mo);
-                    cover.setTranslationX(off);
-                    cover.setRotation(12f);
-                    cover.setScaleX(0.82f);
-                    cover.setScaleY(0.82f);
-                    cover.setAlpha(0f);
-                    cover.animate()
-                            .alpha(1f)
-                            .translationX(0f)
-                            .rotation(0f)
-                            .scaleX(1f).scaleY(1f)
-                            .setDuration(430)
-                            .setInterpolator(overshoot)
-                            .start();
-
-                    for (View v : texts) {
-                        v.setTranslationY(AndroidUtilities.dp(12));
-                        v.animate().alpha(1f).translationY(0f).setDuration(300).setInterpolator(ease).start();
-                    }
-                })
-                .start();
-    }
-
-    private void loadLyrics(MessageObject mo) {
-        if (trackKey(mo) == lyricsForMsgId) {
-            return;
-        }
-        lyricsForMsgId = trackKey(mo);
-        currentLyrics = null;
-        lyricsPanel.setLoading();
-        final long reqId = trackKey(mo);
-        PrizmaLyrics.fetch(mo.getMusicTitle(), mo.getMusicAuthor(), (int) mo.getDuration(), result -> {
-            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-            if (cur == null || trackKey(cur) != reqId || !running) {
-                return;
+        coverBox.animate().cancel();
+        coverBox.animate().alpha(page == PAGE_COVER ? 0f : 0.4f).setDuration(150).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).withEndAction(() -> {
+            applyTrack(mo);
+            swipe.snap(-dir * off);
+            coverBox.animate().alpha(1f).setDuration(240).withEndAction(null).start();
+            swipe.to(0f);
+            for (View v : texts) {
+                v.setTranslationY(AndroidUtilities.dp(10));
+                v.animate().alpha(1f).translationY(0f).setDuration(280).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
             }
-            currentLyrics = result;
-            lyricsPanel.setLyrics(result);
-        });
+        }).start();
     }
 
     private void loadCover(MessageObject mo) {
@@ -1575,20 +890,20 @@ public class PrizmaFullPlayer extends Dialog {
             return;
         }
         coverWaiting = true;
-        String artworkUrl = mo.getArtworkUrl(false);
-        ImageLocation thumbLoc = thumbLocation(mo);
-        android.graphics.drawable.Drawable placeholder = coverPlaceholder(mo);
-        if (artworkUrl != null && !artworkUrl.isEmpty()) {
-            cover.setImage(ImageLocation.getForPath(artworkUrl), null, thumbLoc, null, placeholder, null, 0, 1, mo);
-        } else if (thumbLoc != null) {
-            cover.setImage(null, null, thumbLoc, null, placeholder, null, 0, 1, mo);
+        String artwork = mo.getArtworkUrl(false);
+        ImageLocation thumb = PrizmaTrackCover.thumb(mo, 360);
+        Drawable placeholder = coverPlaceholder(mo);
+        if (artwork != null && !artwork.isEmpty()) {
+            cover.setImage(ImageLocation.getForPath(artwork), null, thumb, null, placeholder, null, 0, 1, mo);
+        } else if (thumb != null) {
+            cover.setImage(null, null, thumb, null, placeholder, null, 0, 1, mo);
         } else {
             cover.setImageDrawable(placeholder);
         }
     }
 
     private void checkLateCover() {
-        if (!coverWaiting || cover == null) return;
+        if (!coverWaiting) return;
         if (cover.getImageReceiver() != null && cover.getImageReceiver().hasImageLoaded() && cover.getImageReceiver().getBitmap() != null) {
             coverWaiting = false;
             return;
@@ -1611,737 +926,903 @@ public class PrizmaFullPlayer extends Dialog {
         return null;
     }
 
-    private android.graphics.drawable.Drawable coverPlaceholder(MessageObject mo) {
-        String key = mo.getMusicAuthor() == null ? "" : mo.getMusicAuthor();
-        int[][] tones = {{0xff2f3a52, 0xff1b2130}, {0xff3d2f4f, 0xff221a2e}, {0xff2c4440, 0xff182624}, {0xff4a3a2a, 0xff2a2018}};
-        int[] tone = tones[Math.abs(key.hashCode()) % tones.length];
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, tone);
-        bg.setCornerRadius(AndroidUtilities.dp(16));
-        android.graphics.drawable.Drawable note = cover.getContext().getResources().getDrawable(org.telegram.messenger.R.drawable.msg_played).mutate();
+    private Drawable coverPlaceholder(MessageObject mo) {
+        Drawable bg = PrizmaTrackCover.placeholder(mo, AndroidUtilities.dp(16));
+        Drawable note = ctx.getResources().getDrawable(R.drawable.prizma_ic_music).mutate();
         note.setColorFilter(new android.graphics.PorterDuffColorFilter(0x66ffffff, android.graphics.PorterDuff.Mode.SRC_IN));
-        android.graphics.drawable.LayerDrawable layers = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{bg, note});
-        int inset = AndroidUtilities.dp(56);
+        android.graphics.drawable.LayerDrawable layers = new android.graphics.drawable.LayerDrawable(new Drawable[]{bg, note});
+        int inset = AndroidUtilities.dp(84);
         layers.setLayerInset(1, inset, inset, inset, inset);
         return layers;
+    }
+
+    private void tryBuildBlur(MessageObject mo) {
+        long key = trackKey(mo);
+        if (blurKey == key && blurBitmap != null) return;
+        Bitmap src = null;
+        try {
+            if (cover.getImageReceiver() != null) src = cover.getImageReceiver().getBitmap();
+            if (src == null) src = audioInfoCover();
+        } catch (Throwable ignore) {
+        }
+        if (src == null || src.isRecycled() || src == blurSource) return;
+        try {
+            Bitmap small = Bitmap.createScaledBitmap(src, 56, 56, true).copy(Bitmap.Config.ARGB_8888, true);
+            Utilities.stackBlurBitmap(small, 4);
+            Bitmap old = blurBitmap;
+            blurBitmap = small;
+            blurSource = src;
+            blurKey = key;
+            backdrop.setCoverBitmaps(small, src);
+            if (old != null && !old.isRecycled()) old.recycle();
+            lastSeed = PrizmaPalette.seedOf(src);
+            refreshPalette(true);
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private void refreshPalette(boolean animated) {
+        PrizmaPalette next;
+        if (!PrizmaConfig.coverColorsBig() || lastSeed == 0) {
+            next = PrizmaPalette.neutral();
+        } else {
+            next = PrizmaPalette.of(lastSeed);
+        }
+        applyPalette(next, animated);
+    }
+
+    private void applyPalette(PrizmaPalette p, boolean animated) {
+        palette = p;
+        backdrop.setPalette(p, animated);
+        seek.setColors(p.accent, p.onAccent);
+        playButton.setColors(p.accent, p.onAccent, animated);
+        playPause.setColor(p.onAccent);
+        prevButton.setColors(p.container, p.onContainer, animated);
+        nextButton.setColors(p.container, p.onContainer, animated);
+        lyricsButton.setColors(p.accent, p.onAccent, p.container, p.onContainer);
+        queueButton.setColors(p.accent, p.onAccent, p.container, p.onContainer);
+        heart.setAccent(p.accent);
+        shuffleButton.setAccent(p.accent);
+        repeatButton.setAccent(p.accent);
+        queuePanel.setPalette(p);
+        lyricsPanel.setPalette(p);
+        updateShuffle();
+        updateRepeat();
+    }
+
+    private void checkWave(MessageObject mo) {
+        long key = trackKey(mo);
+        if (wavePeaksKey == key) return;
+        long now = System.currentTimeMillis();
+        if (now < waveRetryAt) return;
+        waveRetryAt = now + 2500;
+        PrizmaWaveform.load(mo, peaks -> {
+            if (!running || loadedKey != key) return;
+            wavePeaksKey = key;
+            seek.setPeaks(peaks, true);
+        });
+    }
+
+    private void checkTagLyrics(MessageObject mo) {
+        if (currentLyrics != null || page != PAGE_LYRICS) return;
+        try {
+            if (MediaController.getInstance().getAudioInfo() == null) return;
+            PrizmaLyrics.Lyrics tags = PrizmaLyrics.fromTags(MediaController.getInstance().getAudioInfo().getLyrics());
+            if (tags != null) {
+                currentLyrics = tags;
+                lyricsPanel.showLines(tags);
+            }
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private void loadLyrics(MessageObject mo) {
+        long key = trackKey(mo);
+        if (lyricsKey == key && lyricsAnswered) return;
+        lyricsKey = key;
+        lyricsAnswered = false;
+        currentLyrics = null;
+        if (!PrizmaConfig.lyricsOnline()) {
+            if (PrizmaConfig.lyricsAsked()) {
+                lyricsPanel.showOff();
+            } else {
+                lyricsPanel.showAsk();
+            }
+            return;
+        }
+        lyricsPanel.showLoading();
+        PrizmaLyrics.fetch(mo.getMusicTitle(), mo.getMusicAuthor(), (int) mo.getDuration(), result -> {
+            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
+            if (!running || cur == null || trackKey(cur) != key) return;
+            lyricsAnswered = true;
+            if (result == null) {
+                lyricsPanel.showNone();
+            } else if (result.instrumental) {
+                lyricsPanel.showInstrumental();
+            } else {
+                currentLyrics = result;
+                lyricsPanel.showLines(result);
+            }
+        });
+    }
+
+    private void forceLyrics() {
+        lyricsKey = Long.MIN_VALUE;
+        lyricsAnswered = false;
+        MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+        if (mo != null) loadLyrics(mo);
+    }
+
+    private void loadClip(MessageObject mo) {
+        long key = trackKey(mo);
+        if (clipKey == key) return;
+        clipKey = key;
+        if (PrizmaConfig.liteMode()) {
+            clipView.hide();
+            return;
+        }
+        clipView.hide();
+        PrizmaClips.find(mo, clip -> {
+            if (!running || clipKey != key) return;
+            if (clip != null) clipView.show(clip.file);
+        });
+    }
+
+    private void onSettingsChanged() {
+        refreshPalette(true);
+        measureStage();
+        seek.invalidate();
+        lyricsPanel.view.invalidate();
+        backdrop.invalidate();
+        if (PrizmaConfig.coverParallax()) startParallax();
+        else stopParallax();
+        clipKey = Long.MIN_VALUE;
+        MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+        if (mo != null) {
+            loadClip(mo);
+            if (currentLyrics == null) forceLyrics();
+        }
+    }
+
+    private void updateShuffle() {
+        if (shuffleButton != null) shuffleButton.setActive(SharedConfig.shuffleMusic);
+    }
+
+    private void updateRepeat() {
+        if (repeatButton == null) return;
+        int m = SharedConfig.repeatMode;
+        repeatButton.setIcon(m == 2 ? R.drawable.player_new_repeatone : R.drawable.player_new_repeatall);
+        repeatButton.setActive(m != 0);
+    }
+
+    private void updateTogetherBar() {
+        PrizmaTogether t = PrizmaTogether.get();
+        boolean hosting = t.isHosting(), following = t.isFollowing();
+        String key;
+        if (hosting) {
+            key = "H" + t.getHostChatName() + "|" + t.audienceNames();
+        } else if (following) {
+            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
+            boolean waiting = cur == null || cur.getId() != t.getGuestMsgId();
+            key = "G" + t.getGuestHostName() + "|" + t.getAudience().size() + (waiting ? "|w" : "");
+        } else {
+            key = "";
+        }
+        if (key.equals(togetherKey)) return;
+        togetherKey = key;
+        if (key.isEmpty()) {
+            togetherBar.setVisibility(View.GONE);
+        } else if (hosting) {
+            String name = t.getHostChatName();
+            togetherEyebrow.setText("Вы ведёте эфир");
+            togetherEyebrow.setTextColor(0xffff7a70);
+            String who = t.audienceNames();
+            togetherLabel.setText(!who.isEmpty() ? "Слушают: " + who : (name.isEmpty() ? "" : "Чат: " + name + " · ") + "пока никто не подключился");
+            togetherButton.setText("Стоп");
+            togetherBar.setVisibility(View.VISIBLE);
+        } else {
+            String name = t.getGuestHostName();
+            togetherEyebrow.setText("Слушаете вместе");
+            togetherEyebrow.setTextColor(palette.accent);
+            int others = t.getAudience().size();
+            togetherLabel.setText((name.isEmpty() ? "Эфир" : "Ведёт: " + name)
+                    + (key.endsWith("|w") ? " · ждём следующий трек…" : others > 0 ? " · с вами ещё " + others : " · синхронно"));
+            togetherButton.setText("Выйти");
+            togetherBar.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private int popupSurface() {
+        return PrizmaPalette.mix(palette.surface, 0xffffffff, 0.05f);
+    }
+
+    private PrizmaPopup openMenu() {
+        final MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+        PrizmaPopup popup = new PrizmaPopup(root, popupSurface(), TEXT);
+        if (mo != null) {
+            popup.item(R.drawable.msg_forward, "Переслать", () -> forward(mo));
+            popup.item(R.drawable.msg_share, "Поделиться", () -> share(mo));
+            popup.item(R.drawable.msg_download, "Сохранить в Музыку", () -> saveToMusic(mo));
+            popup.item(R.drawable.msg_openin, "Открыть в чате", () -> openInChat(mo));
+        }
+        popup.item(R.drawable.prizma_ic_music, "Моя музыка", () -> PrizmaPlaylistSheet.show(ctx));
+        popup.item(R.drawable.media_settings, "Эквалайзер", () -> PrizmaEqualizerSheet.show(ctx, root, palette.accent));
+        popup.more(R.drawable.msg_autodelete, PrizmaSleepTimer.isActive() ? "Таймер сна включён" : "Таймер сна", () -> popup.replaceWith(this::fillSleep));
+        addTogether(popup);
+        if (mo != null) {
+            final int account = mo.currentAccount;
+            final boolean saved = PrizmaProfileMusic.isSaved(account, mo);
+            Runnable toggle = () -> PrizmaProfileMusic.toggle(account, mo, text -> Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show());
+            if (saved) {
+                popup.danger(R.drawable.msg_delete, "Убрать из профиля", toggle);
+            } else {
+                popup.item(R.drawable.left_status_profile, "Добавить в профиль", toggle);
+            }
+            popup.divider();
+            popup.more(R.drawable.msg_info, "Детали", () -> popup.replaceWith(p -> fillDetails(p, mo)));
+            popup.item(R.drawable.prizma_ic_clip, PrizmaClips.hasOwn(mo) ? "Убрать свой клип" : "Свой клип к треку", () -> toggleOwnClip(mo));
+        } else {
+            popup.divider();
+        }
+        popup.item(R.drawable.msg_settings, "Настройки плеера", () -> PrizmaPlayerSettings.show(root, palette, this::onSettingsChanged));
+        popup.showAt(optionsButton, true);
+        return popup;
+    }
+
+    private void addTogether(PrizmaPopup popup) {
+        final PrizmaTogether together = PrizmaTogether.get();
+        if (together.isHosting()) {
+            popup.item(R.drawable.msg_leave, "Завершить эфир", together::stopHosting);
+        } else if (together.isFollowing()) {
+            popup.item(R.drawable.msg_leave, "Выйти из эфира", together::leave);
+        } else {
+            popup.item(R.drawable.msg_groups, "Слушать вместе", () -> {
+                dismiss();
+                PrizmaTogether.pickChatAndStart(ctx);
+            });
+        }
+    }
+
+    private void fillSleep(PrizmaPopup p) {
+        for (int m : new int[]{15, 30, 45, 60}) {
+            final int minutes = m;
+            p.item(R.drawable.msg_autodelete, "Через " + m + " мин", () -> {
+                PrizmaSleepTimer.schedule(minutes);
+                Toast.makeText(ctx, "Таймер сна: " + minutes + " мин", Toast.LENGTH_SHORT).show();
+            });
+        }
+        if (PrizmaSleepTimer.isActive()) {
+            p.danger(R.drawable.msg_delete, "Выключить таймер", PrizmaSleepTimer::cancel);
+        }
+    }
+
+    private void fillDetails(PrizmaPopup p, MessageObject mo) {
+        TLRPC.Document doc = mo.getDocument();
+        int seconds = Math.max(1, (int) mo.getDuration());
+        p.note("Длительность", formatTime(seconds));
+        if (doc != null) {
+            String mime = doc.mime_type == null ? "" : doc.mime_type.replace("audio/", "").toUpperCase();
+            if (!mime.isEmpty()) p.note("Формат", mime);
+            p.note("Размер", AndroidUtilities.formatFileSize(doc.size));
+            p.note("Битрейт", (doc.size * 8 / 1000 / seconds) + " кбит/с");
+        }
+        p.note("Откуда", sourceName(mo));
+    }
+
+    private void openSpeed(View anchor) {
+        PrizmaPopup popup = new PrizmaPopup(root, popupSurface(), TEXT);
+        float cur = MediaController.getInstance().getPlaybackSpeed(true);
+        for (float s : new float[]{0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f}) {
+            final float value = s;
+            popup.check(R.drawable.msg_speed, formatSpeed(s) + "x", Math.abs(cur - s) < 0.025f,
+                    () -> MediaController.getInstance().setPlaybackSpeed(true, value));
+        }
+        popup.showAt(anchor, false);
+    }
+
+    private void forward(MessageObject mo) {
+        try {
+            ArrayList<MessageObject> list = new ArrayList<>();
+            list.add(mo);
+            new ShareAlert(ctx, list, null, false, null, false).show();
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private File trackFile(MessageObject mo) {
+        File f = null;
+        if (!TextUtils.isEmpty(mo.messageOwner.attachPath)) {
+            f = new File(mo.messageOwner.attachPath);
+            if (!f.exists()) f = null;
+        }
+        if (f == null) f = FileLoader.getInstance(mo.currentAccount).getPathToMessage(mo.messageOwner);
+        return f;
+    }
+
+    private void share(MessageObject mo) {
+        try {
+            File f = trackFile(mo);
+            if (f == null || !f.exists()) {
+                Toast.makeText(ctx, "Трек ещё не скачался", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType(mo.getMimeType());
+            intent.putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(ApplicationLoader.applicationContext, ApplicationLoader.getApplicationId() + ".provider", f));
+            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Activity activity = AndroidUtilities.findActivity(ctx);
+            if (activity != null) activity.startActivity(Intent.createChooser(intent, "Поделиться треком"));
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private void saveToMusic(MessageObject mo) {
+        Activity activity = AndroidUtilities.findActivity(ctx);
+        if (activity == null) return;
+        if (Build.VERSION.SDK_INT <= 28 || BuildVars.NO_SCOPED_STORAGE) {
+            if (activity.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                activity.requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, 4);
+                return;
+            }
+        }
+        File f = trackFile(mo);
+        if (f == null || !f.exists()) {
+            Toast.makeText(ctx, "Трек ещё не скачался", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String name = FileLoader.getDocumentFileName(mo.getDocument());
+        if (TextUtils.isEmpty(name)) name = mo.getFileName();
+        MediaController.saveFile(f.getAbsolutePath(), activity, 3, name, mo.getDocument() != null ? mo.getDocument().mime_type : "",
+                uri -> Toast.makeText(ctx, "Сохранено в Музыку", Toast.LENGTH_SHORT).show());
+    }
+
+    private void openInChat(MessageObject mo) {
+        BaseFragment fragment = LaunchActivity.getSafeLastFragment();
+        if (fragment == null) return;
+        Bundle args = new Bundle();
+        long did = mo.getDialogId();
+        if (DialogObject.isEncryptedDialog(did)) {
+            args.putInt("enc_id", DialogObject.getEncryptedChatId(did));
+        } else if (DialogObject.isUserDialog(did)) {
+            args.putLong("user_id", did);
+        } else {
+            args.putLong("chat_id", -did);
+        }
+        args.putInt("message_id", mo.getId());
+        dismiss();
+        fragment.presentFragment(new ChatActivity(args));
+    }
+
+    private void toggleOwnClip(MessageObject mo) {
+        if (PrizmaClips.hasOwn(mo)) {
+            PrizmaClips.clearOwn(mo);
+            clipKey = Long.MIN_VALUE;
+            loadClip(mo);
+            return;
+        }
+        Activity activity = AndroidUtilities.findActivity(ctx);
+        if (activity == null) return;
+        try {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("video/*");
+            activity.startActivityForResult(Intent.createChooser(intent, "Клип к треку"), PrizmaClips.OWN_REQUEST);
+        } catch (Throwable ignore) {
+        }
+    }
+
+    public static void handleClipPicked(Activity activity, Uri uri) {
+        final MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+        if (activity == null || uri == null || mo == null) return;
+        Utilities.globalQueue.postRunnable(() -> {
+            boolean ok = false;
+            File dst = PrizmaClips.ownTarget(mo);
+            try (InputStream in = activity.getContentResolver().openInputStream(uri); OutputStream out = new FileOutputStream(dst)) {
+                byte[] buf = new byte[64 * 1024];
+                long total = 0;
+                int r;
+                while (in != null && (r = in.read(buf)) > 0) {
+                    total += r;
+                    if (total > 120L * 1024 * 1024) throw new java.io.IOException("too big");
+                    out.write(buf, 0, r);
+                }
+                ok = total > 0;
+            } catch (Throwable e) {
+                dst.delete();
+            }
+            final boolean done = ok;
+            AndroidUtilities.runOnUIThread(() -> {
+                Toast.makeText(activity, done ? "Клип добавлен" : "Не получилось взять это видео", Toast.LENGTH_SHORT).show();
+                if (instance != null) {
+                    instance.clipKey = Long.MIN_VALUE;
+                    instance.loadClip(mo);
+                }
+            });
+        });
+    }
+
+    @Override
+    public ViewGroup popupHost() {
+        return root;
+    }
+
+    @Override
+    public PrizmaPalette palette() {
+        return palette;
+    }
+
+    private static String formatSpeed(float s) {
+        if (Math.abs(s - Math.round(s)) < 0.01f) return String.valueOf(Math.round(s));
+        String v = String.valueOf(Math.round(s * 100f) / 100f);
+        return v.endsWith("0") && v.contains(".") ? v.substring(0, v.length() - 1) : v;
     }
 
     private static long trackKey(MessageObject mo) {
         return mo.getDialogId() * 1_000_003L + mo.getId();
     }
 
-    private void tryBuildBlur(MessageObject mo) {
-        if (blurForMsgId == trackKey(mo) && blurBg != null) {
-            return;
-        }
-        Bitmap src = null;
-        try {
-            if (cover.getImageReceiver() != null) {
-                src = cover.getImageReceiver().getBitmap();
-            }
-            if (src == null && MediaController.getInstance().getAudioInfo() != null) {
-                src = MediaController.getInstance().getAudioInfo().getCover();
-            }
-        } catch (Throwable ignore) {}
-        if (src == null || src.isRecycled()) {
-            return;
-        }
-        if (src == blurSrcRef) {
-            return;
-        }
-        try {
-            Bitmap small = Bitmap.createScaledBitmap(src, 56, 56, true).copy(Bitmap.Config.ARGB_8888, true);
-            Utilities.stackBlurBitmap(small, 4);
-            Bitmap old = blurBg;
-            blurBg = small;
-            blurSrcRef = src;
-            blurForMsgId = trackKey(mo);
-            if (old != null && !old.isRecycled()) {
-                old.recycle();
-            }
-            applyAccent(dominantColor(src));
-            if (root != null) root.invalidate();
-        } catch (Throwable ignore) {}
-    }
-
-    private ImageLocation thumbLocation(MessageObject mo) {
-        TLRPC.Document doc = mo.getDocument();
-        TLRPC.PhotoSize thumb = doc != null ? FileLoader.getClosestPhotoSizeWithSize(doc.thumbs, 360) : null;
-        if (!(thumb instanceof TLRPC.TL_photoSize) && !(thumb instanceof TLRPC.TL_photoSizeProgressive)) {
-            thumb = null;
-        }
-        return thumb != null ? ImageLocation.getForDocument(thumb, doc) : null;
-    }
-
     private static String formatTime(int seconds) {
         if (seconds < 0) seconds = 0;
-        int m = seconds / 60;
-        int s = seconds % 60;
+        int m = seconds / 60, s = seconds % 60;
         return m + ":" + (s < 10 ? "0" + s : s);
     }
 
-    interface OnSeek {
-        void onSeek(float progress, boolean committed);
-    }
+    private final class DragRoot extends FrameLayout {
+        private final int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        private float startX, startY, baseY;
+        private boolean dragging, allowed;
+        private VelocityTracker velocity;
+        private float cornerRadius;
+        private final PrizmaSpring sheet = new PrizmaSpring(0f, 300f, 0.92f, this::setTranslationY);
 
-    private static class AppleSeek extends View implements PrizmaVisualizerData.Listener {
-        OnSeek onSeek;
-        private float value;
-        private float display;
-        private boolean pressed;
-        private boolean playing;
-        private float amp;
-        private float ampTarget;
-        private long lastTime;
-        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final float[] hsv = new float[3];
-        private final RectF r = new RectF();
-        private final RectF rGlow = new RectF();
-        private int accent = ACCENT;
-
-        AppleSeek(Context c) {
-            super(c);
+        DragRoot(Context context) {
+            super(context);
+            setOutlineProvider(new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight() + AndroidUtilities.dp(40), cornerRadius);
+                }
+            });
         }
 
-        void setAccent(int color) {
-            accent = color;
-            invalidate();
+        void settle() {
+            sheet.snap(getTranslationY());
+            sheet.to(0f);
         }
 
-        private static int blend(int a, int b, float t) {
-            t = t < 0 ? 0 : (t > 1 ? 1 : t);
-            int aa = (a >>> 24), ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
-            int ba = (b >>> 24), br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
-            int oa = (int) (aa + (ba - aa) * t);
-            int or = (int) (ar + (br - ar) * t);
-            int og = (int) (ag + (bg - ag) * t);
-            int ob = (int) (ab + (bb - ab) * t);
-            return (oa << 24) | (or << 16) | (og << 8) | ob;
-        }
-
-        void setValue(float v) {
-            if (pressed) return;
-            value = clamp(v);
-            invalidate();
-        }
-
-        private float clamp(float v) {
-            return v < 0 ? 0 : (v > 1 ? 1 : v);
+        private void track(MotionEvent e) {
+            if (velocity == null) velocity = VelocityTracker.obtain();
+            MotionEvent copy = MotionEvent.obtain(e);
+            copy.setLocation(e.getRawX(), e.getRawY());
+            velocity.addMovement(copy);
+            copy.recycle();
         }
 
         @Override
-        protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            PrizmaVisualizerData.setListener(this);
-        }
-
-        @Override
-        protected void onDetachedFromWindow() {
-            super.onDetachedFromWindow();
-            PrizmaVisualizerData.clearListener(this);
-        }
-
-        @Override
-        public void onWaveform(boolean playing, boolean animate, float[] values) {
-            this.playing = playing;
-            float m = 0;
-            if (values != null) {
-                for (float v : values) m = Math.max(m, v);
+        public boolean onInterceptTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX = e.getRawX();
+                    startY = e.getRawY();
+                    dragging = false;
+                    int limit = page == PAGE_COVER ? seek.getTop() : stage.getTop();
+                    allowed = e.getY() < limit && getChildCount() <= 3;
+                    if (velocity != null) velocity.clear();
+                    track(e);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    track(e);
+                    float dy = e.getRawY() - startY, dx = e.getRawX() - startX;
+                    if (allowed && dy > slop && dy > Math.abs(dx) * 1.3f) {
+                        dragging = true;
+                        baseY = slop;
+                        sheet.cancel();
+                        setClipToOutline(true);
+                        return true;
+                    }
+                    break;
             }
-            ampTarget = Math.max(0f, Math.min(1f, m));
-            postInvalidateOnAnimation();
+            return false;
         }
 
         @Override
         public boolean onTouchEvent(MotionEvent e) {
-            float w = Math.max(1, getWidth());
-            switch (e.getAction()) {
+            switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    pressed = true;
-                    if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
-                    value = clamp(e.getX() / w);
-                    if (onSeek != null) onSeek.onSeek(value, false);
-                    invalidate();
                     return true;
                 case MotionEvent.ACTION_MOVE:
-                    value = clamp(e.getX() / w);
-                    if (onSeek != null) onSeek.onSeek(value, false);
-                    invalidate();
+                    if (!dragging) return true;
+                    track(e);
+                    float y = Math.max(0f, e.getRawY() - startY - baseY);
+                    setTranslationY(y);
+                    float wanted = Math.min(AndroidUtilities.dpf2(30), y / 3f);
+                    if (wanted != cornerRadius) {
+                        cornerRadius = wanted;
+                        invalidateOutline();
+                    }
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    pressed = false;
-                    if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
-                    if (onSeek != null) onSeek.onSeek(value, true);
-                    invalidate();
+                    if (dragging) {
+                        dragging = false;
+                        float v = 0;
+                        if (velocity != null) {
+                            track(e);
+                            velocity.computeCurrentVelocity(1000);
+                            v = velocity.getYVelocity();
+                        }
+                        if (getTranslationY() > getHeight() * 0.2f || v > AndroidUtilities.dp(900)) {
+                            PrizmaFullPlayer.this.dismiss();
+                        } else {
+                            setClipToOutline(false);
+                            cornerRadius = 0;
+                            settle();
+                        }
+                    }
                     return true;
+            }
+            return true;
+        }
+    }
+
+    private final class LyricsPanel extends FrameLayout {
+        final PrizmaLyricsView view;
+        private final LinearLayout state;
+        private final ImageView icon;
+        private final TextView title, text, action;
+        private final GradientDrawable actionBg = new GradientDrawable();
+
+        LyricsPanel(Context c) {
+            super(c);
+            view = new PrizmaLyricsView(c);
+            view.listener = ms -> {
+                MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
+                if (mo != null && mo.getDuration() > 0) {
+                    MediaController.getInstance().seekToProgress(mo, (float) (ms / (mo.getDuration() * 1000f)));
+                }
+            };
+            addView(view, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+            state = new LinearLayout(c);
+            state.setOrientation(LinearLayout.VERTICAL);
+            state.setGravity(Gravity.CENTER_HORIZONTAL);
+            icon = new ImageView(c);
+            icon.setImageResource(R.drawable.prizma_ic_empty);
+            icon.setColorFilter(TEXT_2);
+            icon.setScaleX(2.6f);
+            icon.setScaleY(2.6f);
+            icon.setScaleType(ImageView.ScaleType.CENTER);
+            state.addView(icon, LayoutHelper.createLinear(84, 84, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 18));
+            title = new TextView(c);
+            title.setTextColor(TEXT);
+            title.setTextSize(21);
+            title.setTypeface(AndroidUtilities.bold());
+            title.setGravity(Gravity.CENTER);
+            state.addView(title, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
+            text = new TextView(c);
+            text.setTextColor(TEXT_2);
+            text.setTextSize(14);
+            text.setGravity(Gravity.CENTER);
+            text.setLineSpacing(AndroidUtilities.dp(2), 1f);
+            state.addView(text, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 12, 8, 12, 0));
+            action = new TextView(c);
+            action.setTextSize(15);
+            action.setTypeface(AndroidUtilities.bold());
+            action.setGravity(Gravity.CENTER);
+            action.setPadding(AndroidUtilities.dp(34), 0, AndroidUtilities.dp(34), 0);
+            actionBg.setCornerRadius(AndroidUtilities.dp(24));
+            action.setBackground(actionBg);
+            PrizmaGlass.pressable(action);
+            state.addView(action, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 48, Gravity.CENTER_HORIZONTAL, 0, 22, 0, 0));
+            addView(state, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+        }
+
+        void setPalette(PrizmaPalette p) {
+            actionBg.setColor(p.accent);
+            action.setTextColor(p.onAccent);
+        }
+
+        private void state(String head, String body, String button, Runnable click) {
+            view.setVisibility(GONE);
+            state.setVisibility(VISIBLE);
+            state.setAlpha(0f);
+            state.animate().alpha(1f).setDuration(200).start();
+            title.setText(head);
+            text.setText(body);
+            text.setVisibility(TextUtils.isEmpty(body) ? GONE : VISIBLE);
+            action.setVisibility(button == null ? GONE : VISIBLE);
+            action.setText(button);
+            action.setOnClickListener(click == null ? null : v -> click.run());
+        }
+
+        void showAsk() {
+            state("Найти текст песни?", "Название и исполнитель уйдут на сайт LRCLIB. Если подключён сервер Libre, запрос пойдёт через него, а не с вашего телефона.",
+                    "Искать текст", () -> {
+                        PrizmaConfig.setLyricsOnline(true);
+                        PrizmaConfig.setLyricsAsked(true);
+                        forceLyrics();
+                    });
+        }
+
+        void showOff() {
+            state("Поиск текстов выключен", "В самом треке текста нет. Включите «Тексты из сети», чтобы искать его онлайн.",
+                    "Включить", () -> {
+                        PrizmaConfig.setLyricsOnline(true);
+                        forceLyrics();
+                    });
+        }
+
+        void showLoading() {
+            state("Ищем текст…", null, null, null);
+        }
+
+        void showNone() {
+            state("Текст не нашёлся", "Для этого трека пока никто не добавил слова.", "Попробовать ещё раз", PrizmaFullPlayer.this::forceLyrics);
+        }
+
+        void showInstrumental() {
+            state("Инструментал", "Трек отмечен как композиция без слов.", null, null);
+        }
+
+        void showLines(PrizmaLyrics.Lyrics lyrics) {
+            state.setVisibility(GONE);
+            view.setVisibility(VISIBLE);
+            view.setLyrics(lyrics);
+            view.setAlpha(0f);
+            view.animate().alpha(1f).setDuration(260).start();
+        }
+    }
+
+    private static final class PillButton extends View {
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rect = new RectF();
+        private Drawable icon;
+        private int color, tint;
+        private float grow, shift, round;
+        private PillButton left, right;
+        private final PrizmaSpring growSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.48f, v -> {
+            grow = v;
+            invalidate();
+        });
+        private final PrizmaSpring shiftSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.5f, v -> {
+            shift = v;
+            invalidate();
+        });
+        private final PrizmaSpring roundSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.8f, v -> {
+            round = v;
+            invalidate();
+        });
+
+        PillButton(Context c) {
+            super(c);
+            setClickable(true);
+        }
+
+        void setIcon(Drawable d) {
+            icon = d;
+            if (d != null) d.setCallback(this);
+            if (d instanceof PlayPauseDrawable) ((PlayPauseDrawable) d).setParent(this);
+            invalidate();
+        }
+
+        @Override
+        protected boolean verifyDrawable(Drawable who) {
+            return who == icon || super.verifyDrawable(who);
+        }
+
+        void neighbors(PillButton l, PillButton r) {
+            left = l;
+            right = r;
+        }
+
+        void setRounded(boolean paused) {
+            if (roundSpring.target() != (paused ? 1f : 0f)) roundSpring.to(paused ? 1f : 0f);
+        }
+
+        void setColors(int fillColor, int iconColor, boolean animated) {
+            if (!animated) {
+                color = fillColor;
+                tint = iconColor;
+                paint();
+                return;
+            }
+            final int fromFill = color, fromTint = tint;
+            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0f, 1f);
+            va.setDuration(420);
+            va.addUpdateListener(a -> {
+                float t = (float) a.getAnimatedValue();
+                color = PrizmaPalette.mix(fromFill, fillColor, t);
+                tint = PrizmaPalette.mix(fromTint, iconColor, t);
+                paint();
+            });
+            va.start();
+        }
+
+        private void paint() {
+            if (icon != null && !(icon instanceof PlayPauseDrawable)) {
+                icon.setColorFilter(new android.graphics.PorterDuffColorFilter(tint, android.graphics.PorterDuff.Mode.SRC_IN));
+            }
+            invalidate();
+        }
+
+        void nudge(float direction) {
+            shiftSpring.snap(direction * AndroidUtilities.dp(7));
+            shiftSpring.to(0f);
+        }
+
+        void squeeze(float amount) {
+            growSpring.to(amount);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    growSpring.to(AndroidUtilities.dp(7));
+                    if (left != null) left.squeeze(-AndroidUtilities.dp(5));
+                    if (right != null) right.squeeze(-AndroidUtilities.dp(5));
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    growSpring.to(0f);
+                    if (left != null) left.squeeze(0f);
+                    if (right != null) right.squeeze(0f);
+                    break;
             }
             return super.onTouchEvent(e);
         }
 
-        private float baseHeight(int i) {
-            float s = (float) (0.55 + 0.45 * Math.sin(i * 0.9) * Math.cos(i * 0.37 + 1.3));
-            return Math.max(0.18f, Math.min(1f, Math.abs(s)));
-        }
-
         @Override
         protected void onDraw(Canvas canvas) {
-            long now = System.currentTimeMillis();
-            float dt = lastTime == 0 ? 16 : Math.min(48, now - lastTime);
-            lastTime = now;
-            float kv = Math.min(1f, dt / 120f * 3f);
-            float ka = Math.min(1f, dt / 90f * 3f);
-            display += (value - display) * kv;
-            boolean isPlaying;
-            try {
-                isPlaying = MediaController.getInstance().getPlayingMessageObject() != null
-                        && !MediaController.getInstance().isMessagePaused();
-            } catch (Throwable e) {
-                isPlaying = playing;
-            }
-            float target = isPlaying ? Math.max(0.18f, ampTarget) : 0.05f;
-            amp += (target - amp) * ka;
-
-            int w = getWidth();
-            int h = getHeight();
-            float cy = h / 2f;
-            float barW = AndroidUtilities.dpf2(3f);
-            float gap = AndroidUtilities.dpf2(3.5f);
-            float step = barW + gap;
-            int count = (int) (w / step);
-            if (count <= 0) return;
-            float maxH = h - AndroidUtilities.dpf2(6);
-            float minH = AndroidUtilities.dpf2(3);
-            float fx = w * display;
-            float rad = barW / 2f;
-
-            int style;
-            try {
-                style = org.telegram.messenger.PrizmaConfig.seekStyle();
-            } catch (Throwable e) {
-                style = 0;
-            }
-            for (int i = 0; i < count; i++) {
-                float x = i * step + gap / 2f;
-                float cx = x + barW / 2f;
-                float wiggle = (float) (0.12 * Math.sin(now / 190.0 + i * 0.6));
-                float level = baseHeight(i) * (0.32f + 0.68f * amp) + wiggle;
-                level = Math.max(0.08f, Math.min(1f, level));
-                float bh = minH + level * (maxH - minH);
-                boolean played = cx <= fx;
-                r.set(x, cy - bh / 2f, x + barW, cy + bh / 2f);
-                if (!played) {
-                    p.setColor(0x40ffffff);
-                    canvas.drawRoundRect(r, rad, rad, p);
-                    continue;
-                }
-                int col;
-                if (style == 1) {
-                    float heat = (float) (0.5 + 0.5 * Math.sin(now / 200.0 + i * 0.45));
-                    col = blend(0xffFFC24B, 0xffFF2D2D, heat);
-                    glowPaint.setColor((col & 0x00ffffff) | 0x55000000);
-                    float gp = AndroidUtilities.dpf2(2.6f);
-                    rGlow.set(x - gp, cy - bh / 2f - gp, x + barW + gp, cy + bh / 2f + gp);
-                    canvas.drawRoundRect(rGlow, rad + gp, rad + gp, glowPaint);
-                } else if (style == 2) {
-                    hsv[0] = (float) (((i * 9) + now * 0.08) % 360.0);
-                    hsv[1] = 0.82f;
-                    hsv[2] = 1f;
-                    col = Color.HSVToColor(hsv);
-                } else {
-                    col = accent;
-                }
-                p.setColor(col);
-                canvas.drawRoundRect(r, rad, rad, p);
-            }
-
-            if (isPlaying || Math.abs(value - display) > 0.001f || Math.abs(target - amp) > 0.01f) {
-                org.telegram.messenger.PrizmaConfig.nextDecorFrame(this);
+            float w = getWidth(), h = getHeight();
+            rect.set(-grow, Math.min(0f, -grow * 0.35f), w + grow, h - Math.min(0f, -grow * 0.35f));
+            float r = AndroidUtilities.lerp(AndroidUtilities.dpf2(24), h / 2f, Math.max(0f, Math.min(1f, round)));
+            fill.setColor(color);
+            canvas.drawRoundRect(rect, r, r, fill);
+            if (icon != null) {
+                int iw = icon.getIntrinsicWidth(), ih = icon.getIntrinsicHeight();
+                if (iw <= 0) iw = AndroidUtilities.dp(26);
+                if (ih <= 0) ih = AndroidUtilities.dp(26);
+                int cx = (int) (w / 2f + shift), cy = (int) (h / 2f);
+                icon.setBounds(cx - iw / 2, cy - ih / 2, cx + iw / 2, cy + ih / 2);
+                icon.draw(canvas);
             }
         }
     }
 
-    interface OnSeekMs {
-        void run(long ms);
-    }
-
-    private static class LyricsPanel extends FrameLayout {
-        OnSeekMs onSeekToMs;
-
-        private final LinearLayout island;
-        private final TextView lineView;
-        private final TextView nextView;
-        private PrizmaLyrics.Lyrics lyrics;
-        private int current = -1;
-
-        LyricsPanel(Context c) {
-            super(c);
-
-            island = new LinearLayout(c);
-            island.setOrientation(LinearLayout.VERTICAL);
-            island.setGravity(Gravity.CENTER);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setCornerRadius(AndroidUtilities.dp(26));
-            bg.setColor(0xE6000000);
-            island.setBackground(bg);
-            island.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(9), AndroidUtilities.dp(20), AndroidUtilities.dp(9));
-            if (android.os.Build.VERSION.SDK_INT >= 21) {
-                island.setElevation(AndroidUtilities.dpf2(6));
-            }
-
-            lineView = new TextView(c);
-            lineView.setTextColor(0xffffffff);
-            lineView.setTextSize(16);
-            lineView.setTypeface(AndroidUtilities.bold());
-            lineView.setGravity(Gravity.CENTER);
-            lineView.setMaxLines(2);
-            lineView.setLineSpacing(AndroidUtilities.dp(2), 1f);
-            lineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            island.addView(lineView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
-
-            nextView = new TextView(c);
-            nextView.setTextColor(0x66ffffff);
-            nextView.setTextSize(13);
-            nextView.setGravity(Gravity.CENTER);
-            nextView.setMaxLines(1);
-            nextView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            island.addView(nextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 3, 0, 0));
-
-            int maxW = AndroidUtilities.displaySize.x - AndroidUtilities.dp(90);
-            lineView.setMaxWidth(maxW);
-            nextView.setMaxWidth(maxW);
-            addView(island, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
-            island.setVisibility(GONE);
-        }
-
-        void setLoading() {
-            lyrics = null;
-            current = -1;
-            island.setVisibility(VISIBLE);
-            lineView.setText("Загрузка текста…");
-            nextView.setText("");
-        }
-
-        void setLyrics(PrizmaLyrics.Lyrics l) {
-            lyrics = l;
-            current = -1;
-            if (l == null || l.lines.isEmpty()) {
-                island.setVisibility(GONE);
-                return;
-            }
-            if (!l.synced) {
-                island.setVisibility(VISIBLE);
-                lineView.setText("♪");
-                nextView.setText("текст без синхронизации");
-                return;
-            }
-            island.setVisibility(VISIBLE);
-            lineView.setText("♪");
-            nextView.setText("");
-        }
-
-        void setPosition(long posMs) {
-            if (lyrics == null || !lyrics.synced || lyrics.lines.isEmpty()) {
-                return;
-            }
-            int idx = 0;
-            ArrayList<PrizmaLyrics.Line> lines = lyrics.lines;
-            for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).timeMs <= posMs) idx = i;
-                else break;
-            }
-            if (idx != current) {
-                current = idx;
-                animateTo(idx);
-            }
-        }
-
-        private void animateTo(int idx) {
-            final ArrayList<PrizmaLyrics.Line> lines = lyrics.lines;
-            String cur = idx >= 0 && idx < lines.size() ? lines.get(idx).text : "";
-            if (cur == null || cur.isEmpty()) cur = "♪";
-            final String nxt = (idx + 1) < lines.size() ? lines.get(idx + 1).text : "";
-            final String curF = cur;
-
-            lineView.animate().cancel();
-            lineView.animate().alpha(0f).translationY(-AndroidUtilities.dp(7)).setDuration(85)
-                    .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
-                    .withEndAction(() -> {
-                        lineView.setText(curF);
-                        nextView.setText(nxt);
-                        lineView.setTranslationY(AndroidUtilities.dp(9));
-                        lineView.setAlpha(0f);
-                        lineView.setScaleX(0.96f);
-                        lineView.setScaleY(0.96f);
-                        lineView.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
-                                .setDuration(300)
-                                .setInterpolator(new OvershootInterpolator(1.6f))
-                                .start();
-                    }).start();
-        }
-    }
-
-    private static final int ACCENT = 0xffFF4D6D;
-
-    private class QueueView extends LinearLayout {
-        private final TextView countLabel;
-        private final TextView nextLabel;
-        private final LinearLayout list;
-        private final ScrollView scroll;
-        private TextView expand;
-
-        void applyAccentColor() {
-            if (expand != null) expand.setTextColor(accentColor);
-            rebuild();
-        }
-
-        QueueView(Context c) {
-            super(c);
-            setOrientation(VERTICAL);
-
-            LinearLayout header = new LinearLayout(c);
-            header.setOrientation(HORIZONTAL);
-            header.setGravity(Gravity.CENTER_VERTICAL);
-            header.setPadding(AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4), AndroidUtilities.dp(2));
-
-            TextView eyebrow = new TextView(c);
-            eyebrow.setText("ОЧЕРЕДЬ");
-            eyebrow.setTextColor(0x8cffffff);
-            eyebrow.setTextSize(11);
-            eyebrow.setTypeface(AndroidUtilities.bold());
-            eyebrow.setLetterSpacing(0.18f);
-            header.addView(eyebrow, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
-
-            countLabel = new TextView(c);
-            countLabel.setTextColor(0x66ffffff);
-            countLabel.setTextSize(11);
-            countLabel.setTypeface(AndroidUtilities.bold());
-            countLabel.setLetterSpacing(0.04f);
-            header.addView(countLabel, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-
-            expand = new TextView(c);
-            expand.setText("Все  ›");
-            expand.setTextColor(accentColor);
-            expand.setTextSize(11.5f);
-            expand.setTypeface(AndroidUtilities.bold());
-            expand.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(4), AndroidUtilities.dp(2), AndroidUtilities.dp(4));
-            header.addView(expand, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-
-            addView(header, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            expand.setOnClickListener(v -> showFull());
-
-            nextLabel = new TextView(c);
-            nextLabel.setTextColor(0xccffffff);
-            nextLabel.setTextSize(12.5f);
-            nextLabel.setMaxLines(1);
-            nextLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            nextLabel.setPadding(AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4), AndroidUtilities.dp(6));
-            addView(nextLabel, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-            scroll = new ScrollView(c);
-            scroll.setVerticalScrollBarEnabled(false);
-            scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-            scroll.setVerticalFadingEdgeEnabled(true);
-            scroll.setFadingEdgeLength(AndroidUtilities.dp(30));
-            list = new LinearLayout(c);
-            list.setOrientation(VERTICAL);
-            scroll.addView(list, new FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            addView(scroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
-        }
-
-        void rebuild() {
-            ArrayList<MessageObject> pl;
-            try {
-                pl = MediaController.getInstance().getPlaylist();
-            } catch (Throwable e) {
-                pl = null;
-            }
-            list.removeAllViews();
-            if (pl == null || pl.isEmpty()) {
-                setVisibility(GONE);
-                return;
-            }
-            setVisibility(VISIBLE);
-            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-            int curId = cur == null ? Integer.MIN_VALUE : cur.getId();
-            int n = pl.size();
-            countLabel.setText(n + " " + plural(n));
-
-            int curIndex = -1;
-            for (int i = 0; i < n; i++) {
-                MessageObject m = pl.get(i);
-                if (m != null && m.getId() == curId) {
-                    curIndex = i;
-                    break;
-                }
-            }
-
-            boolean shuffle = org.telegram.messenger.SharedConfig.shuffleMusic;
-            int[] order = new int[n];
-            if (curIndex >= 0 && !shuffle) {
-                int dir = org.telegram.messenger.SharedConfig.playOrderReversed ? 1 : -1;
-                int idx = curIndex;
-                for (int k = 0; k < n; k++) {
-                    order[k] = idx;
-                    idx += dir;
-                    if (idx < 0) idx = n - 1;
-                    else if (idx >= n) idx = 0;
-                }
-            } else {
-                for (int k = 0; k < n; k++) order[k] = k;
-            }
-
-            if (n > 1) {
-                MessageObject nx = pl.get(order[1]);
-                String t = nx == null ? null : nx.getMusicTitle();
-                String a = nx == null ? null : nx.getMusicAuthor();
-                String name = (t == null || t.isEmpty()) ? "Неизвестный трек" : t;
-                if (a != null && !a.isEmpty()) name += " — " + a;
-                android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder("Далее  " + name);
-                sb.setSpan(new android.text.style.ForegroundColorSpan(accentColor), 0, 5, 0);
-                sb.setSpan(new android.text.style.StyleSpan(Typeface.BOLD), 0, 5, 0);
-                nextLabel.setText(sb);
-                nextLabel.setVisibility(VISIBLE);
-            } else {
-                nextLabel.setVisibility(GONE);
-            }
-
-            int max = 300;
-            int added = 0;
-            int curPos = -1;
-            for (int k = 0; k < n && added < max; k++) {
-                MessageObject mo = pl.get(order[k]);
-                if (mo == null) continue;
-                boolean isCur = mo.getId() == curId;
-                View row = buildRow(mo, isCur, added + 1);
-                if (isCur) curPos = list.getChildCount();
-                list.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 54));
-                added++;
-            }
-
-            final int target = curPos;
-            if (target >= 0) {
-                scroll.post(() -> {
-                    View child = target < list.getChildCount() ? list.getChildAt(target) : null;
-                    if (child != null) {
-                        scroll.smoothScrollTo(0, Math.max(0, child.getTop() - AndroidUtilities.dp(6)));
-                    }
-                });
-            }
-        }
-
-        private String plural(int n) {
-            int m10 = n % 10, m100 = n % 100;
-            if (m10 == 1 && m100 != 11) return "трек";
-            if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return "трека";
-            return "треков";
-        }
-
-        void showFull() {
-            ArrayList<MessageObject> pl;
-            try {
-                pl = MediaController.getInstance().getPlaylist();
-            } catch (Throwable e) {
-                return;
-            }
-            if (pl == null || pl.isEmpty()) {
-                return;
-            }
-            MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
-            int curId = cur == null ? Integer.MIN_VALUE : cur.getId();
-            int n = pl.size();
-            int curIndex = -1;
-            for (int i = 0; i < n; i++) {
-                MessageObject m = pl.get(i);
-                if (m != null && m.getId() == curId) { curIndex = i; break; }
-            }
-            boolean shuffle = org.telegram.messenger.SharedConfig.shuffleMusic;
-            int[] order = new int[n];
-            if (curIndex >= 0 && !shuffle) {
-                int dir = org.telegram.messenger.SharedConfig.playOrderReversed ? 1 : -1;
-                int idx = curIndex;
-                for (int k = 0; k < n; k++) { order[k] = idx; idx += dir; if (idx < 0) idx = n - 1; else if (idx >= n) idx = 0; }
-            } else {
-                for (int k = 0; k < n; k++) order[k] = k;
-            }
-
-            LinearLayout sheetRoot = new LinearLayout(ctx);
-            sheetRoot.setOrientation(VERTICAL);
-            GradientDrawable rbg = new GradientDrawable();
-            rbg.setColor(0xff141418);
-            rbg.setCornerRadii(new float[]{AndroidUtilities.dp(14), AndroidUtilities.dp(14), AndroidUtilities.dp(14), AndroidUtilities.dp(14), 0, 0, 0, 0});
-            sheetRoot.setBackground(rbg);
-            sheetRoot.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(16), AndroidUtilities.dp(14), AndroidUtilities.dp(10));
-
-            TextView t = new TextView(ctx);
-            t.setText("Очередь · " + n + " " + plural(n));
-            t.setTextColor(0xffffffff);
-            t.setTextSize(18);
-            t.setTypeface(AndroidUtilities.bold());
-            sheetRoot.addView(t, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
-
-            LinearLayout fullList = new LinearLayout(ctx);
-            fullList.setOrientation(VERTICAL);
-            int added = 0;
-            for (int k = 0; k < n; k++) {
-                MessageObject mo = pl.get(order[k]);
-                if (mo == null) continue;
-                boolean isCur = mo.getId() == curId;
-                fullList.addView(buildRow(mo, isCur, added + 1), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 56));
-                added++;
-            }
-
-            ScrollView sc = new ScrollView(ctx) {
-                @Override
-                protected void onMeasure(int ws, int hs) {
-                    int maxH = (int) (AndroidUtilities.displaySize.y * 0.72f);
-                    super.onMeasure(ws, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST));
-                }
-            };
-            sc.setVerticalScrollBarEnabled(false);
-            sc.addView(fullList, new FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            sheetRoot.addView(sc, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-            BottomSheet.Builder b = new BottomSheet.Builder(ctx);
-            b.setCustomView(sheetRoot);
-            BottomSheet s = b.create();
-            try { s.setBackgroundColor(0xff141418); } catch (Throwable ignore) {}
-            try { s.fixNavigationBar(0xff141418); } catch (Throwable ignore) {}
-            try { s.setCanDismissWithSwipe(false); } catch (Throwable ignore) {}
-            s.show();
-        }
-
-        private View buildRow(MessageObject mo, boolean isCur, int index) {
-            LinearLayout row = new LinearLayout(ctx);
-            row.setOrientation(HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(AndroidUtilities.dp(10), 0, AndroidUtilities.dp(12), 0);
-            if (isCur) {
-                GradientDrawable bg = new GradientDrawable();
-                bg.setCornerRadius(AndroidUtilities.dp(14));
-                bg.setColor(0x1fffffff);
-                row.setBackground(bg);
-            } else {
-                row.setBackground(Theme.createSelectorDrawable(0x22ffffff, 2, AndroidUtilities.dp(14)));
-            }
-
-            FrameLayout lead = new FrameLayout(ctx);
-            if (isCur) {
-                MiniEqBars eq = new MiniEqBars(ctx, accentColor);
-                lead.addView(eq, LayoutHelper.createFrame(18, 15, Gravity.CENTER));
-            } else {
-                TextView num = new TextView(ctx);
-                num.setText(String.valueOf(index));
-                num.setTextColor(0x59ffffff);
-                num.setTextSize(13);
-                num.setGravity(Gravity.CENTER);
-                lead.addView(num, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-            }
-            row.addView(lead, LayoutHelper.createLinear(30, 30, Gravity.CENTER_VERTICAL, 0, 0, 10, 0));
-
-            LinearLayout texts = new LinearLayout(ctx);
-            texts.setOrientation(VERTICAL);
-
-            TextView t = new TextView(ctx);
-            String title = mo.getMusicTitle();
-            t.setText(title == null || title.isEmpty() ? "Неизвестный трек" : title);
-            t.setTextColor(isCur ? accentColor : 0xffffffff);
-            t.setTextSize(15);
-            t.setTypeface(isCur ? AndroidUtilities.bold() : Typeface.DEFAULT);
-            t.setMaxLines(1);
-            t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            texts.addView(t, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-            TextView a = new TextView(ctx);
-            String author = mo.getMusicAuthor();
-            a.setText(author == null ? "" : author);
-            a.setTextColor(0x80ffffff);
-            a.setTextSize(12);
-            a.setMaxLines(1);
-            a.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            texts.addView(a, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
-
-            row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
-
-            TextView dur = new TextView(ctx);
-            dur.setText(formatTime((int) mo.getDuration()));
-            dur.setTextColor(0x59ffffff);
-            dur.setTextSize(12);
-            row.addView(dur, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 10, 0, 0, 0));
-
-            final MessageObject target = mo;
-            row.setOnClickListener(v -> {
-                if (MediaController.getInstance().getPlayingMessageObject() != null
-                        && MediaController.getInstance().getPlayingMessageObject().getId() == target.getId()) {
-                    return;
-                }
-                v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(90)
-                        .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f)
-                                .setInterpolator(new OvershootInterpolator(2f)).setDuration(220).start())
-                        .start();
-                try {
-                    MediaController.getInstance().findMessageInPlaylistAndPlay(target);
-                } catch (Throwable ignore) {}
-            });
-            return row;
-        }
-    }
-
-    private static class MiniEqBars extends View {
-        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF r = new RectF();
-        private final long seed = System.currentTimeMillis();
-
-        MiniEqBars(Context c, int color) {
-            super(c);
-            p.setColor(color);
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            boolean playing;
-            try {
-                playing = MediaController.getInstance().getPlayingMessageObject() != null
-                        && !MediaController.getInstance().isMessagePaused();
-            } catch (Throwable e) {
-                playing = true;
-            }
-            int w = getWidth(), h = getHeight();
-            int bars = 3;
-            float gap = AndroidUtilities.dpf2(2.5f);
-            float bw = (w - gap * (bars - 1)) / bars;
-            float rad = bw / 2f;
-            long now = System.currentTimeMillis() - seed;
-            for (int i = 0; i < bars; i++) {
-                float level;
-                if (playing) {
-                    level = (float) (0.35 + 0.55 * Math.abs(Math.sin(now / 150.0 + i * 1.7)));
-                } else {
-                    level = 0.22f;
-                }
-                float bh = Math.max(AndroidUtilities.dpf2(3), level * h);
-                float left = i * (bw + gap);
-                r.set(left, (h - bh) / 2f, left + bw, (h + bh) / 2f);
-                canvas.drawRoundRect(r, rad, rad, p);
-            }
-            if (playing) {
-                org.telegram.messenger.PrizmaConfig.nextDecorFrame(this);
-            }
-        }
-    }
-
-    private static class BeatBackground extends View implements PrizmaVisualizerData.Listener {
-        private static final int BARS = 42;
-        private final float[] target = new float[BARS];
-        private final float[] cur = new float[BARS];
-        private boolean playing;
-        private int accent = ACCENT;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final class GroupButton extends View {
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
         private final RectF rect = new RectF();
-        private long lastTime;
+        private final float[] radii = new float[8];
+        private final boolean leading;
+        private Drawable icon;
+        private int onColor, onTint, offColor, offTint;
+        private float selected;
+        private final PrizmaSpring spring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.7f, v -> {
+            selected = v;
+            invalidate();
+        });
 
-        BeatBackground(Context c) {
+        GroupButton(Context c, boolean leading) {
             super(c);
+            this.leading = leading;
+            setClickable(true);
+        }
+
+        void setIcon(Drawable d) {
+            icon = d;
+        }
+
+        void setColors(int on, int onIcon, int off, int offIcon) {
+            onColor = on;
+            onTint = onIcon;
+            offColor = off;
+            offTint = offIcon;
+            invalidate();
+        }
+
+        void setSelectedState(boolean value) {
+            spring.to(value ? 1f : 0f);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float w = getWidth(), h = getHeight();
+            float t = Math.max(0f, Math.min(1f, selected));
+            float outer = h / 2f;
+            float inner = AndroidUtilities.lerp(AndroidUtilities.dpf2(8), outer, t);
+            float a = leading ? outer : inner;
+            float b = leading ? inner : outer;
+            radii[0] = radii[1] = a;
+            radii[2] = radii[3] = b;
+            radii[4] = radii[5] = b;
+            radii[6] = radii[7] = a;
+            path.rewind();
+            rect.set(0, 0, w, h);
+            path.addRoundRect(rect, radii, Path.Direction.CW);
+            fill.setColor(PrizmaPalette.mix(offColor, onColor, t));
+            canvas.drawPath(path, fill);
+            if (icon != null) {
+                int s = AndroidUtilities.dp(24);
+                int cx = (int) (w / 2f), cy = (int) (h / 2f);
+                icon.setBounds(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2);
+                icon.setColorFilter(new android.graphics.PorterDuffColorFilter(PrizmaPalette.mix(offTint, onTint, t), android.graphics.PorterDuff.Mode.SRC_IN));
+                icon.draw(canvas);
+            }
+        }
+    }
+
+    private static final class DotIcon extends FrameLayout {
+        private final ImageView image;
+        private final View dot;
+        private final GradientDrawable dotBg = new GradientDrawable();
+        private int accent = 0xffffffff;
+        private boolean active;
+
+        DotIcon(Context c, int icon) {
+            super(c);
+            image = new ImageView(c);
+            image.setImageResource(icon);
+            image.setScaleType(ImageView.ScaleType.CENTER);
+            addView(image, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+            dot = new View(c);
+            dotBg.setShape(GradientDrawable.OVAL);
+            dot.setBackground(dotBg);
+            dot.setScaleX(0f);
+            dot.setScaleY(0f);
+            addView(dot, LayoutHelper.createFrame(5, 5, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 3));
+            PrizmaGlass.pressable(this);
+        }
+
+        void setIcon(int icon) {
+            image.setImageResource(icon);
+        }
+
+        void setAccent(int color) {
+            accent = color;
+            dotBg.setColor(color);
+            setActive(active);
+        }
+
+        void setActive(boolean value) {
+            active = value;
+            image.setColorFilter(value ? accent : 0x8cffffff);
+            dot.animate().scaleX(value ? 1f : 0f).scaleY(value ? 1f : 0f).setDuration(240)
+                    .setInterpolator(new OvershootInterpolator(2.4f)).start();
+        }
+    }
+
+    private static final class HeartButton extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
+        private final android.graphics.Matrix matrix = new android.graphics.Matrix();
+        private final Path scaled = new Path();
+        private int accent = 0xffffffff;
+        private float fill;
+        private boolean checked;
+        private float pop = 1f;
+        private final PrizmaSpring popSpring = new PrizmaSpring(1f, PrizmaSpring.MEDIUM, 0.4f, v -> {
+            pop = v;
+            invalidate();
+        });
+        private final PrizmaSpring fillSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 1f, v -> {
+            fill = v;
+            invalidate();
+        });
+
+        HeartButton(Context c) {
+            super(c);
+            path.moveTo(12, 20.6f);
+            path.cubicTo(12, 20.6f, 3.2f, 14.7f, 3.2f, 8.8f);
+            path.cubicTo(3.2f, 5.9f, 5.4f, 3.8f, 8.1f, 3.8f);
+            path.cubicTo(9.7f, 3.8f, 11.2f, 4.7f, 12, 6.1f);
+            path.cubicTo(12.8f, 4.7f, 14.3f, 3.8f, 15.9f, 3.8f);
+            path.cubicTo(18.6f, 3.8f, 20.8f, 5.9f, 20.8f, 8.8f);
+            path.cubicTo(20.8f, 14.7f, 12, 20.6f, 12, 20.6f);
+            path.close();
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setStrokeWidth(AndroidUtilities.dpf2(1.9f));
+            setClickable(true);
         }
 
         void setAccent(int color) {
@@ -2349,68 +1830,41 @@ public class PrizmaFullPlayer extends Dialog {
             invalidate();
         }
 
-        @Override
-        protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            PrizmaVisualizerData.setListener(this);
-        }
-
-        @Override
-        protected void onDetachedFromWindow() {
-            super.onDetachedFromWindow();
-            PrizmaVisualizerData.clearListener(this);
-        }
-
-        @Override
-        public void onWaveform(boolean playing, boolean animate, float[] values) {
-            this.playing = playing;
-            if (values != null && values.length > 0) {
-                for (int i = 0; i < BARS; i++) {
-                    float v = values[i % values.length];
-                    if (v < 0) v = 0;
-                    if (v > 1) v = 1;
-                    target[i] = v;
+        void setChecked(boolean value, boolean animated) {
+            boolean changed = checked != value;
+            checked = value;
+            if (animated) {
+                fillSpring.to(value ? 1f : 0f);
+                if (changed && value) {
+                    popSpring.snap(0.72f);
+                    popSpring.to(1f);
                 }
             } else {
-                for (int i = 0; i < BARS; i++) target[i] = 0;
+                fillSpring.snap(value ? 1f : 0f);
             }
-            postInvalidateOnAnimation();
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
-            if (lite()) return;
-            long now = System.currentTimeMillis();
-            float dt = lastTime == 0 ? 16 : Math.min(40, now - lastTime);
-            lastTime = now;
-            float k = Math.min(1f, dt / 120f * 3f);
-            boolean isPlaying;
-            try {
-                isPlaying = MediaController.getInstance().getPlayingMessageObject() != null
-                        && !MediaController.getInstance().isMessagePaused();
-            } catch (Throwable e) {
-                isPlaying = playing;
+            float size = AndroidUtilities.dp(26);
+            float k = size / 24f;
+            matrix.reset();
+            matrix.setScale(k, k);
+            matrix.postTranslate((getWidth() - size) / 2f, (getHeight() - size) / 2f);
+            path.transform(matrix, scaled);
+            canvas.save();
+            canvas.scale(pop, pop, getWidth() / 2f, getHeight() / 2f);
+            float t = Math.max(0f, Math.min(1f, fill));
+            if (t > 0f) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(accent);
+                paint.setAlpha((int) (255 * t));
+                canvas.drawPath(scaled, paint);
             }
-            int w = getWidth(), h = getHeight();
-            if (w == 0) return;
-            paint.setColor((accent & 0x00ffffff) | 0x33000000);
-            float gap = w / (float) BARS;
-            float barW = gap * 0.5f;
-            float maxH = h * 0.26f;
-            boolean need = false;
-            for (int i = 0; i < BARS; i++) {
-                float t = isPlaying ? target[i] : 0f;
-                cur[i] += (t - cur[i]) * k;
-                if (Math.abs(t - cur[i]) > 0.004f) need = true;
-                float wiggle = isPlaying ? (float) (AndroidUtilities.dpf2(2) * Math.sin(now / 260.0 + i * 0.5)) : 0f;
-                float bh = AndroidUtilities.dpf2(2) + cur[i] * maxH + wiggle;
-                float left = i * gap + (gap - barW) / 2f;
-                rect.set(left, h - bh, left + barW, h);
-                canvas.drawRoundRect(rect, barW / 2f, barW / 2f, paint);
-            }
-            if (need || isPlaying) {
-                org.telegram.messenger.PrizmaConfig.nextDecorFrame(this);
-            }
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(PrizmaPalette.mix(0xd9ffffff, accent, t));
+            canvas.drawPath(scaled, paint);
+            canvas.restore();
         }
     }
 }

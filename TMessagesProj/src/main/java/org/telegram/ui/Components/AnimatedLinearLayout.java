@@ -27,11 +27,15 @@ public class AnimatedLinearLayout extends LinearLayout {
         onItemsChanged();
     };
 
-    private final ListAnimator<Holder> listAnimator = new ListAnimator<>(
-        callback, CubicBezierInterpolator.EASE_OUT_QUINT, 420L);
+    private final ListAnimator<Holder> listAnimator;
 
     public AnimatedLinearLayout(Context context) {
+        this(context, CubicBezierInterpolator.EASE_OUT_QUINT, 420L);
+    }
+
+    public AnimatedLinearLayout(Context context, android.view.animation.Interpolator interpolator, long duration) {
         super(context);
+        listAnimator = new ListAnimator<>(callback, interpolator, duration);
     }
 
     public boolean isViewVisible(View child) {

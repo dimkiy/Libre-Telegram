@@ -6777,6 +6777,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
             return;
         }
+        if (requestCode == org.telegram.messenger.PrizmaClips.OWN_REQUEST) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                org.telegram.ui.Components.PrizmaFullPlayer.handleClipPicked(this, data.getData());
+            }
+            return;
+        }
         if (requestCode == org.telegram.ui.Components.PrizmaPlaylistSheet.COVER_REQUEST) {
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
                 org.telegram.ui.Components.PrizmaPlaylistSheet.handleCoverPicked(this, data.getData());

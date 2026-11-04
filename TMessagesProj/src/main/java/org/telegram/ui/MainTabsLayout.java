@@ -21,6 +21,7 @@ import androidx.dynamicanimation.animation.SpringForce;
 import android.util.Log;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.PrizmaConfig;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AnimatedLinearLayout;
 import org.telegram.ui.Components.CubicBezierInterpolator;
@@ -38,9 +39,43 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
     private final Theme.ResourcesProvider resourcesProvider;
 
+    private final boolean dock = PrizmaConfig.dockTabs();
+
     public MainTabsLayout(Context context, Theme.ResourcesProvider resourcesProvider) {
-        super(context);
+        super(context, PrizmaConfig.dockTabs() ? new CubicBezierInterpolator(0.2, 1.16, 0.32, 1) : CubicBezierInterpolator.EASE_OUT_QUINT, PrizmaConfig.dockTabs() ? 460L : 420L);
         this.resourcesProvider = resourcesProvider;
+    }
+
+    private void measureDock(int width, int height, int tabHeight) {
+        measureTabTexts(13f);
+        final int avail = width - getPaddingLeft() - getPaddingRight();
+        int widest = 0;
+        int visible = 0;
+        for (int a = 0, N = getChildCount(); a < N; a++) {
+            if (!isViewVisible(getChildAt(a))) continue;
+            widest = Math.max(widest, (int) Math.ceil(tabsTextWidth[a]));
+            visible++;
+        }
+        int open = Math.max(dp(104), widest + dp(24 + 7 + 30));
+        int closed = dp(56);
+        if (visible > 1 && open + closed * (visible - 1) > avail) {
+            closed = Math.max(dp(40), (avail - open) / (visible - 1));
+            open = Math.min(open, avail - closed * (visible - 1));
+        }
+        int used = 0;
+        for (int a = 0, N = getChildCount(); a < N; a++) {
+            final View child = getChildAt(a);
+            int w = 0;
+            if (isViewVisible(child)) {
+                boolean selected = child instanceof GlassTabView && ((GlassTabView) child).isTabSelected();
+                w = selected ? open : closed;
+            }
+            tabsWidth[a] = w;
+            used += w;
+            child.measure(MeasureSpec.makeMeasureSpec(Math.max(0, w), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(tabHeight, MeasureSpec.EXACTLY));
+        }
+        setMeasuredDimension(used + getPaddingLeft() + getPaddingRight(), height);
+        calculateTotalSizesAfterMeasure();
     }
 
     private static final float[] PASS_TEXT_SIZES_DP = {12f, 12f, 10f};
@@ -63,6 +98,11 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
         if (maxWidthPx > 0 && width > maxWidthPx) {
             width = maxWidthPx;
+        }
+
+        if (dock) {
+            measureDock(width, height, tabHeight);
+            return;
         }
 
         final int maxTotalWidthForTabs = width - getPaddingLeft() - getPaddingRight();
@@ -262,6 +302,9 @@ public class MainTabsLayout extends AnimatedLinearLayout {
                 ((GlassTabView) child).setSelected(child == tab, animated);
             }
         }
+        if (dock) {
+            requestLayout();
+        }
     }
 
     private View findSelectedTab() {
@@ -286,7 +329,7 @@ public class MainTabsLayout extends AnimatedLinearLayout {
     private void setSkipDrawSelector(boolean skipDrawSelector) {
         drawCustomSelector = skipDrawSelector;
         if (drawCustomSelector) {
-            selectorPaint.setColor(Theme.multAlpha(Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider), 0.09f));
+            selectorPaint.setColor(Theme.multAlpha(Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider), dock ? 1f : 0.09f));
         }
         for (int a = 0, N = getChildCount(); a < N; a++) {
             final View child = getChildAt(a);

@@ -16,6 +16,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -33,6 +34,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.PrizmaConfig;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
@@ -103,6 +105,38 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         counter.setTextSize(dp(10));
     }
 
+    private boolean dock;
+    private int dockContrast = Color.WHITE;
+    private float dockTextWidth;
+
+    private void enableDock() {
+        dock = true;
+        setClipChildren(false);
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13f);
+        defaultTextPaint.setTextSize(dp(13));
+        textView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+        View icon = dockIcon();
+        boolean avatar = icon == backupImageView;
+        icon.setLayoutParams(LayoutHelper.createFrame(avatar ? 22 : 24, avatar ? 22 : 24, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+        setContentDescription(textView.getText());
+        dockTextWidth = defaultTextPaint.measureText(textView.getText().toString());
+    }
+
+    private View dockIcon() {
+        return backupImageView != null ? backupImageView : imageView;
+    }
+
+    private void placeDock() {
+        float f = isSelectedAnimator.getFloatValue();
+        float w = hasVisualWidth ? visualWidth : getWidth();
+        float size = dockIcon() == backupImageView ? dp(22) : dp(24);
+        float content = size + dp(7) + dockTextWidth;
+        float left = lerp((w - size) / 2f, (w - content) / 2f, f);
+        dockIcon().setTranslationX(left);
+        textView.setTranslationX(left + size + dp(7));
+        textView.setAlpha(MathUtils.clamp((f - 0.25f) / 0.75f, 0, 1));
+    }
+
     private boolean hasVisualWidth;
     private float visualWidth;
     public void setVisualWidth(float width) {
@@ -121,6 +155,10 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
     }
 
     private void checkVisualWidth() {
+        if (dock) {
+            placeDock();
+            return;
+        }
         if (hasVisualWidth) {
             final float offset = (visualWidth - getMeasuredWidth()) / 2f;
             imageView.setTranslationX(offset);
@@ -135,6 +173,9 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
     private boolean skipDrawSelector;
 
     public void setGestureSelectedOverride(float gestureSelectedOverride, boolean allow) {
+        if (dock) {
+            return;
+        }
         this.gestureSelectedOverride = gestureSelectedOverride;
         this.hasGestureSelectedOverride = allow;
         invalidate();
@@ -154,10 +195,10 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         if (selectedFactor > 0 && !skipDrawSelector) {
             final float alpha = AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(selectedFactor);
 
-            paintCounterBackground.setColor(Theme.multAlpha(colorSelected, 0.09f * alpha));
+            paintCounterBackground.setColor(Theme.multAlpha(colorSelected, (dock ? 1f : 0.09f) * alpha));
             tmpRectF.set(0, 0, viewWidth, getHeight());
             final float r = Math.min(tmpRectF.width(), tmpRectF.height()) / 2f;
-            final float s = lerp(0.6f, 1, selectedFactor) * MathUtils.clamp(attachScale, 0, 1);
+            final float s = lerp(dock ? 0.78f : 0.6f, 1, selectedFactor) * MathUtils.clamp(attachScale, 0, 1);
             canvas.save();
             canvas.scale(s, s, tmpRectF.centerX(), tmpRectF.centerY());
             canvas.drawRoundRect(tmpRectF, r, r, paintCounterBackground);
@@ -176,8 +217,8 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
             canvas.save();
 
             final float gap = dpf2(1.33f);
-            final float cx = viewWidth / 2f + dpf2(11);
-            final float cy = dpf2(10);
+            final float cx = dock ? dockIcon().getTranslationX() + dpf2(26) : viewWidth / 2f + dpf2(11);
+            final float cy = dock ? getHeight() / 2f - dpf2(14) : dpf2(10);
             final float height = dpf2(16);
             final float width = Math.max(height, counter.getCurrentWidth() + dp(8));
             final float rOuter = dpf2(9.333f);
@@ -205,7 +246,13 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
                 premiumStarDrawable.setBounds(x, y, x + dp(14), y + dp(14));
                 premiumStarDrawable.draw(canvas);
             } else {
-                paintCounterBackground.setColor(ColorUtils.blendARGB(Theme.getColor(Theme.key_telegram_color), Theme.getColor(Theme.key_fill_RedNormal), isHasCounterErrorAnimator.getFloatValue()));
+                int badge = ColorUtils.blendARGB(Theme.getColor(Theme.key_telegram_color), Theme.getColor(Theme.key_fill_RedNormal), isHasCounterErrorAnimator.getFloatValue());
+                if (dock) {
+                    float picked = isSelectedAnimator.getFloatValue();
+                    badge = ColorUtils.blendARGB(badge, dockContrast, picked);
+                    counter.setTextColor(ColorUtils.blendARGB(Color.WHITE, colorSelected, picked));
+                }
+                paintCounterBackground.setColor(badge);
                 canvas.drawRoundRect(tmpRectF, rInner, rInner, paintCounterBackground);
                 counter.setBounds(tmpRectF);
                 counter.draw(canvas);
@@ -234,6 +281,10 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         isSelectedAnimator.setValue(selected, animated);
         checkPlayAnimation(animated);
 
+        if (dock) {
+            placeDock();
+            return;
+        }
         textView.setTypeface(selected ? AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_EXTRA_BOLD) : AndroidUtilities.bold());
     }
 
@@ -245,6 +296,9 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
     public void onFactorChanged(int id, float factor, float fraction, FactorAnimator callee) {
         if (id == ANIMATOR_ID_IS_SELECTED) {
             updateColors();
+            if (dock) {
+                placeDock();
+            }
         }
         invalidate();
     }
@@ -252,8 +306,11 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
     private boolean needUpdateBackupViewColor;
 
     private void updateColors() {
-        final int color = ColorUtils.blendARGB(colorDefault, colorSelected, isSelectedAnimator.getFloatValue());
-        final int colorText = ColorUtils.blendARGB(colorDefault, colorSelectedText, isSelectedAnimator.getFloatValue());
+        if (dock) {
+            dockContrast = AndroidUtilities.computePerceivedBrightness(colorSelected) > 0.62f ? 0xff111114 : Color.WHITE;
+        }
+        final int color = ColorUtils.blendARGB(colorDefault, dock ? dockContrast : colorSelected, isSelectedAnimator.getFloatValue());
+        final int colorText = ColorUtils.blendARGB(colorDefault, dock ? dockContrast : colorSelectedText, isSelectedAnimator.getFloatValue());
 
         final PorterDuffColorFilter filter = new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN);
         if (backupImageView != null && needUpdateBackupViewColor) {
@@ -407,6 +464,9 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         tab.colorDefault = Theme.getColor(Theme.key_glass_tabUnselected, resourcesProvider);
         tab.colorSelected = Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider);
         tab.colorSelectedText = Theme.getColor(Theme.key_glass_tabSelectedText, resourcesProvider);
+        if (PrizmaConfig.dockTabs()) {
+            tab.enableDock();
+        }
         tab.updateColors();
         return tab;
     }
@@ -428,6 +488,9 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         tab.colorDefault = Theme.getColor(Theme.key_glass_tabUnselected, resourcesProvider);
         tab.colorSelected = Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider);
         tab.colorSelectedText = Theme.getColor(Theme.key_glass_tabSelectedText, resourcesProvider);
+        if (PrizmaConfig.dockTabs()) {
+            tab.enableDock();
+        }
         tab.updateColors();
         return tab;
     }
