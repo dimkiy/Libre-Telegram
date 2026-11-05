@@ -1,12 +1,16 @@
 package org.telegram.ui.Components;
 
 import android.content.Context;
-import android.graphics.Outline;
+import android.graphics.Canvas;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.view.TextureView;
-import android.view.View;
-import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
+
+import androidx.media3.common.Player;
+
+import org.telegram.messenger.AndroidUtilities;
 
 import java.io.File;
 
@@ -18,16 +22,12 @@ public class PrizmaClipView extends FrameLayout {
     private boolean paused;
     private boolean revealed;
     private int radius;
+    private int failures;
+    private final Path path = new Path();
+    private final RectF rect = new RectF();
 
     public PrizmaClipView(Context context) {
         super(context);
-        setOutlineProvider(new ViewOutlineProvider() {
-            @Override
-            public void getOutline(View view, Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
-            }
-        });
-        setClipToOutline(true);
         setAlpha(0f);
         setVisibility(GONE);
     }
@@ -35,8 +35,18 @@ public class PrizmaClipView extends FrameLayout {
     public void setRadius(int r) {
         if (radius != r) {
             radius = r;
-            invalidateOutline();
+            invalidate();
         }
+    }
+
+    @Override
+    protected void dispatchDraw(Canvas canvas) {
+        rect.set(0, 0, getWidth(), getHeight());
+        PrizmaShape.leaf(path, rect, radius, radius * PrizmaShape.SMALL, 0f);
+        canvas.save();
+        canvas.clipPath(path);
+        super.dispatchDraw(canvas);
+        canvas.restore();
     }
 
     public void show(File next) {
@@ -48,6 +58,7 @@ public class PrizmaClipView extends FrameLayout {
         animate().cancel();
         release();
         file = next;
+        failures = 0;
         revealed = false;
         setAlpha(0f);
         setVisibility(VISIBLE);
@@ -80,11 +91,15 @@ public class PrizmaClipView extends FrameLayout {
         player.setDelegate(new VideoPlayer.VideoPlayerDelegate() {
             @Override
             public void onStateChanged(boolean playWhenReady, int playbackState) {
+                if (playbackState == Player.STATE_ENDED && player != null) {
+                    player.seekTo(0);
+                    player.setPlayWhenReady(!paused);
+                }
             }
 
             @Override
             public void onError(VideoPlayer p, Exception e) {
-                hide();
+                AndroidUtilities.runOnUIThread(PrizmaClipView.this::recover);
             }
 
             @Override
@@ -94,6 +109,7 @@ public class PrizmaClipView extends FrameLayout {
 
             @Override
             public void onRenderedFirstFrame() {
+                failures = 0;
                 reveal();
             }
         });
@@ -102,6 +118,16 @@ public class PrizmaClipView extends FrameLayout {
         player.setMute(true);
         player.preparePlayer(Uri.fromFile(file), "other");
         player.setPlayWhenReady(!paused);
+    }
+
+    private void recover() {
+        if (file == null) return;
+        if (++failures > 3) {
+            hide();
+            return;
+        }
+        release();
+        AndroidUtilities.runOnUIThread(this::start, 300);
     }
 
     private void fit(float width, float height) {

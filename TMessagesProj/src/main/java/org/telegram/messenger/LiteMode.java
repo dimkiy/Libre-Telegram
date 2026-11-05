@@ -281,12 +281,12 @@ public class LiteMode {
         if (loaded) {
             onFlagsUpdate(prevValue, value);
         }
-        powerSaverLevel = preferences.getInt("lite_mode_battery_level", batteryDefaultValue);
+        powerSaverLevel = preferences.getInt("libre_battery_level", 0);
         loaded = true;
     }
 
     public static void savePreference() {
-        MessagesController.getGlobalMainSettings().edit().putInt("lite_mode6", value).putInt("lite_mode_battery_level", powerSaverLevel).apply();
+        MessagesController.getGlobalMainSettings().edit().putInt("lite_mode6", value).putInt("libre_battery_level", powerSaverLevel).apply();
     }
 
     public static int getPowerSaverLevel() {

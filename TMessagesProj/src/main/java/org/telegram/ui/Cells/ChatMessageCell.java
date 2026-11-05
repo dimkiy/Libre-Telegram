@@ -5408,7 +5408,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         PinchToZoomHelper pinchToZoomHelper = delegate == null ? null : delegate.getPinchToZoomHelper();
         if (currentMessageObject == null || !photoImage.hasNotThumb() || pinchToZoomHelper == null || currentMessageObject.isSticker() ||
                 currentMessageObject.isAnimatedEmoji() || (currentMessageObject.isVideo() && !autoPlayingMedia) ||
-                isRoundVideo || currentMessageObject.isAnimatedSticker() || (currentMessageObject.isDocument() && !currentMessageObject.isGif()) || currentMessageObject.needDrawBluredPreview()) {
+                (isRoundVideo && MediaController.getInstance().isPlayingMessage(currentMessageObject)) || currentMessageObject.isAnimatedSticker() || (currentMessageObject.isDocument() && !currentMessageObject.isGif()) || currentMessageObject.needDrawBluredPreview()) {
             return false;
         }
         return pinchToZoomHelper.checkPinchToZoom(ev, this, photoImage, null, null, currentMessageObject, mediaSpoilerEffect2 == null ? 0 : mediaSpoilerEffect2.getAttachIndex(this));
@@ -17410,6 +17410,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void updateButtonState(boolean ifSame, boolean animated, boolean fromSet) {
+        radialProgress.leafShape = documentAttachType == DOCUMENT_ATTACH_TYPE_AUDIO;
         if (currentMessageObject == null) {
             return;
         }

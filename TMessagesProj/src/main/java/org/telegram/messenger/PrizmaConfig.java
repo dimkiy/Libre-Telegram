@@ -370,6 +370,30 @@ public class PrizmaConfig {
         done(edit().putBoolean("player_cover_kick", v));
     }
 
+    public static boolean playerLens() {
+        return getBool("player_lens", true);
+    }
+
+    public static void setPlayerLens(boolean v) {
+        done(edit().putBoolean("player_lens", v));
+    }
+
+    public static boolean playerContour() {
+        return getBool("player_contour", true);
+    }
+
+    public static void setPlayerContour(boolean v) {
+        done(edit().putBoolean("player_contour", v));
+    }
+
+    public static boolean playerBlob() {
+        return getBool("player_blob", false);
+    }
+
+    public static void setPlayerBlob(boolean v) {
+        done(edit().putBoolean("player_blob", v));
+    }
+
     public static boolean playerHaptics() {
         return getBool("player_haptics", false);
     }

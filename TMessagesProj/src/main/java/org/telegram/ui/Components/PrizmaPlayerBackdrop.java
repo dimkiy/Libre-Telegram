@@ -43,6 +43,9 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
     private final Paint pulsePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint spark = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint contour = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Path ringPath = new android.graphics.Path();
+    private final android.graphics.Path blobPath = new android.graphics.Path();
     private final Rect dst = new Rect();
     private final RectF coverRect = new RectF();
     private final RectF ringRect = new RectF();
@@ -75,6 +78,8 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         ring.setStyle(Paint.Style.STROKE);
         ring.setStrokeWidth(AndroidUtilities.dpf2(1.4f));
         spark.setStyle(Paint.Style.FILL);
+        contour.setStrokeWidth(AndroidUtilities.dpf2(2.4f));
+        contour.setStrokeCap(Paint.Cap.ROUND);
     }
 
     public void setPalette(PrizmaPalette next, boolean animated) {
@@ -218,6 +223,67 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         }
     }
 
+    private boolean drawBlob(Canvas canvas, long now) {
+        float bass = PrizmaBeat.level();
+        float cx = coverRect.centerX(), cy = coverRect.centerY();
+        float base = coverRect.width() * 0.58f * (1f + 0.07f * bass);
+        float wobble = coverRect.width() * 0.05f * (0.25f + bass);
+        double t = now / 900.0;
+        blobPath.rewind();
+        int steps = 72;
+        for (int i = 0; i <= steps; i++) {
+            double a = 2 * Math.PI * i / steps;
+            double r = base + wobble * (Math.sin(3 * a + t) + 0.6 * Math.sin(5 * a - t * 1.4) + 0.4 * Math.sin(2 * a + t * 0.7));
+            float x = cx + (float) (r * Math.cos(a)), y = cy + (float) (r * Math.sin(a));
+            if (i == 0) blobPath.moveTo(x, y);
+            else blobPath.lineTo(x, y);
+        }
+        blobPath.close();
+        spark.setColor(ringColor);
+        spark.setAlpha(46);
+        canvas.drawPath(blobPath, spark);
+        return bass > 0.01f;
+    }
+
+    private boolean drawContour(Canvas canvas) {
+        float l = coverRect.left, t = coverRect.top, r = coverRect.right, b = coverRect.bottom;
+        float w = r - l, h = b - t, per = 2 * (w + h);
+        int bars = PrizmaBeat.BANDS * 3;
+        float gapOut = AndroidUtilities.dpf2(7);
+        float reach = AndroidUtilities.dpf2(26);
+        boolean live = false;
+        contour.setColor(ringColor);
+        for (int i = 0; i < bars; i++) {
+            int band = i % (PrizmaBeat.BANDS * 2);
+            if (band >= PrizmaBeat.BANDS) band = PrizmaBeat.BANDS * 2 - 1 - band;
+            float v = PrizmaBeat.band(band);
+            if (v > 0.02f) live = true;
+            float d = per * i / bars, x, y, nx = 0f, ny = 0f;
+            if (d < w) {
+                x = l + d;
+                y = t;
+                ny = -1f;
+            } else if (d < w + h) {
+                x = r;
+                y = t + d - w;
+                nx = 1f;
+            } else if (d < 2 * w + h) {
+                x = r - (d - w - h);
+                y = b;
+                ny = 1f;
+            } else {
+                x = l;
+                y = b - (d - 2 * w - h);
+                nx = -1f;
+            }
+            float side = nx != 0f ? Math.min(reach, l - gapOut - AndroidUtilities.dpf2(5)) : reach;
+            float len = AndroidUtilities.dpf2(2) + v * v * side;
+            contour.setAlpha((int) (90 + 150 * v));
+            canvas.drawLine(x + nx * gapOut, y + ny * gapOut, x + nx * (gapOut + len), y + ny * (gapOut + len), contour);
+        }
+        return live;
+    }
+
     private void drawScrim(Canvas canvas, int w, int h) {
         if (scrimFor != h) {
             scrimFor = h;
@@ -238,6 +304,10 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         drawBase(canvas, w, h);
 
         boolean more = false;
+        if (coverDominant && !coverRect.isEmpty() && PrizmaConfig.beatEffects()) {
+            if (PrizmaConfig.playerBlob()) more |= drawBlob(canvas, now);
+            if (PrizmaConfig.playerContour()) more |= drawContour(canvas);
+        }
         if (pulse > 0.01f) {
             pulse *= (float) Math.pow(0.02f, dt);
             float cx = coverRect.isEmpty() ? w / 2f : coverRect.centerX();
@@ -268,7 +338,8 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
             ring.setColor(ringColor);
             ring.setAlpha((int) (255 * Math.min(1f, a)));
             float r = coverRadius + grow;
-            canvas.drawRoundRect(ringRect, r, r, ring);
+            PrizmaShape.leaf(ringPath, ringRect, r, r * PrizmaShape.SMALL, 0f);
+            canvas.drawPath(ringPath, ring);
             more = true;
         }
 

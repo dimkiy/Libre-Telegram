@@ -245,6 +245,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     float pinchStartDistance;
 
     float pinchScale;
+    float zoomBase = 1f;
 
     boolean isInPinchToZoomTouchMode;
     boolean maybePinchToZoomTouchMode;
@@ -707,6 +708,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     public void showCamera(boolean fromPaused) {
+        zoomBase = 1f;
         if (textureView != null) {
             return;
         }
@@ -3827,7 +3829,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (maybePinchToZoomTouchMode && !isInPinchToZoomTouchMode && ev.getPointerCount() == 2 && finishZoomTransition == null && recording) {
                 pinchStartDistance = (float) Math.hypot(ev.getX(1) - ev.getX(0), ev.getY(1) - ev.getY(0));
 
-                pinchScale = 1f;
+                pinchScale = zoomBase;
 
                 pointerId1 = ev.getPointerId(0);
                 pointerId2 = ev.getPointerId(1);
@@ -3835,7 +3837,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
             if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
                 AndroidUtilities.rectTmp.set(cameraContainer.getX(), cameraContainer.getY(), cameraContainer.getX() + cameraContainer.getMeasuredWidth(), cameraContainer.getY() + cameraContainer.getMeasuredHeight());
-                maybePinchToZoomTouchMode = AndroidUtilities.rectTmp.contains(ev.getX(), ev.getY());
+                maybePinchToZoomTouchMode = true;
             }
             return true;
         } else if (ev.getActionMasked() == MotionEvent.ACTION_MOVE && isInPinchToZoomTouchMode) {
@@ -3855,7 +3857,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 finishZoom();
                 return false;
             }
-            pinchScale = (float) Math.hypot(ev.getX(index2) - ev.getX(index1), ev.getY(index2) - ev.getY(index1)) / pinchStartDistance;
+            pinchScale = (float) Math.hypot(ev.getX(index2) - ev.getX(index1), ev.getY(index2) - ev.getY(index1)) / pinchStartDistance * zoomBase;
             if (useCamera2) {
                 if (camera2SessionCurrent != null) {
                     float zoom = Utilities.clamp(pinchScale, camera2SessionCurrent.getMaxZoom(), camera2SessionCurrent.getMinZoom());
@@ -3875,44 +3877,11 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     ValueAnimator finishZoomTransition;
 
     public void finishZoom() {
-        if (finishZoomTransition != null) {
-            return;
+        float limit = 2f;
+        if (useCamera2 && camera2SessionCurrent != null) {
+            limit = camera2SessionCurrent.getMaxZoom();
         }
-
-        float zoom;
-        if (useCamera2) {
-            if (camera2SessionCurrent == null) return;
-            zoom = Utilities.clamp(pinchScale, camera2SessionCurrent.getMaxZoom(), camera2SessionCurrent.getMinZoom());
-        } else {
-            zoom = Math.min(1f, Math.max(0, pinchScale - 1f));
-        }
-
-        if (zoom > 0f) {
-            finishZoomTransition = ValueAnimator.ofFloat(zoom, 0);
-            finishZoomTransition.addUpdateListener(valueAnimator -> {
-                if (useCamera2) {
-                    if (camera2SessionCurrent != null) {
-                        camera2SessionCurrent.setZoom((float) valueAnimator.getAnimatedValue());
-                    }
-                } else {
-                    if (cameraSession != null) {
-                        cameraSession.setZoom((float) valueAnimator.getAnimatedValue());
-                    }
-                }
-            });
-            finishZoomTransition.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    if (finishZoomTransition != null) {
-                        finishZoomTransition = null;
-                    }
-                }
-            });
-
-            finishZoomTransition.setDuration(350);
-            finishZoomTransition.setInterpolator(CubicBezierInterpolator.DEFAULT);
-            finishZoomTransition.start();
-        }
+        zoomBase = Math.max(1f, Math.min(limit, pinchScale));
     }
 
     public interface Delegate {

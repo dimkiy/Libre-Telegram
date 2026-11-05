@@ -29,6 +29,10 @@ import java.util.Locale;
 
 public class RadialProgress2 {
 
+    public boolean leafShape;
+    private final android.graphics.Path leafPath = new android.graphics.Path();
+    private final RectF leafRect = new RectF();
+
     public RectF progressRect = new RectF();
     private View parent;
 
@@ -352,6 +356,16 @@ public class RadialProgress2 {
     }
 
     @Keep
+    private void drawBack(Canvas canvas, Paint paint, float centerX, float centerY) {
+        if (!leafShape) {
+            canvas.drawCircle(centerX, centerY, circleRadius, paint);
+            return;
+        }
+        leafRect.set(centerX - circleRadius, centerY - circleRadius, centerX + circleRadius, centerY + circleRadius);
+        PrizmaShape.leaf(leafPath, leafRect, circleRadius * 0.92f, circleRadius * 0.92f * PrizmaShape.SMALL, 0f);
+        canvas.drawPath(leafPath, paint);
+    }
+
     public void draw(Canvas canvas) {
         if (mediaActionDrawable.getCurrentIcon() == MediaActionDrawable.ICON_NONE && mediaActionDrawable.getTransitionProgress() >= 1.0f || progressRect.isEmpty()) {
             return;
@@ -469,13 +483,13 @@ public class RadialProgress2 {
         }
         if (drawCircle && drawBackground) {
             if ((drawMiniIcon || circleCrossfadeColorKey >= 0) && miniDrawCanvas != null) {
-                miniDrawCanvas.drawCircle(centerX, centerY, circleRadius, circlePaint);
+                drawBack(miniDrawCanvas, circlePaint, centerX, centerY);
             } else {
                 if (currentIcon != MediaActionDrawable.ICON_NONE || wholeAlpha != 0) {
                     if (backgroundStroke != 0) {
                         canvas.drawCircle(centerX, centerY, (circleRadius - AndroidUtilities.dp(3.5f)), circlePaint);
                     } else {
-                        canvas.drawCircle(centerX, centerY, circleRadius, circlePaint);
+                        drawBack(canvas, circlePaint, centerX, centerY);
                     }
                 }
             }
@@ -489,7 +503,7 @@ public class RadialProgress2 {
                     float rr = AndroidUtilities.dp(6);
                     miniDrawCanvas.drawRoundRect(centerX - circleRadius, centerY - circleRadius, centerX + circleRadius, centerY + circleRadius, rr, rr, overlayPaint);
                 } else {
-                    miniDrawCanvas.drawCircle(centerX, centerY, circleRadius, overlayPaint);
+                    drawBack(miniDrawCanvas, overlayPaint, centerX, centerY);
                 }
             } else {
                 overlayImageView.draw(canvas);
@@ -497,7 +511,7 @@ public class RadialProgress2 {
                     float rr = AndroidUtilities.dp(6);
                     canvas.drawRoundRect(centerX - circleRadius, centerY - circleRadius, centerX + circleRadius, centerY + circleRadius, rr, rr, overlayPaint);
                 } else {
-                    canvas.drawCircle(centerX, centerY, circleRadius, overlayPaint);
+                    drawBack(canvas, overlayPaint, centerX, centerY);
                 }
             }
         }

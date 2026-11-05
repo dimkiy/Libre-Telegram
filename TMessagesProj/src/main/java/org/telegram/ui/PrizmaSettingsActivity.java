@@ -54,6 +54,7 @@ import org.telegram.ui.Components.PrizmaMaxSetup;
 import org.telegram.ui.Components.PrizmaNfcExchange;
 import org.telegram.ui.Components.PrizmaPalette;
 import org.telegram.ui.Components.PrizmaPlayerSettings;
+import org.telegram.ui.Components.PrizmaShape;
 import org.telegram.ui.Components.PrizmaPlaylistSheet;
 import org.telegram.ui.Components.PrizmaStealthSheet;
 import org.telegram.ui.Components.PrizmaSwitch;
@@ -169,10 +170,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
         LinearLayout search = new LinearLayout(context);
         search.setOrientation(LinearLayout.HORIZONTAL);
         search.setGravity(Gravity.CENTER_VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardColor);
-        bg.setCornerRadius(AndroidUtilities.dp(24));
-        search.setBackground(bg);
+        search.setBackground(PrizmaShape.fill(cardColor, AndroidUtilities.dp(24)));
         ImageView icon = new ImageView(context);
         icon.setImageResource(R.drawable.msg_search);
         icon.setColorFilter(new PorterDuffColorFilter(grayColor, PorterDuff.Mode.SRC_IN));
@@ -254,7 +252,8 @@ public class PrizmaSettingsActivity extends BaseFragment {
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(AndroidUtilities.dp(18), AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16));
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{tone.container, tone.surface});
-        bg.setCornerRadius(AndroidUtilities.dp(26));
+        float big = AndroidUtilities.dp(34), small = big * PrizmaShape.SMALL;
+        bg.setCornerRadii(new float[]{big, big, small, small, big, big, small, small});
         card.setBackground(bg);
         LinearLayout texts = new LinearLayout(context);
         texts.setOrientation(LinearLayout.VERTICAL);
@@ -306,18 +305,12 @@ public class PrizmaSettingsActivity extends BaseFragment {
         LinearLayout t = new LinearLayout(context);
         t.setOrientation(LinearLayout.VERTICAL);
         t.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(14), AndroidUtilities.dp(12), AndroidUtilities.dp(14));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardColor);
-        bg.setCornerRadius(AndroidUtilities.dp(24));
-        t.setBackground(bg);
+        t.setBackground(PrizmaShape.fill(cardColor, AndroidUtilities.dp(32)));
         ImageView icon = new ImageView(context);
         icon.setImageResource(ICONS[index]);
         icon.setColorFilter(new PorterDuffColorFilter(tone.onContainer, PorterDuff.Mode.SRC_IN));
         icon.setScaleType(ImageView.ScaleType.CENTER);
-        GradientDrawable mark = new GradientDrawable();
-        mark.setColor(tone.container);
-        mark.setCornerRadius(AndroidUtilities.dp(14));
-        icon.setBackground(mark);
+        icon.setBackground(PrizmaShape.fill(tone.container, AndroidUtilities.dp(18)));
         t.addView(icon, LayoutHelper.createLinear(44, 44));
         TextView name = new TextView(context);
         name.setText(NAMES[index]);
@@ -400,11 +393,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
     private View card(Context context, ArrayList<Entry> list, boolean withSection) {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardColor);
-        bg.setCornerRadius(AndroidUtilities.dp(24));
-        card.setBackground(bg);
-        card.setClipToOutline(true);
+        card.setBackground(PrizmaShape.fill(cardColor, AndroidUtilities.dp(32)));
         for (int i = 0; i < list.size(); i++) {
             if (i > 0) {
                 View line = new View(context);

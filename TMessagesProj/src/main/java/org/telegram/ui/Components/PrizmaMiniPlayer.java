@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
@@ -34,8 +35,9 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
     private final LinearLayout body;
     private final BackupImageView cover;
     private final TextView title, author;
-    private final ImageView prev, next;
-    private final RingPlay ring;
+    private final ImageView next, close;
+    private final PlayKey ring;
+    private final PulseLine pulse;
     private final Paint fill = new Paint();
     private final int slop;
 
@@ -59,12 +61,15 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         body = new LinearLayout(context);
         body.setOrientation(LinearLayout.HORIZONTAL);
         body.setGravity(Gravity.CENTER_VERTICAL);
-        body.setPadding(AndroidUtilities.dp(9), 0, AndroidUtilities.dp(8), 0);
+        body.setPadding(AndroidUtilities.dp(10), 0, AndroidUtilities.dp(8), AndroidUtilities.dp(5));
         addView(body, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        pulse = new PulseLine(context);
+        addView(pulse, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 9, Gravity.BOTTOM, 12, 0, 12, 3));
 
         cover = new BackupImageView(context);
-        cover.setRoundRadius(AndroidUtilities.dp(13));
-        body.addView(cover, LayoutHelper.createLinear(42, 42, Gravity.CENTER_VERTICAL, 0, 0, 11, 0));
+        int leaf = AndroidUtilities.dp(14), corner = (int) (leaf * PrizmaShape.SMALL);
+        cover.setRoundRadius(leaf, corner, corner, leaf);
+        body.addView(cover, LayoutHelper.createLinear(38, 38, Gravity.CENTER_VERTICAL, 0, 0, 11, 0));
 
         LinearLayout texts = new LinearLayout(context);
         texts.setOrientation(LinearLayout.VERTICAL);
@@ -81,14 +86,7 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         texts.addView(author, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
         body.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 0, 0, 6, 0));
 
-        prev = button(R.drawable.prizma_ic_prev, "Предыдущий трек");
-        prev.setOnClickListener(v -> {
-            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            MediaController.getInstance().playPreviousMessage();
-        });
-        body.addView(prev, LayoutHelper.createLinear(38, 44, Gravity.CENTER_VERTICAL));
-
-        ring = new RingPlay(context);
+        ring = new PlayKey(context);
         ring.setContentDescription("Пауза или воспроизведение");
         ring.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
@@ -100,14 +98,21 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
                 MediaController.getInstance().pauseMessage(mo);
             }
         });
-        body.addView(ring, LayoutHelper.createLinear(46, 46, Gravity.CENTER_VERTICAL, 2, 0, 2, 0));
+        body.addView(ring, LayoutHelper.createLinear(42, 36, Gravity.CENTER_VERTICAL, 2, 0, 0, 0));
 
         next = button(R.drawable.prizma_ic_next, "Следующий трек");
         next.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             MediaController.getInstance().playNextMessage();
         });
-        body.addView(next, LayoutHelper.createLinear(38, 44, Gravity.CENTER_VERTICAL));
+        body.addView(next, LayoutHelper.createLinear(36, 44, Gravity.CENTER_VERTICAL));
+
+        close = button(R.drawable.miniplayer_close, "Закрыть трек");
+        close.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            MediaController.getInstance().cleanupPlayer(true, true);
+        });
+        body.addView(close, LayoutHelper.createLinear(32, 44, Gravity.CENTER_VERTICAL));
         paint();
     }
 
@@ -125,9 +130,10 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         title.setTextColor(tint);
         author.setTextColor((tint & 0x00ffffff) | 0xa6000000);
         PorterDuffColorFilter f = new PorterDuffColorFilter(tint, PorterDuff.Mode.SRC_IN);
-        prev.setColorFilter(f);
         next.setColorFilter(f);
-        ring.setTint(tint);
+        close.setColorFilter(f);
+        ring.setColors(tint, color);
+        pulse.setColors(tint, (tint & 0x00ffffff) | 0x38000000);
         invalidate();
     }
 
@@ -250,7 +256,7 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
             boundKey = key;
             bind(mo, animate);
         }
-        ring.setProgress(mo.audioProgress);
+        pulse.setProgress(mo.audioProgress);
         ring.setPlaying(!MediaController.getInstance().isMessagePaused());
         if (paletteKey != key) tryPalette(key);
     }
@@ -311,26 +317,21 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         va.start();
     }
 
-    private static final class RingPlay extends View {
-        private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final class PlayKey extends View {
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
-        private final PlayPauseDrawable icon = new PlayPauseDrawable(20);
-        private int tint = 0xffffffff;
-        private float progress, shown;
+        private final RectF rect = new RectF();
+        private final PlayPauseDrawable icon = new PlayPauseDrawable(18);
         private boolean playing;
-        private float wave;
-        private final PrizmaSpring waveSpring = new PrizmaSpring(0f, PrizmaSpring.SOFT, 1f, v -> {
-            wave = v;
+        private float flip;
+        private final PrizmaSpring flipSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.8f, v -> {
+            flip = v;
             invalidate();
         });
 
-        RingPlay(Context c) {
+        PlayKey(Context c) {
             super(c);
             setClickable(true);
-            ring.setStyle(Paint.Style.STROKE);
-            ring.setStrokeCap(Paint.Cap.ROUND);
-            ring.setStrokeJoin(Paint.Join.ROUND);
-            ring.setStrokeWidth(AndroidUtilities.dpf2(2.4f));
             icon.setParent(this);
             icon.setCallback(this);
         }
@@ -340,9 +341,45 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
             return who == icon || super.verifyDrawable(who);
         }
 
-        void setTint(int color) {
-            tint = color;
-            icon.setColor(color);
+        void setColors(int back, int glyph) {
+            fill.setColor(back);
+            icon.setColor(glyph);
+            invalidate();
+        }
+
+        void setPlaying(boolean value) {
+            if (playing != value) {
+                playing = value;
+                icon.setPause(value, true);
+                flipSpring.to(value ? 0f : 1f);
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            rect.set(0, 0, getWidth(), getHeight());
+            float big = AndroidUtilities.dpf2(16);
+            PrizmaShape.leaf(path, rect, big, big * PrizmaShape.SMALL, Math.max(0f, Math.min(1f, flip)));
+            canvas.drawPath(path, fill);
+            int s = AndroidUtilities.dp(18), cx = getWidth() / 2, cy = getHeight() / 2;
+            icon.setBounds(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2);
+            icon.draw(canvas);
+        }
+    }
+
+    private static final class PulseLine extends View implements PrizmaBeat.Listener {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rect = new RectF();
+        private int played = 0xffffffff, rest = 0x40ffffff;
+        private float progress, shown;
+
+        PulseLine(Context c) {
+            super(c);
+        }
+
+        void setColors(int on, int off) {
+            played = on;
+            rest = off;
             invalidate();
         }
 
@@ -351,46 +388,43 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
             invalidate();
         }
 
-        void setPlaying(boolean value) {
-            if (playing != value) {
-                playing = value;
-                icon.setPause(value, true);
-                waveSpring.to(value ? 1f : 0f);
+        @Override
+        public void onBeat(float strength) {
+            invalidate();
+        }
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            if (PrizmaConfig.beatEffects()) {
+                PrizmaBeat.add(this);
             }
         }
 
         @Override
+        protected void onDetachedFromWindow() {
+            super.onDetachedFromWindow();
+            PrizmaBeat.remove(this);
+        }
+
+        @Override
         protected void onDraw(Canvas canvas) {
-            float cx = getWidth() / 2f, cy = getHeight() / 2f;
-            float radius = Math.min(cx, cy) - AndroidUtilities.dpf2(4);
             shown += (progress - shown) * 0.2f;
-            long now = System.currentTimeMillis();
+            float w = getWidth(), h = getHeight();
+            float bar = AndroidUtilities.dpf2(2f), gap = AndroidUtilities.dpf2(2.4f);
+            int count = (int) (w / (bar + gap));
             boolean fancy = PrizmaConfig.beatEffects();
-
-            ring.setColor((tint & 0x00ffffff) | 0x33000000);
-            canvas.drawCircle(cx, cy, radius, ring);
-
-            int steps = 72;
-            int drawn = (int) (steps * shown);
-            if (drawn > 0) {
-                path.rewind();
-                float amp = AndroidUtilities.dpf2(1.5f) * wave * (fancy ? 1f : 0f);
-                double phase = now / 180.0;
-                for (int i = 0; i <= drawn; i++) {
-                    double a = -Math.PI / 2 + 2 * Math.PI * i / steps;
-                    float r = radius + amp * (float) Math.sin(a * 10 + phase);
-                    float x = cx + r * (float) Math.cos(a);
-                    float y = cy + r * (float) Math.sin(a);
-                    if (i == 0) path.moveTo(x, y);
-                    else path.lineTo(x, y);
-                }
-                ring.setColor(tint);
-                canvas.drawPath(path, ring);
+            boolean alive = false;
+            for (int i = 0; i < count; i++) {
+                float v = fancy ? PrizmaBeat.band(i % PrizmaBeat.BANDS) : 0f;
+                if (v > 0.02f) alive = true;
+                float bh = AndroidUtilities.dpf2(2) + v * (h - AndroidUtilities.dpf2(2));
+                float x = i * (bar + gap);
+                rect.set(x, h - bh, x + bar, h);
+                paint.setColor(x / w <= shown ? played : rest);
+                canvas.drawRoundRect(rect, bar / 2f, bar / 2f, paint);
             }
-            int s = AndroidUtilities.dp(20);
-            icon.setBounds((int) (cx - s / 2f), (int) (cy - s / 2f), (int) (cx + s / 2f), (int) (cy + s / 2f));
-            icon.draw(canvas);
-            if (playing && fancy || Math.abs(progress - shown) > 0.001f) {
+            if (alive || Math.abs(progress - shown) > 0.001f) {
                 PrizmaConfig.nextDecorFrame(this);
             }
         }

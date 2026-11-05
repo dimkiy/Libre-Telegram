@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Prizma</string>
-    <string name="AppNameBeta">Prizma</string>
+    <string name="AppName">Libre</string>
+    <string name="AppNameBeta">Libre</string>
     <string name="LanguageName">Русский</string>
     <string name="English">Английский</string>
     <string name="LanguageNameInEnglish">Russian</string>

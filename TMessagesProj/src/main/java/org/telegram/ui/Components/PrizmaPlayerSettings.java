@@ -126,6 +126,14 @@ public final class PrizmaPlayerSettings {
         LinearLayout beat = card();
         beat.addView(toggle("Кольца от обложки", "На каждый удар от обложки расходится тонкий контур.", PrizmaConfig::playerRings, PrizmaConfig::setPlayerRings));
         divider(beat);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            beat.addView(toggle("Линза на басу", "Обложка выгибается и расслаивается на цвета на каждом ударе.", PrizmaConfig::playerLens, PrizmaConfig::setPlayerLens));
+            divider(beat);
+        }
+        beat.addView(toggle("Эквалайзер вокруг обложки", "Настоящие частоты трека расходятся штрихами по краю обложки.", PrizmaConfig::playerContour, PrizmaConfig::setPlayerContour));
+        divider(beat);
+        beat.addView(toggle("Живая капля", "За обложкой дышит пятно цвета трека, бас раздувает его.", PrizmaConfig::playerBlob, PrizmaConfig::setPlayerBlob));
+        divider(beat);
         beat.addView(toggle("Частицы", "Искры разлетаются от обложки в такт музыке.", PrizmaConfig::playerSparks, PrizmaConfig::setPlayerSparks));
         divider(beat);
         beat.addView(toggle("Удар по обложке", "Обложка коротко подпрыгивает на сильных долях.", PrizmaConfig::playerCoverKick, PrizmaConfig::setPlayerCoverKick));
@@ -183,11 +191,7 @@ public final class PrizmaPlayerSettings {
     private LinearLayout card() {
         LinearLayout c = new LinearLayout(context);
         c.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(cardColor);
-        d.setCornerRadius(AndroidUtilities.dp(24));
-        c.setBackground(d);
-        c.setClipToOutline(true);
+        c.setBackground(PrizmaShape.fill(cardColor, AndroidUtilities.dp(30)));
         return c;
     }
 

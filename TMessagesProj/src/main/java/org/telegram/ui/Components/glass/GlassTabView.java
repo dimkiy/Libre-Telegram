@@ -108,6 +108,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
     private boolean dock;
     private int dockContrast = Color.WHITE;
     private float dockTextWidth;
+    private final android.graphics.Path dockPath = new android.graphics.Path();
 
     private void enableDock() {
         dock = true;
@@ -201,7 +202,12 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
             final float s = lerp(dock ? 0.78f : 0.6f, 1, selectedFactor) * MathUtils.clamp(attachScale, 0, 1);
             canvas.save();
             canvas.scale(s, s, tmpRectF.centerX(), tmpRectF.centerY());
-            canvas.drawRoundRect(tmpRectF, r, r, paintCounterBackground);
+            if (dock) {
+                org.telegram.ui.Components.PrizmaShape.leaf(dockPath, tmpRectF, r, r * org.telegram.ui.Components.PrizmaShape.SMALL, 0f);
+                canvas.drawPath(dockPath, paintCounterBackground);
+            } else {
+                canvas.drawRoundRect(tmpRectF, r, r, paintCounterBackground);
+            }
             canvas.restore();
         }
 

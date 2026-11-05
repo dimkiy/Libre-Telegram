@@ -35,6 +35,9 @@ import java.util.ArrayList;
 
 public class SeekBarWaveform {
 
+    private static final float BAR_STEP = 4.6f;
+    private static final float BAR_WIDTH = 2.6f;
+
     private static Paint paintInner;
     private static Paint paintOuter;
     private int thumbX = 0;
@@ -98,7 +101,7 @@ public class SeekBarWaveform {
 
     public void setWaveform(byte[] waveform) {
         waveformBytes = waveform;
-        heights = calculateHeights((int) (width / AndroidUtilities.dpf2(3)));
+        heights = calculateHeights((int) (width / AndroidUtilities.dpf2(BAR_STEP)));
         if (!delegate.isSeekBarDragAllowed()) {
             this.progress = 1f;
         }
@@ -222,14 +225,14 @@ public class SeekBarWaveform {
         int wasWidth = width;
         width = w;
         height = h;
-        if (heights == null || heights.length != (int) (width / AndroidUtilities.dpf2(3))) {
-            heights = calculateHeights((int) (width / AndroidUtilities.dpf2(3)));
+        if (heights == null || heights.length != (int) (width / AndroidUtilities.dpf2(BAR_STEP))) {
+            heights = calculateHeights((int) (width / AndroidUtilities.dpf2(BAR_STEP)));
         }
         if (fromW != toW && (fromWidth != fromW || toWidth != toW)) {
             fromWidth = fromW;
             toWidth = toW;
-            fromHeights = calculateHeights((int) (fromWidth / AndroidUtilities.dpf2(3)));
-            toHeights = calculateHeights((int) (toWidth / AndroidUtilities.dpf2(3)));
+            fromHeights = calculateHeights((int) (fromWidth / AndroidUtilities.dpf2(BAR_STEP)));
+            toHeights = calculateHeights((int) (toWidth / AndroidUtilities.dpf2(BAR_STEP)));
         } else if (fromW == toW) {
             fromHeights = toHeights = null;
         }
@@ -315,7 +318,7 @@ public class SeekBarWaveform {
         if (waveformBytes == null || width == 0 || alpha <= 0) {
             return;
         }
-        float totalBarsCount = width / AndroidUtilities.dpf2(3);
+        float totalBarsCount = width / AndroidUtilities.dpf2(BAR_STEP);
         if (totalBarsCount <= 0.1f) {
             return;
         }
@@ -356,12 +359,12 @@ public class SeekBarWaveform {
             for (int barNum = 0; barNum < maxlen; ++barNum) {
                 int l = MathUtils.clamp((int) Math.floor(barNum / (float) maxlen * minlen), 0, minlen - 1);
                 if (k < l) {
-                    float x = AndroidUtilities.lerp((float) l, (float) barNum, T) * AndroidUtilities.dpf2(3);
+                    float x = AndroidUtilities.lerp((float) l, (float) barNum, T) * AndroidUtilities.dpf2(BAR_STEP);
                     float h = AndroidUtilities.dpf2(AndroidUtilities.lerp(minarr[reverse ? minarr.length - 1 - l : l], maxarr[reverse ? maxarr.length - 1 - barNum : barNum], T));
                     addBar(path, x, h);
                     k = l;
                 } else {
-                    float x = AndroidUtilities.lerp((float) l, (float) barNum, T) * AndroidUtilities.dpf2(3);
+                    float x = AndroidUtilities.lerp((float) l, (float) barNum, T) * AndroidUtilities.dpf2(BAR_STEP);
                     float h = AndroidUtilities.dpf2(AndroidUtilities.lerp(minarr[reverse ? minarr.length - 1 - l : l], maxarr[reverse ? maxarr.length - 1 - barNum : barNum], T));
                     addBar(alphaPath, x, h);
                     alpha = T;
@@ -372,7 +375,7 @@ public class SeekBarWaveform {
                 if (barNum >= heights.length) {
                     break;
                 }
-                float x = barNum * AndroidUtilities.dpf2(3);
+                float x = barNum * AndroidUtilities.dpf2(BAR_STEP);
                 float bart = MathUtils.clamp(appearProgress * totalBarsCount - barNum, 0, 1);
                 float h = AndroidUtilities.dpf2(heights[reverse ? heights.length - 1 - barNum : barNum]) * bart;
                 h -= AndroidUtilities.dpf2(1) * (1f - bart);
@@ -382,7 +385,7 @@ public class SeekBarWaveform {
 
         if (exploding || explosionRate > 0) {
             canvas.save();
-            final float w = totalBarsCount * AndroidUtilities.dpf2(3);
+            final float w = totalBarsCount * AndroidUtilities.dpf2(BAR_STEP);
             canvas.clipRect(0, 0, w * (1f - explodeProgress * explosionRate), height);
         }
 
@@ -397,6 +400,13 @@ public class SeekBarWaveform {
         canvas.clipPath(path);
         drawFill(canvas, this.alpha);
         canvas.restore();
+
+        if (!exploding && !loading && progress > 0f && progress < 1f) {
+            float head = progress * width;
+            float half = AndroidUtilities.dpf2(1);
+            AndroidUtilities.rectTmp.set(head - half, 0, head + half, height);
+            canvas.drawRoundRect(AndroidUtilities.rectTmp, half, half, paintOuter);
+        }
 
         if (exploding || explosionRate > 0) {
             canvas.restore();
@@ -413,7 +423,7 @@ public class SeekBarWaveform {
                     float bart = MathUtils.clamp(appearProgress * totalBarsCount - barNum, 0, 1);
                     float h = AndroidUtilities.dpf2(heights[barNum]) * bart;
                     emitArea = AndroidUtilities.rectTmp;
-                    final float x = (totalBarsCount * (1f - explodeProgress)) * AndroidUtilities.dpf2(3);
+                    final float x = (totalBarsCount * (1f - explodeProgress)) * AndroidUtilities.dpf2(BAR_STEP);
                     final float strokeWidth = AndroidUtilities.dpf2(2);
                     final int y = (height - dp(14)) / 2;
                     h *= waveScaling;
@@ -476,7 +486,7 @@ public class SeekBarWaveform {
     }
 
     private void addBar(Path path, float x, float h) {
-        final float strokeWidth = AndroidUtilities.dpf2(2);
+        final float strokeWidth = AndroidUtilities.dpf2(BAR_WIDTH);
         final int y = (height - dp(14)) / 2;
         h *= waveScaling;
         AndroidUtilities.rectTmp.set(
@@ -485,7 +495,7 @@ public class SeekBarWaveform {
             x + AndroidUtilities.dpf2(1) + strokeWidth / 2f,
             y + dp(7) + (h + strokeWidth / 2f)
         );
-        path.addRoundRect(AndroidUtilities.rectTmp, strokeWidth, strokeWidth, Path.Direction.CW);
+        path.addRoundRect(AndroidUtilities.rectTmp, AndroidUtilities.dpf2(0.9f), AndroidUtilities.dpf2(0.9f), Path.Direction.CW);
     }
 
     public void setWaveScaling(float waveScaling) {

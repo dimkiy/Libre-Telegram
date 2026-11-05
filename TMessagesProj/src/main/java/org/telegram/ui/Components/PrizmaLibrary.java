@@ -3,7 +3,6 @@ package org.telegram.ui.Components;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.InputType;
@@ -13,7 +12,6 @@ import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -246,10 +244,7 @@ public class PrizmaLibrary extends Dialog {
     private void bindCreate(LinearLayout card) {
         int side = (AndroidUtilities.displaySize.x - AndroidUtilities.dp(44)) / 2;
         FrameLayout tile = new FrameLayout(ctx);
-        GradientDrawable d = new GradientDrawable();
-        d.setCornerRadius(AndroidUtilities.dp(24));
-        d.setColor(SURFACE);
-        tile.setBackground(d);
+        tile.setBackground(PrizmaShape.fill(SURFACE, AndroidUtilities.dp(34)));
         ImageView plus = new ImageView(ctx);
         plus.setImageResource(R.drawable.msg_add);
         plus.setColorFilter(TEXT_2);
@@ -412,16 +407,21 @@ public class PrizmaLibrary extends Dialog {
     }
 
     private final class Mosaic extends FrameLayout {
+        private final android.graphics.Path clip = new android.graphics.Path();
+        private final android.graphics.RectF box = new android.graphics.RectF();
+
+        @Override
+        public void draw(android.graphics.Canvas canvas) {
+            box.set(0, 0, getWidth(), getHeight());
+            PrizmaShape.leaf(clip, box, AndroidUtilities.dp(34), AndroidUtilities.dp(10), 0f);
+            canvas.save();
+            canvas.clipPath(clip);
+            super.draw(canvas);
+            canvas.restore();
+        }
+
         Mosaic(Context c, PrizmaPlaylist.Playlist p, int side) {
             super(c);
-            final int r = AndroidUtilities.dp(24);
-            setClipToOutline(true);
-            setOutlineProvider(new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), r);
-                }
-            });
             setBackgroundColor(SURFACE);
             Bitmap custom = PrizmaPlaylistSheet.decodeCover(p.cover, side);
             if (custom != null) {
@@ -633,10 +633,7 @@ public class PrizmaLibrary extends Dialog {
             t.setTypeface(AndroidUtilities.bold());
             t.setGravity(Gravity.CENTER);
             t.setPadding(AndroidUtilities.dp(28), 0, AndroidUtilities.dp(28), 0);
-            GradientDrawable d = new GradientDrawable();
-            d.setColor(bg);
-            d.setCornerRadius(AndroidUtilities.dp(26));
-            t.setBackground(d);
+            t.setBackground(PrizmaShape.fill(bg, AndroidUtilities.dp(26)));
             PrizmaGlass.pressable(t);
             return t;
         }

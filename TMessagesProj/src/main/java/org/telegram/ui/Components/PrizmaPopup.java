@@ -56,10 +56,7 @@ public class PrizmaPopup {
         overlay.setOnClickListener(v -> dismiss());
         card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(surface);
-        bg.setCornerRadius(AndroidUtilities.dp(22));
-        card.setBackground(bg);
+        card.setBackground(PrizmaShape.fill(surface, AndroidUtilities.dp(28)));
         card.setElevation(AndroidUtilities.dpf2(10));
         card.setPadding(0, AndroidUtilities.dp(8), 0, AndroidUtilities.dp(8));
         card.setClickable(true);

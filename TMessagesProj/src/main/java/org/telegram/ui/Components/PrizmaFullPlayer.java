@@ -104,12 +104,14 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
     private TextView titleView, authorView;
     private HeartButton heart;
     private PrizmaSeekBars seek;
+    private LinearLayout seekRow;
     private TextView timeCur, timeDur;
     private DotIcon shuffleButton, repeatButton;
     private PillButton prevButton, playButton, nextButton;
     private PlayPauseDrawable playPause;
     private TextView speedButton;
-    private GroupButton lyricsButton, queueButton;
+    private PageTabs pageTabs;
+    private PrizmaCoverLens lens;
     private ImageView optionsButton;
 
     private PrizmaPalette palette = PrizmaPalette.fallback();
@@ -206,14 +208,17 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
             timeCur.setText(formatTime((int) (mo.getDuration() * progress)));
             if (committed) MediaController.getInstance().seekToProgress(mo, progress);
         };
-        column.addView(seek, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 2, 0, 0));
-
-        FrameLayout times = new FrameLayout(ctx);
+        seekRow = new LinearLayout(ctx);
+        seekRow.setOrientation(LinearLayout.HORIZONTAL);
+        seekRow.setGravity(Gravity.CENTER_VERTICAL);
+        seekRow.setClipChildren(false);
         timeCur = timeLabel();
         timeDur = timeLabel();
-        times.addView(timeCur, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT));
-        times.addView(timeDur, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT));
-        column.addView(times, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
+        timeDur.setGravity(Gravity.RIGHT);
+        seekRow.addView(timeCur, LayoutHelper.createLinear(38, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+        seekRow.addView(seek, LayoutHelper.createLinear(0, 48, 1f, Gravity.CENTER_VERTICAL, 4, 0, 4, 0));
+        seekRow.addView(timeDur, LayoutHelper.createLinear(38, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+        column.addView(seekRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 4, 0, 0));
 
         column.addView(buildControls(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 76, 0, 10, 0, 0));
         column.addView(buildBottomRow(), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 12, 0, 0));
@@ -230,6 +235,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         clipView.setRadius(AndroidUtilities.dp(28));
         coverInner.addView(clipView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         coverBox.addView(coverInner, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        lens = new PrizmaCoverLens(coverInner);
         attachCoverGestures();
         root.addView(coverBox, new FrameLayout.LayoutParams(AndroidUtilities.dp(200), AndroidUtilities.dp(200)));
 
@@ -259,19 +265,19 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
 
         LinearLayout center = new LinearLayout(ctx);
         center.setOrientation(LinearLayout.VERTICAL);
-        center.setGravity(Gravity.CENTER_HORIZONTAL);
+        center.setGravity(Gravity.LEFT);
         topTitle = new TextView(ctx);
         topTitle.setTextColor(TEXT);
         topTitle.setTextSize(15);
         topTitle.setTypeface(AndroidUtilities.bold());
         topTitle.setSingleLine(true);
         topTitle.setEllipsize(TextUtils.TruncateAt.END);
-        center.addView(topTitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
+        center.addView(topTitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT));
         topSubtitle = new TextView(ctx);
         topSubtitle.setTextColor(TEXT_3);
         topSubtitle.setTextSize(12.5f);
         topSubtitle.setSingleLine(true);
-        center.addView(topSubtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 1, 0, 0));
+        center.addView(topSubtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT, 0, 1, 0, 0));
         center.setOnClickListener(v -> setPage(page == PAGE_QUEUE ? PAGE_COVER : PAGE_QUEUE));
         bar.addView(center, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 44, 0, 44, 0));
 
@@ -379,6 +385,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         row.addView(shuffleButton, LayoutHelper.createLinear(44, 44, Gravity.CENTER_VERTICAL));
 
         prevButton = new PillButton(ctx);
+        prevButton.ghost = true;
         prevButton.setContentDescription("Предыдущий трек");
         prevButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_prev).mutate());
         prevButton.setOnClickListener(v -> {
@@ -407,6 +414,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         row.addView(playButton, LayoutHelper.createLinear(0, 74, 1.5f, Gravity.CENTER_VERTICAL, 6, 0, 6, 0));
 
         nextButton = new PillButton(ctx);
+        nextButton.ghost = true;
         nextButton.setContentDescription("Следующий трек");
         nextButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_next).mutate());
         nextButton.setOnClickListener(v -> {
@@ -429,34 +437,16 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
 
     private View buildBottomRow() {
         FrameLayout row = new FrameLayout(ctx);
+        pageTabs = new PageTabs(ctx);
+        row.addView(pageTabs, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT, 0, 0, 64, 0));
         speedButton = new TextView(ctx);
-        speedButton.setTextColor(TEXT);
+        speedButton.setTextColor(TEXT_2);
         speedButton.setTextSize(14);
-        speedButton.setTypeface(AndroidUtilities.bold());
-        speedButton.setGravity(Gravity.CENTER);
-        speedButton.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
-        speedButton.setMinWidth(AndroidUtilities.dp(62));
+        speedButton.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MONO));
+        speedButton.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
         speedButton.setContentDescription("Скорость воспроизведения");
-        GradientDrawable pill = new GradientDrawable();
-        pill.setCornerRadius(AndroidUtilities.dp(18));
-        pill.setStroke(AndroidUtilities.dp(1.4f), 0x59ffffff);
-        speedButton.setBackground(pill);
         speedButton.setOnClickListener(this::openSpeed);
-        row.addView(speedButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 36, Gravity.LEFT | Gravity.CENTER_VERTICAL));
-
-        LinearLayout group = new LinearLayout(ctx);
-        group.setOrientation(LinearLayout.HORIZONTAL);
-        lyricsButton = new GroupButton(ctx, true);
-        lyricsButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_lyrics).mutate());
-        lyricsButton.setContentDescription("Текст песни");
-        lyricsButton.setOnClickListener(v -> setPage(page == PAGE_LYRICS ? PAGE_COVER : PAGE_LYRICS));
-        group.addView(lyricsButton, LayoutHelper.createLinear(70, 48));
-        queueButton = new GroupButton(ctx, false);
-        queueButton.setIcon(ctx.getResources().getDrawable(R.drawable.prizma_ic_queue).mutate());
-        queueButton.setContentDescription("Очередь");
-        queueButton.setOnClickListener(v -> setPage(page == PAGE_QUEUE ? PAGE_COVER : PAGE_QUEUE));
-        group.addView(queueButton, LayoutHelper.createLinear(70, 48, 3, 0, 0, 0));
-        row.addView(group, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 48, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
+        row.addView(speedButton, LayoutHelper.createFrame(60, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
         return row;
     }
 
@@ -518,7 +508,8 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         coverBox.setTranslationY(y);
         float clamped = Math.max(0f, Math.min(1f, p));
         int radius = (int) (AndroidUtilities.lerp(AndroidUtilities.dpf2(28), AndroidUtilities.dpf2(14), clamped) / Math.max(0.05f, scale));
-        cover.setRoundRadius(radius);
+        int corner = (int) (radius * PrizmaShape.SMALL);
+        cover.setRoundRadius(radius, corner, corner, radius);
         clipView.setRadius(radius);
 
         float inset = smallSize + AndroidUtilities.dp(12);
@@ -565,8 +556,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         pageSpring.to(next == PAGE_COVER ? 0f : 1f);
         lyricsSpring.to(next == PAGE_LYRICS ? 1f : 0f);
         queueSpring.to(next == PAGE_QUEUE ? 1f : 0f);
-        lyricsButton.setSelectedState(next == PAGE_LYRICS);
-        queueButton.setSelectedState(next == PAGE_QUEUE);
+        pageTabs.select(next);
         applyPage();
     }
 
@@ -625,6 +615,9 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
             kick.snap(1f + 0.032f * strength);
             kick.to(1f);
         }
+        if (PrizmaConfig.playerLens() && page == PAGE_COVER) {
+            lens.hit(strength);
+        }
         if (lyricsPanel != null && page == PAGE_LYRICS) {
             lyricsPanel.view.bump(strength);
         }
@@ -638,10 +631,10 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
 
     @Override
     public void show() {
-        super.show();
+        running = true;
         open = true;
         instance = this;
-        running = true;
+        super.show();
         AndroidUtilities.runOnUIThread(ticker, 60);
         startParallax();
         root.post(() -> {
@@ -977,10 +970,9 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         seek.setColors(p.accent, p.onAccent);
         playButton.setColors(p.accent, p.onAccent, animated);
         playPause.setColor(p.onAccent);
-        prevButton.setColors(p.container, p.onContainer, animated);
-        nextButton.setColors(p.container, p.onContainer, animated);
-        lyricsButton.setColors(p.accent, p.onAccent, p.container, p.onContainer);
-        queueButton.setColors(p.accent, p.onAccent, p.container, p.onContainer);
+        prevButton.setColors(p.container, TEXT, animated);
+        nextButton.setColors(p.container, TEXT, animated);
+        pageTabs.setAccent(p.accent);
         heart.setAccent(p.accent);
         shuffleButton.setAccent(p.accent);
         repeatButton.setAccent(p.accent);
@@ -1303,10 +1295,22 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         Activity activity = AndroidUtilities.findActivity(ctx);
         if (activity == null) return;
         try {
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("video/*");
-            activity.startActivityForResult(Intent.createChooser(intent, "Клип к треку"), PrizmaClips.OWN_REQUEST);
-        } catch (Throwable ignore) {
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= 33) {
+                intent = new Intent(android.provider.MediaStore.ACTION_PICK_IMAGES);
+                intent.setType("video/*");
+            } else {
+                intent = new Intent(Intent.ACTION_PICK);
+                intent.setDataAndType(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "video/*");
+            }
+            activity.startActivityForResult(intent, PrizmaClips.OWN_REQUEST);
+        } catch (Throwable pickerMissing) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("video/*");
+                activity.startActivityForResult(Intent.createChooser(intent, "Клип к треку"), PrizmaClips.OWN_REQUEST);
+            } catch (Throwable ignore) {
+            }
         }
     }
 
@@ -1404,7 +1408,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
                     startX = e.getRawX();
                     startY = e.getRawY();
                     dragging = false;
-                    int limit = page == PAGE_COVER ? seek.getTop() : stage.getTop();
+                    int limit = page == PAGE_COVER ? seekRow.getTop() : stage.getTop();
                     allowed = e.getY() < limit && getChildCount() <= 3;
                     if (velocity != null) velocity.clear();
                     track(e);
@@ -1578,6 +1582,8 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         private Drawable icon;
         private int color, tint;
         private float grow, shift, round;
+        boolean ghost;
+        private final Path path = new Path();
         private PillButton left, right;
         private final PrizmaSpring growSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.48f, v -> {
             grow = v;
@@ -1675,13 +1681,21 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         protected void onDraw(Canvas canvas) {
             float w = getWidth(), h = getHeight();
             rect.set(-grow, Math.min(0f, -grow * 0.35f), w + grow, h - Math.min(0f, -grow * 0.35f));
-            float r = AndroidUtilities.lerp(AndroidUtilities.dpf2(24), h / 2f, Math.max(0f, Math.min(1f, round)));
+            float big = AndroidUtilities.dpf2(30);
+            PrizmaShape.leaf(path, rect, big, big * PrizmaShape.SMALL, Math.max(0f, Math.min(1f, round)));
             fill.setColor(color);
-            canvas.drawRoundRect(rect, r, r, fill);
+            if (ghost) {
+                fill.setAlpha((int) (255 * Math.max(0f, Math.min(1f, grow / AndroidUtilities.dpf2(7)))));
+            }
+            canvas.drawPath(path, fill);
             if (icon != null) {
                 int iw = icon.getIntrinsicWidth(), ih = icon.getIntrinsicHeight();
                 if (iw <= 0) iw = AndroidUtilities.dp(26);
                 if (ih <= 0) ih = AndroidUtilities.dp(26);
+                if (ghost) {
+                    iw = iw * 4 / 3;
+                    ih = ih * 4 / 3;
+                }
                 int cx = (int) (w / 2f + shift), cy = (int) (h / 2f);
                 icon.setBounds(cx - iw / 2, cy - ih / 2, cx + iw / 2, cy + ih / 2);
                 icon.draw(canvas);
@@ -1689,66 +1703,75 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         }
     }
 
-    private static final class GroupButton extends View {
-        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final class PageTabs extends View {
+        private final String[] labels = {"Обложка", "Текст", "Очередь"};
+        private final android.text.TextPaint text = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
         private final RectF rect = new RectF();
-        private final float[] radii = new float[8];
-        private final boolean leading;
-        private Drawable icon;
-        private int onColor, onTint, offColor, offTint;
-        private float selected;
+        private final float[] lefts = new float[3];
+        private final float[] widths = new float[3];
+        private int accent = TEXT;
+        private int selected;
+        private float position;
         private final PrizmaSpring spring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.7f, v -> {
-            selected = v;
+            position = v;
             invalidate();
         });
 
-        GroupButton(Context c, boolean leading) {
+        PageTabs(Context c) {
             super(c);
-            this.leading = leading;
+            text.setTextSize(AndroidUtilities.dp(15));
+            text.setTypeface(AndroidUtilities.bold());
             setClickable(true);
+            setContentDescription("Обложка, текст или очередь");
         }
 
-        void setIcon(Drawable d) {
-            icon = d;
-        }
-
-        void setColors(int on, int onIcon, int off, int offIcon) {
-            onColor = on;
-            onTint = onIcon;
-            offColor = off;
-            offTint = offIcon;
+        void setAccent(int color) {
+            accent = color;
             invalidate();
         }
 
-        void setSelectedState(boolean value) {
-            spring.to(value ? 1f : 0f);
+        void select(int index) {
+            selected = index;
+            spring.to(index);
+            invalidate();
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            if (e.getActionMasked() == MotionEvent.ACTION_UP) {
+                for (int i = 0; i < 3; i++) {
+                    if (e.getX() >= lefts[i] - AndroidUtilities.dp(10) && e.getX() <= lefts[i] + widths[i] + AndroidUtilities.dp(10)) {
+                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                        setPage(i);
+                        break;
+                    }
+                }
+            }
+            return true;
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
-            float w = getWidth(), h = getHeight();
-            float t = Math.max(0f, Math.min(1f, selected));
-            float outer = h / 2f;
-            float inner = AndroidUtilities.lerp(AndroidUtilities.dpf2(8), outer, t);
-            float a = leading ? outer : inner;
-            float b = leading ? inner : outer;
-            radii[0] = radii[1] = a;
-            radii[2] = radii[3] = b;
-            radii[4] = radii[5] = b;
-            radii[6] = radii[7] = a;
-            path.rewind();
-            rect.set(0, 0, w, h);
-            path.addRoundRect(rect, radii, Path.Direction.CW);
-            fill.setColor(PrizmaPalette.mix(offColor, onColor, t));
-            canvas.drawPath(path, fill);
-            if (icon != null) {
-                int s = AndroidUtilities.dp(24);
-                int cx = (int) (w / 2f), cy = (int) (h / 2f);
-                icon.setBounds(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2);
-                icon.setColorFilter(new android.graphics.PorterDuffColorFilter(PrizmaPalette.mix(offTint, onTint, t), android.graphics.PorterDuff.Mode.SRC_IN));
-                icon.draw(canvas);
+            float x = 0f, baseline = getHeight() / 2f + AndroidUtilities.dp(3);
+            for (int i = 0; i < 3; i++) {
+                widths[i] = text.measureText(labels[i]);
+                lefts[i] = x;
+                float near = Math.max(0f, 1f - Math.abs(position - i));
+                text.setColor(PrizmaPalette.mix(TEXT_3, TEXT, near));
+                canvas.drawText(labels[i], x, baseline, text);
+                x += widths[i] + AndroidUtilities.dp(22);
             }
+            int from = Math.max(0, Math.min(1, (int) Math.floor(position)));
+            float t = Math.max(0f, Math.min(1f, position - from));
+            float left = AndroidUtilities.lerp(lefts[from], lefts[from + 1], t);
+            float right = AndroidUtilities.lerp(lefts[from] + widths[from], lefts[from + 1] + widths[from + 1], t);
+            float top = baseline + AndroidUtilities.dp(7);
+            rect.set(left, top, right, top + AndroidUtilities.dp(4));
+            PrizmaShape.leaf(path, rect, AndroidUtilities.dp(3), AndroidUtilities.dp(1), 0f);
+            bar.setColor(accent);
+            canvas.drawPath(path, bar);
         }
     }
 
