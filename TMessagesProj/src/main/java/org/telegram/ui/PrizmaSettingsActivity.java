@@ -473,6 +473,22 @@ public class PrizmaSettingsActivity extends BaseFragment {
         entries.add(e);
     }
 
+    private interface IntSetter {
+        void set(int value);
+    }
+
+    private void choose(Context ctx, String title, String[] names, int[] values, int current, IntSetter setter) {
+        org.telegram.ui.ActionBar.AlertDialog.Builder b = new org.telegram.ui.ActionBar.AlertDialog.Builder(ctx);
+        b.setTitle(title);
+        CharSequence[] items = new CharSequence[names.length];
+        for (int i = 0; i < names.length; i++) items[i] = (values[i] == current ? "• " : "") + names[i];
+        b.setItems(items, (d, which) -> {
+            setter.set(values[which]);
+            NotificationCenter.getInstance(UserConfig.selectedAccount).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+        });
+        showDialog(b.create());
+    }
+
     private void buildEntries(Context ctx) {
         entries.clear();
         final Activity activity = AndroidUtilities.findActivity(ctx);
@@ -492,6 +508,11 @@ public class PrizmaSettingsActivity extends BaseFragment {
         toggle(GHOST, "Антиудаление", "Удалённые сообщения не исчезают из открытого чата", PrizmaConfig::antiDelete, PrizmaConfig::setAntiDelete);
         toggle(GHOST, "Стирать GPS из фото", "Убирать геолокацию и метаданные из отправляемых изображений", PrizmaConfig::stripExif, PrizmaConfig::setStripExif);
         toggle(GHOST, "Анонимная пересылка", "Пересылать без подписи «переслано от»", PrizmaConfig::anonForward, PrizmaConfig::setAnonForward);
+        toggle(GHOST, "Режим стримера", "Номер, юзернейм, ID и тексты в списке чатов прячутся под пылью", PrizmaConfig::streamer, v -> {
+            PrizmaConfig.setStreamer(v);
+            NotificationCenter.getInstance(acc).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+        });
+        toggle(GHOST, "Чистить ссылки", "Убирать utm, fbclid, si и другие метки слежки перед отправкой", PrizmaConfig::cleanLinks, PrizmaConfig::setCleanLinks);
 
         toggle(GUARD, "Не беспокоить", "Глушить все уведомления Telegram на этом телефоне", PrizmaConfig::dnd, PrizmaConfig::setDnd);
         toggle(GUARD, "Сохранять из защищённых", "Скачивание, пересылка и копирование везде", PrizmaConfig::allowSaveRestricted, PrizmaConfig::setAllowSaveRestricted);
@@ -513,8 +534,20 @@ public class PrizmaSettingsActivity extends BaseFragment {
         action(GUARD, "Блокировка приложения", "Пароль и отпечаток на вход, автоблокировка", () -> presentFragment(new PasscodeActivity(PasscodeActivity.TYPE_MANAGE_CODE_SETTINGS)));
         action(GUARD, "Обмен контактом", "Поднесите телефоны друг к другу: одноразовый код по NFC", () -> PrizmaNfcExchange.show(ctx));
         action(GUARD, "Стереть следы", "Поиск, недавние, буфер и кэш одной кнопкой", () -> PrizmaTraces.show(ctx, activity != null ? activity.getWindow().getDecorView() : null));
+        toggle(GUARD, "Хранить удалённые и правки", "Своя база на телефоне, переживает очистку кэша. Меню чата → «Удалённые и правки»", PrizmaConfig::keepHistory, PrizmaConfig::setKeepHistory);
+        toggle(GUARD, "Не терять чаты после бана", "Если вас выгнали, чат и его сообщения остаются для чтения", PrizmaConfig::keepBanned, PrizmaConfig::setKeepBanned);
 
         action(LOOK, "Иконка приложения", "Сменить иконку Libre", () -> PrizmaStealthSheet.showIconPicker(ctx));
+        toggle(LOOK, "Лента вместо контактов", "Вкладка с постами всех каналов. Контакты по долгому нажатию. Применится после перезапуска", PrizmaConfig::feedTab, PrizmaConfig::setFeedTab);
+        toggle(LOOK, "Прятать панель при прокрутке", "Нижняя панель уезжает, пока листаете чаты вниз", PrizmaConfig::dockAutoHide, PrizmaConfig::setDockAutoHide);
+        toggle(LOOK, "Виджеты над чатами", "Курсы и погода над списком чатов. Применится после перезапуска", PrizmaConfig::searchWidgets, PrizmaConfig::setSearchWidgets);
+        toggle(LOOK, "Чаты без звука ниже", "Заглушённые чаты опускаются под остальные", PrizmaConfig::mutedBottom, v -> {
+            PrizmaConfig.setMutedBottom(v);
+            MessagesController.getInstance(acc).sortDialogs(null);
+            NotificationCenter.getInstance(acc).postNotificationName(NotificationCenter.dialogsNeedReload);
+        });
+        toggle(LOOK, "Сообщения без хвостика", "Пузыри без уголка у последнего сообщения", PrizmaConfig::noTail, PrizmaConfig::setNoTail);
+        action(LOOK, "Скругление аватаров", "Круг, лист или квадрат", () -> choose(ctx, "Скругление аватаров", new String[]{"Круг", "Сильное", "Среднее", "Лёгкое", "Квадрат"}, new int[]{100, 70, 45, 25, 0}, PrizmaConfig.avatarCorner(), PrizmaConfig::setAvatarCorner));
         toggle(LOOK, "Компактная панель вкладок", "Подпись только у открытой вкладки. Применится после перезапуска", PrizmaConfig::dockTabs, PrizmaConfig::setDockTabs);
         action(LOOK, "Размер эмодзи", "Уменьшить большие эмодзи в сообщениях", () -> PrizmaStealthSheet.showEmojiSize(ctx));
         action(LOOK, "Форма пузырей", "Скругление пузырей сообщений", () -> PrizmaStealthSheet.showBubbleShape(ctx));
@@ -580,6 +613,9 @@ public class PrizmaSettingsActivity extends BaseFragment {
                 });
             }
         });
+        toggle(MUSIC, "Рябь на весь фон", "Волны под басс расходятся по всему экрану плеера", PrizmaConfig::playerRipple, PrizmaConfig::setPlayerRipple);
+        action(MUSIC, "Плавный переход", PrizmaConfig.fadeSeconds() == 0 ? "Выключен" : "Затухание " + PrizmaConfig.fadeSeconds() + " с в начале и конце трека", () -> choose(ctx, "Плавный переход", new String[]{"Выключен", "2 секунды", "4 секунды", "6 секунд"}, new int[]{0, 2, 4, 6}, PrizmaConfig.fadeSeconds(), PrizmaConfig::setFadeSeconds));
+        action(MUSIC, "Эквалайзер", "Пресеты, свои настройки, бас и объём", () -> org.telegram.ui.Components.PrizmaEqualizerSheet.show(ctx));
         action(MUSIC, "Звук уведомлений", "Свой звук на сообщения", () -> {
             if (activity != null) PrizmaSounds.pick(activity);
         });
@@ -599,6 +635,15 @@ public class PrizmaSettingsActivity extends BaseFragment {
             PrizmaMusicStatus.onToggle();
         });
 
+        toggle(OTHER, "Перевод без Premium", "Перевод всего чата через Google или Яндекс, разметка сохраняется", PrizmaConfig::freeTranslate, PrizmaConfig::setFreeTranslate);
+        action(OTHER, "Переводчик", PrizmaConfig.translateEngine() == 1 ? "Яндекс" : "Google", () -> choose(ctx, "Переводчик", new String[]{"Google", "Яндекс"}, new int[]{0, 1}, PrizmaConfig.translateEngine(), PrizmaConfig::setTranslateEngine));
+        toggle(OTHER, "Блокировка рекламы в браузере", "Встроенный браузер не грузит рекламу и счётчики", PrizmaConfig::adBlock, PrizmaConfig::setAdBlock);
+        toggle(OTHER, "ИИ на телефоне", "Gemini Nano: пересказ чата и улучшение черновика без интернета", PrizmaConfig::aiEnabled, PrizmaConfig::setAiEnabled);
+        toggle(OTHER, "Кружки в 60 кадров", "Плавнее, если камера телефона это умеет", PrizmaConfig::round60, PrizmaConfig::setRound60);
+        toggle(OTHER, "Ползунок зума в кружках", "Ведите пальцем по ползунку справа во время записи", PrizmaConfig::roundZoomSlider, PrizmaConfig::setRoundZoomSlider);
+        toggle(OTHER, "Начинать с широкоугольной", "Задняя камера кружка открывается на самом широком объективе", PrizmaConfig::wideStart, PrizmaConfig::setWideStart);
+        toggle(OTHER, "Тишина при записи", "Глушить звуки уведомлений, пока пишете голосовое или кружок", PrizmaConfig::muteSystemOnRecord, PrizmaConfig::setMuteSystemOnRecord);
+        action(OTHER, "Пропорции фото", "Для камеры в чате", () -> choose(ctx, "Пропорции фото", new String[]{"Как снято", "Квадрат 1:1", "4:3", "16:9"}, new int[]{0, 1, 2, 3}, PrizmaConfig.photoAspect(), PrizmaConfig::setPhotoAspect));
         toggle(OTHER, "Скрывать рекламу", "Без спонсорских сообщений в каналах и ботах", PrizmaConfig::hideAds, PrizmaConfig::setHideAds);
         toggle(OTHER, "Перевод по тапу", "Пункт «Перевести» всегда в меню сообщения", PrizmaConfig::tapTranslate, PrizmaConfig::setTapTranslate);
         toggle(OTHER, "Подсказки в поле ввода", "Считать примеры, валюты, единицы и часовые пояса прямо при наборе", PrizmaConfig::inputCalc, PrizmaConfig::setInputCalc);

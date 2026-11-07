@@ -136,6 +136,12 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
     public void onBeat(float strength) {
         if (beatSink != null) beatSink.onBeat(strength);
         if (!PrizmaConfig.beatEffects()) return;
+        if (PrizmaConfig.playerRipple() && strength > 0.25f) {
+            rippleAt[rippleNext] = System.currentTimeMillis();
+            ripplePower[rippleNext] = strength;
+            rippleNext = (rippleNext + 1) % rippleAt.length;
+            invalidate();
+        }
         boolean bg = PrizmaConfig.playerBgBeat();
         if (bg) pulse = Math.max(pulse, strength);
         if (coverDominant) {
@@ -284,6 +290,36 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         return live;
     }
 
+    private final long[] rippleAt = new long[5];
+    private final float[] ripplePower = new float[5];
+    private int rippleNext;
+    private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private boolean drawRipples(Canvas canvas, long now, int w, int h) {
+        float cx = coverRect.isEmpty() ? w / 2f : coverRect.centerX();
+        float cy = coverRect.isEmpty() ? h * 0.36f : coverRect.centerY();
+        float reach = (float) Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy));
+        float start = coverRect.isEmpty() ? 0f : coverRect.width() * 0.5f;
+        ripplePaint.setStyle(Paint.Style.STROKE);
+        boolean live = false;
+        for (int i = 0; i < rippleAt.length; i++) {
+            long age = now - rippleAt[i];
+            if (rippleAt[i] == 0 || age > 1500) continue;
+            float t = age / 1500f;
+            float eased = 1f - (1f - t) * (1f - t);
+            float r = start + (reach - start) * eased;
+            float fade = (1f - t) * (1f - t);
+            ripplePaint.setColor(ringColor);
+            ripplePaint.setStrokeWidth(AndroidUtilities.dpf2(1.2f + 3.5f * ripplePower[i] * (1f - t)));
+            ripplePaint.setAlpha((int) (150 * fade * ripplePower[i]));
+            canvas.drawCircle(cx, cy, r, ripplePaint);
+            ripplePaint.setAlpha((int) (70 * fade * ripplePower[i]));
+            canvas.drawCircle(cx, cy, r * 0.82f, ripplePaint);
+            live = true;
+        }
+        return live;
+    }
+
     private void drawScrim(Canvas canvas, int w, int h) {
         if (scrimFor != h) {
             scrimFor = h;
@@ -307,6 +343,9 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         if (coverDominant && !coverRect.isEmpty() && PrizmaConfig.beatEffects()) {
             if (PrizmaConfig.playerBlob()) more |= drawBlob(canvas, now);
             if (PrizmaConfig.playerContour()) more |= drawContour(canvas);
+        }
+        if (PrizmaConfig.playerRipple() && PrizmaConfig.beatEffects()) {
+            more |= drawRipples(canvas, now, w, h);
         }
         if (pulse > 0.01f) {
             pulse *= (float) Math.pow(0.02f, dt);

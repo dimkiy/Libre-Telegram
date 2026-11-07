@@ -728,4 +728,204 @@ public class PrizmaConfig {
     public static void setLiveWallpaperPalette(int v) {
         done(edit().putInt("live_wallpaper_palette", v));
     }
+
+    public static boolean keepHistory() {
+        return getBool("keep_history", true);
+    }
+
+    public static void setKeepHistory(boolean v) {
+        done(edit().putBoolean("keep_history", v));
+    }
+
+    public static boolean keepBanned() {
+        return getBool("keep_banned", true);
+    }
+
+    public static void setKeepBanned(boolean v) {
+        done(edit().putBoolean("keep_banned", v));
+    }
+
+    public static boolean mutedBottom() {
+        return getBool("muted_bottom", false);
+    }
+
+    public static void setMutedBottom(boolean v) {
+        done(edit().putBoolean("muted_bottom", v));
+    }
+
+    public static boolean freeTranslate() {
+        return getBool("free_translate", true);
+    }
+
+    public static void setFreeTranslate(boolean v) {
+        done(edit().putBoolean("free_translate", v));
+    }
+
+    public static boolean dockAutoHide() {
+        return getBool("dock_autohide", false);
+    }
+
+    public static void setDockAutoHide(boolean v) {
+        done(edit().putBoolean("dock_autohide", v));
+    }
+
+    public static boolean streamer() {
+        return getBool("streamer", false);
+    }
+
+    public static void setStreamer(boolean v) {
+        done(edit().putBoolean("streamer", v));
+    }
+
+    public static boolean cleanLinks() {
+        return getBool("clean_links", true);
+    }
+
+    public static void setCleanLinks(boolean v) {
+        done(edit().putBoolean("clean_links", v));
+    }
+
+    public static boolean adBlock() {
+        return getBool("ad_block", true);
+    }
+
+    public static void setAdBlock(boolean v) {
+        done(edit().putBoolean("ad_block", v));
+    }
+
+    public static boolean round60() {
+        return getBool("round_60", false);
+    }
+
+    public static void setRound60(boolean v) {
+        done(edit().putBoolean("round_60", v));
+    }
+
+    public static boolean roundZoomSlider() {
+        return getBool("round_zoom_slider", true);
+    }
+
+    public static void setRoundZoomSlider(boolean v) {
+        done(edit().putBoolean("round_zoom_slider", v));
+    }
+
+    public static boolean wideStart() {
+        return getBool("wide_start", false);
+    }
+
+    public static void setWideStart(boolean v) {
+        done(edit().putBoolean("wide_start", v));
+    }
+
+    public static boolean stereoVoice() {
+        return getBool("stereo_voice", false);
+    }
+
+    public static void setStereoVoice(boolean v) {
+        done(edit().putBoolean("stereo_voice", v));
+    }
+
+    public static boolean muteSystemOnRecord() {
+        return getBool("mute_system_record", false);
+    }
+
+    public static void setMuteSystemOnRecord(boolean v) {
+        done(edit().putBoolean("mute_system_record", v));
+    }
+
+    public static boolean noTail() {
+        return getBool("no_tail", false);
+    }
+
+    public static void setNoTail(boolean v) {
+        done(edit().putBoolean("no_tail", v));
+    }
+
+    public static boolean searchWidgets() {
+        return getBool("search_widgets", true);
+    }
+
+    public static void setSearchWidgets(boolean v) {
+        done(edit().putBoolean("search_widgets", v));
+    }
+
+    public static boolean playerRipple() {
+        return getBool("player_ripple", true);
+    }
+
+    public static void setPlayerRipple(boolean v) {
+        done(edit().putBoolean("player_ripple", v));
+    }
+
+    public static boolean aiEnabled() {
+        return getBool("ai_enabled", true);
+    }
+
+    public static void setAiEnabled(boolean v) {
+        done(edit().putBoolean("ai_enabled", v));
+    }
+
+    public static boolean feedTab() {
+        return getBool("feed_tab", true);
+    }
+
+    public static void setFeedTab(boolean v) {
+        done(edit().putBoolean("feed_tab", v));
+    }
+
+    public static int translateEngine() {
+        return getInt("translate_engine", 0);
+    }
+
+    public static void setTranslateEngine(int v) {
+        done(edit().putInt("translate_engine", v));
+    }
+
+    public static int photoAspect() {
+        return getInt("photo_aspect", 0);
+    }
+
+    public static void setPhotoAspect(int v) {
+        done(edit().putInt("photo_aspect", v));
+    }
+
+    public static int avatarCorner() {
+        return getInt("avatar_corner", 100);
+    }
+
+    public static void setAvatarCorner(int v) {
+        done(edit().putInt("avatar_corner", v));
+    }
+
+    public static int fadeSeconds() {
+        return getInt("fade_seconds", 0);
+    }
+
+    public static void setFadeSeconds(int v) {
+        done(edit().putInt("fade_seconds", v));
+    }
+
+    public static int tabletPane() {
+        return getInt("tablet_pane", 0);
+    }
+
+    public static void setTabletPane(int v) {
+        done(edit().putInt("tablet_pane", v));
+    }
+
+    public static String weatherCity() {
+        return getString("weather_city", "");
+    }
+
+    public static void setWeatherCity(String v) {
+        done(edit().putString("weather_city", v));
+    }
+
+    public static String feedGroups() {
+        return getString("feed_groups", "");
+    }
+
+    public static void setFeedGroups(String v) {
+        done(edit().putString("feed_groups", v));
+    }
 }

@@ -89,8 +89,10 @@ public class Camera2Session {
         String cameraId = null;
         try {
             String[] cameraIds = cameraManager.getCameraIdList();
+            final String widest = !front && org.telegram.messenger.PrizmaConfig.wideStart() ? widest(cameraManager, cameraIds) : null;
             for (int i = 0; i < cameraIds.length; ++i) {
                 final String id = cameraIds[i];
+                if (widest != null && !widest.equals(id)) continue;
                 CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
                 if (characteristics == null) continue;
                 if (characteristics.get(CameraCharacteristics.LENS_FACING) != (front ? CameraCharacteristics.LENS_FACING_FRONT : CameraCharacteristics.LENS_FACING_BACK)) {
@@ -123,6 +125,39 @@ public class Camera2Session {
             return null;
         }
         return new Camera2Session(context, front, cameraId, bestSize);
+    }
+
+    private static String widest(CameraManager manager, String[] ids) {
+        String best = null;
+        float bestFocal = Float.MAX_VALUE;
+        for (String id : ids) {
+            try {
+                CameraCharacteristics c = manager.getCameraCharacteristics(id);
+                Integer facing = c.get(CameraCharacteristics.LENS_FACING);
+                float[] focal = c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                if (facing == null || facing != CameraCharacteristics.LENS_FACING_BACK || focal == null || focal.length == 0) continue;
+                float f = focal[0];
+                for (float v : focal) f = Math.min(f, v);
+                if (f < bestFocal) {
+                    bestFocal = f;
+                    best = id;
+                }
+            } catch (Exception ignore) {
+            }
+        }
+        return best;
+    }
+
+    private Range<Integer> recordRange() {
+        if (org.telegram.messenger.PrizmaConfig.round60() && cameraCharacteristics != null) {
+            Range<Integer>[] ranges = cameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
+            if (ranges != null) {
+                for (Range<Integer> r : ranges) {
+                    if (r.getLower() == 60 && r.getUpper() == 60) return r;
+                }
+            }
+        }
+        return new Range<Integer>(30, 60);
     }
 
     private Camera2Session(Context context, boolean isFront, String cameraId, Size size) {
@@ -490,7 +525,7 @@ public class Camera2Session {
             captureRequestBuilder.set(CaptureRequest.FLASH_MODE, flashing ? (recordingVideo ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_SINGLE) : CaptureRequest.FLASH_MODE_OFF);
 
             if (recordingVideo) {
-                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<Integer>(30, 60));
+                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, recordRange());
                 captureRequestBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_RECORD);
             }
 

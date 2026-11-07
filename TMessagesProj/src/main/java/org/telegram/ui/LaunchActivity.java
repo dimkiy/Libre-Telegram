@@ -942,6 +942,37 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     });
                 }
 
+                private boolean prizmaDragging;
+
+                @Override
+                public boolean onInterceptTouchEvent(MotionEvent ev) {
+                    if (!tabletFullSize && ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                        int edge = AndroidUtilities.getTabletLeftFragmentSize(getMeasuredWidth(), insets.left, insets.right);
+                        if (Math.abs(ev.getX() - edge) < dp(10) && ev.getY() > dp(100)) {
+                            prizmaDragging = true;
+                            return true;
+                        }
+                    }
+                    return prizmaDragging || super.onInterceptTouchEvent(ev);
+                }
+
+                @Override
+                public boolean onTouchEvent(MotionEvent ev) {
+                    if (prizmaDragging) {
+                        int span = Math.max(1, getMeasuredWidth() - insets.left - insets.right);
+                        AndroidUtilities.prizmaPaneDrag = Math.max(25, Math.min(65, (int) ((ev.getX() - insets.left) * 100 / span)));
+                        requestLayout();
+                        int action = ev.getActionMasked();
+                        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                            prizmaDragging = false;
+                            org.telegram.messenger.PrizmaConfig.setTabletPane(AndroidUtilities.prizmaPaneDrag);
+                            AndroidUtilities.prizmaPaneDrag = 0;
+                        }
+                        return true;
+                    }
+                    return super.onTouchEvent(ev);
+                }
+
                 private boolean inLayout;
                 @Override
                 public void requestLayout() {

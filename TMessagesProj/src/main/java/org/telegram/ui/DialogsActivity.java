@@ -619,6 +619,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private DialogsActivityTopBubblesFadeView topBubblesFadeView;
     private ActiveGiftAuctionsHintCell activeGiftAuctionsHintCell;
     private DialogsHintCell dialogsHintCell;
+    private org.telegram.ui.Components.PrizmaWidgetStrip prizmaWidgets;
+    private boolean prizmaDockHidden;
     private UnconfirmedAuthHintCell authHintCell;
     private Long cacheSize, deviceSize;
     private CommunityRequestsCell communityPendingRequests;
@@ -4552,6 +4554,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (contentView != null) {
                         contentView.updateBlurContent();
                     }
+                    if (org.telegram.messenger.PrizmaConfig.dockAutoHide() && Math.abs(dy) > 2) {
+                        boolean hide = dy > 0 && recyclerView.canScrollVertically(-1);
+                        if (hide != prizmaDockHidden) {
+                            prizmaDockHidden = hide;
+                            checkUi_mainTabsVisible();
+                        }
+                    }
                     viewPage.dialogsItemAnimator.onListScroll(-dy);
                     int firstVisiblePosition = -1;
                     int lastVisiblePosition = -1;
@@ -4902,6 +4911,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 updateDialogsHint();
             });
             topPanelLayout.addView(dialogsHintCell);
+            if (folderId == 0 && communityId == 0 && !isInPreviewMode() && org.telegram.messenger.PrizmaConfig.searchWidgets()) {
+                prizmaWidgets = new org.telegram.ui.Components.PrizmaWidgetStrip(context);
+                topPanelLayout.addView(prizmaWidgets);
+                topPanelLayout.setViewVisible(prizmaWidgets, true, false);
+            }
 
 
             if (communityId != 0) {
@@ -7070,6 +7084,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        if (prizmaWidgets != null) {
+            prizmaWidgets.refresh();
+        }
         if (dialogStoriesCell != null) {
             dialogStoriesCell.onResume();
         }
@@ -14164,7 +14181,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private void checkUi_mainTabsVisible() {
         final boolean mainTabsVisible = !searching && (blurredView == null || blurredView.getBackground() == null || blurredView.getAlpha() < 0.01f || blurredView.getVisibility() == View.GONE);
         if (mainTabsActivityController != null) {
-            mainTabsActivityController.setTabsVisible(mainTabsVisible);
+            mainTabsActivityController.setTabsVisible(mainTabsVisible && !prizmaDockHidden);
         }
     }
 

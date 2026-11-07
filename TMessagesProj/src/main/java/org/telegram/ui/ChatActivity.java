@@ -1688,6 +1688,10 @@ public class ChatActivity extends BaseFragment implements
     private final static int view_as_topics = 59;
 
     private final static int search = 40;
+    private final static int prizma_history = 9101;
+    private final static int prizma_top = 9102;
+    private final static int prizma_ai_summary = 9103;
+    private final static int prizma_ai_rewrite = 9104;
 
     private final static int topic_close = 60;
     private final static int open_forum = 61;
@@ -4015,6 +4019,18 @@ public class ChatActivity extends BaseFragment implements
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/help", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == bot_settings) {
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/settings", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
+                } else if (id == prizma_history) {
+                    presentFragment(new PrizmaHistoryActivity(getDialogId()));
+                } else if (id == prizma_ai_rewrite) {
+                    org.telegram.ui.Components.PrizmaAiSheet.rewrite(ChatActivity.this, chatActivityEnterView == null ? null : chatActivityEnterView.getFieldText(),
+                            () -> BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.error, "Сначала напишите текст в поле").show(),
+                            text -> {
+                                if (chatActivityEnterView != null) chatActivityEnterView.setFieldText(text);
+                            });
+                } else if (id == prizma_top) {
+                    jumpToDate(1);
+                } else if (id == prizma_ai_summary) {
+                    org.telegram.ui.Components.PrizmaAiSheet.summarize(ChatActivity.this, messages);
                 } else if (id == search) {
                     openSearchWithText(isSupportedTags() ? "" : null);
                 } else if (id == translate) {
@@ -4475,6 +4491,14 @@ public class ChatActivity extends BaseFragment implements
             if (ChatObject.isBoostSupported(currentChat) && (getUserConfig().isPremium() || ChatObject.isBoosted(chatInfo) || ChatObject.hasAdminRights(currentChat))) {
                 RLottieDrawable drawable = new RLottieDrawable(R.raw.boosts, dp(24), dp(24));
                 headerItem.lazilyAddSubItem(boost_group, drawable, LocaleController.getString(ChatObject.isChannelAndNotMegaGroup(currentChat) ? R.string.BoostingBoostChannelMenu : R.string.BoostingBoostGroupMenu));
+            }
+            headerItem.lazilyAddSubItem(prizma_top, R.drawable.msg_go_up, "В начало чата");
+            if (org.telegram.messenger.PrizmaConfig.keepHistory()) {
+                headerItem.lazilyAddSubItem(prizma_history, R.drawable.msg_delete, "Удалённые и правки");
+            }
+            if (org.telegram.messenger.PrizmaConfig.aiEnabled() && android.os.Build.VERSION.SDK_INT >= 26) {
+                headerItem.lazilyAddSubItem(prizma_ai_summary, R.drawable.msg_text_outlined, "Пересказ на телефоне");
+                headerItem.lazilyAddSubItem(prizma_ai_rewrite, R.drawable.msg_edit, "Улучшить черновик");
             }
             translateItem = headerItem.lazilyAddSubItem(translate, R.drawable.msg_translate, LocaleController.getString(R.string.TranslateMessage));
             updateTranslateItemVisibility();
@@ -23103,6 +23127,10 @@ public class ChatActivity extends BaseFragment implements
             if (currentChat != null && currentChat.id == chatId) {
                 int reason = (Integer) args[1];
                 if (getParentActivity() == null || closeChatDialog != null) {
+                    return;
+                }
+                if (org.telegram.messenger.PrizmaConfig.keepBanned() && reason == 0 && !messages.isEmpty()) {
+                    BulletinFactory.of(this).createSimpleBulletin(R.raw.error, "Вас исключили. Сохранённые сообщения остаются для чтения").show();
                     return;
                 }
                 AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), themeDelegate);

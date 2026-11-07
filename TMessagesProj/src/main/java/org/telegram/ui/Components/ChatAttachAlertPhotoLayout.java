@@ -1359,6 +1359,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
                         return;
                     }
 //                    Pair<Integer, Integer> orientation = AndroidUtilities.getImageOrientation(cameraFile);
+                    final int turned = org.telegram.messenger.PrizmaCapture.crop(cameraFile, orientation == -1 ? 0 : orientation);
                     mediaFromExternalCamera = false;
                     int width = 0, height = 0;
                     try {
@@ -1368,7 +1369,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
                         width = options.outWidth;
                         height = options.outHeight;
                     } catch (Exception ignore) {}
-                    MediaController.PhotoEntry photoEntry = new MediaController.PhotoEntry(0, lastImageId--, 0, cameraFile.getAbsolutePath(), orientation == -1 ? 0 : orientation, false, width, height, 0);
+                    MediaController.PhotoEntry photoEntry = new MediaController.PhotoEntry(0, lastImageId--, 0, cameraFile.getAbsolutePath(), turned, false, width, height, 0);
                     photoEntry.canDeleteAfter = true;
                     openPhotoViewer(photoEntry, sameTakePictureOrientation, false);
                 });

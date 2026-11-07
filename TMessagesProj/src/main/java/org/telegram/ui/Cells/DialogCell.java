@@ -2804,6 +2804,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 messageStringFinal = messageString;
             }
 
+            messageStringFinal = org.telegram.ui.Components.PrizmaStreamer.veil(messageStringFinal);
             Layout.Alignment align = isForum && LocaleController.isRTL ? Layout.Alignment.ALIGN_OPPOSITE : Layout.Alignment.ALIGN_NORMAL;
             if ((useForceThreeLines || SharedConfig.useThreeLinesLayout) && !hasTags()) {
                 if (thumbsCount > 0 && messageNameString != null) {
@@ -3732,7 +3733,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 avatarRadius = dp(28);
             }
 
-            avatarImage.setRoundRadius(avatarRadius);
+            avatarImage.setRoundRadius(org.telegram.ui.Components.PrizmaStreamer.avatarRadius(avatarRadius));
         }
         if (!isTopic && (getMeasuredWidth() != 0 || getMeasuredHeight() != 0)) {
             rebuildLayout = true;

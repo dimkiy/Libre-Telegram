@@ -1225,6 +1225,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     };
 
     private float audioVolume;
+    private float prizmaFade = 1f;
     private ValueAnimator audioVolumeAnimator;
 
     private float duckVolume = 1f;
@@ -1628,7 +1629,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 duck = VOLUME_DUCK;
             }
             if (audioPlayer != null) {
-                audioPlayer.setVolume(CastSync.isActive() ? 0.0f : volume * audioVolume * duck);
+                audioPlayer.setVolume(CastSync.isActive() ? 0.0f : volume * audioVolume * duck * prizmaFade);
             } else if (videoPlayer != null) {
                 videoPlayer.setVolume(CastSync.isActive() ? 0.0f : volume * duck);
             }
@@ -1708,6 +1709,15 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                                     currentPlayingMessageObject.audioPlayerDuration = (int) (duration / 1000);
                                     currentPlayingMessageObject.audioProgress = value;
                                     currentPlayingMessageObject.audioProgressSec = (int) (lastProgress / 1000);
+                                    float fade = 1f;
+                                    int fadeMs = PrizmaConfig.fadeSeconds() * 1000;
+                                    if (fadeMs > 0 && audioPlayer != null && currentPlayingMessageObject.isMusic() && duration > fadeMs * 3L) {
+                                        fade = Math.max(0.08f, Math.min(1f, Math.min(progress / (float) fadeMs, (duration - progress) / (float) fadeMs)));
+                                    }
+                                    if (Math.abs(fade - prizmaFade) > 0.01f) {
+                                        prizmaFade = fade;
+                                        setPlayerVolume();
+                                    }
                                     currentPlayingMessageObject.bufferedProgress = bufferedValue;
                                     if (value >= 0 && shouldSavePositionForCurrentAudio != null && SystemClock.elapsedRealtime() - lastSaveTime >= 1000) {
                                         final String saveFor = shouldSavePositionForCurrentAudio;
@@ -5511,6 +5521,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 recordSendMessageChatArguments = sendMessageChatArguments;
                 fileBuffer.rewind();
 
+                PrizmaCapture.quiet(true);
                 audioRecorder.startRecording();
             } catch (Exception e) {
                 FileLog.e(e);
@@ -5710,6 +5721,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void stopRecording(final int send, boolean notify, int scheduleDate, boolean once, long payStars) {
+        PrizmaCapture.quiet(false);
         if (audioRecorderV2Active) {
             stopRecordingV2(send, notify, scheduleDate, once, payStars);
             return;

@@ -87,7 +87,7 @@
 
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
-    <uses-sdk tools:overrideLibrary="com.google.mlkit.vision.segmentation.subject"/>
+    <uses-sdk tools:overrideLibrary="com.google.mlkit.vision.segmentation.subject,com.google.mlkit.genai.prompt,com.google.mlkit.genai.common,com.google.mlkit.genai.schema"/>
 
     <queries>
         <package android:name="com.google.android.apps.maps"/>

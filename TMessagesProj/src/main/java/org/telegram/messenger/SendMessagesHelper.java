@@ -4425,8 +4425,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     public void sendMessage(SendMessageParams sendMessageParams) {
         final SendMessageChatArguments sendMessageChatArguments = sendMessageParams.sendMessageChatArguments != null ?
                 sendMessageParams.sendMessageChatArguments : SendMessageChatArguments.EMPTY;
-        String message = sendMessageParams.message;
-        String caption = sendMessageParams.caption;
+        String message = PrizmaLinks.clean(sendMessageParams.message, sendMessageParams.entities);
+        String caption = PrizmaLinks.clean(sendMessageParams.caption, sendMessageParams.entities);
         TLRPC.MessageMedia location = sendMessageParams.location;
         TLRPC.TL_photo photo = sendMessageParams.photo;
         VideoEditedInfo videoEditedInfo = sendMessageParams.videoEditedInfo;

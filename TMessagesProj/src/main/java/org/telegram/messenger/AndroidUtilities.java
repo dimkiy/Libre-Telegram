@@ -3029,7 +3029,13 @@ public class AndroidUtilities {
         }
     }
 
+    public static int prizmaPaneDrag;
+
     public static int getTabletLeftFragmentSize(final int fullWidth, final int insetLeft, final int insetRight) {
+        int percent = prizmaPaneDrag > 0 ? prizmaPaneDrag : PrizmaConfig.tabletPane();
+        if (percent > 0) {
+            return insetLeft + Math.max(dp(240), (fullWidth - insetLeft - insetRight) * percent / 100);
+        }
         return insetLeft + Math.max(dp(320), (fullWidth - insetLeft - insetRight) * 35 / 100);
     }
 

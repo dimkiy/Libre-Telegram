@@ -313,12 +313,23 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         tabs = new GlassTabView[5];
         tabs[INDEX_CHATS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CHATS, R.string.MainTabsChats);
-        tabs[INDEX_CONTACTS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
+        tabs[INDEX_CONTACTS] = org.telegram.messenger.PrizmaConfig.feedTab()
+                ? GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.FILES, R.string.LibreFeed)
+                : GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
         tabs[INDEX_SETTINGS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
         tabs[INDEX_CALLS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CALLS, R.string.MainTabsCalls);
         tabs[INDEX_PROFILE] = GlassTabView.createAvatar(context, resourceProvider, currentAccount, R.string.MainTabsProfile);
         tabs[INDEX_CHATS].setOnLongClickListener(this::openFoldersSelector);
-        tabs[INDEX_CONTACTS].setOnLongClickListener(this::openContactsSelector);
+        if (org.telegram.messenger.PrizmaConfig.feedTab()) {
+            tabs[INDEX_CONTACTS].setOnLongClickListener(v -> {
+                Bundle args = new Bundle();
+                args.putBoolean("needPhonebook", true);
+                presentFragment(new ContactsActivity(args));
+                return true;
+            });
+        } else {
+            tabs[INDEX_CONTACTS].setOnLongClickListener(this::openContactsSelector);
+        }
         tabs[INDEX_CALLS].setOnLongClickListener(this::openCallsSelector);
         tabs[INDEX_PROFILE].setOnLongClickListener(this::openAccountSelector);
 
@@ -807,7 +818,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected BaseFragment createBaseFragmentAt(int position) {
-        if (position == POSITION_CONTACTS) {
+        if (position == POSITION_CONTACTS && org.telegram.messenger.PrizmaConfig.feedTab()) {
+            Bundle args = new Bundle();
+            args.putBoolean("hasMainTabs", true);
+            return new PrizmaFeedActivity(args);
+        } else if (position == POSITION_CONTACTS) {
             Bundle args = new Bundle();
             args.putBoolean("needPhonebook", true);
             args.putBoolean("needFinishFragment", false);

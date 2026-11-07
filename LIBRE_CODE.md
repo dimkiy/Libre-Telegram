@@ -100,3 +100,13 @@
 - `PrizmaCoverLens`: линза на обложке под басс (AGSL, Android 13+).
 - `PrizmaBeat.band()`: реальные частоты трека для эквалайзера вокруг обложки и мини-плеера.
 - `LiteMode`: энергосбережение Telegram по умолчанию выключено (ключ `libre_battery_level`).
+
+## 1.2.3
+
+- `PrizmaHistory` и `PrizmaHistoryActivity`: удалённые сообщения и правки в своей базе на телефоне.
+- `PrizmaTranslate`: перевод чата без Premium через Google или Яндекс с сохранением разметки.
+- `PrizmaFeedActivity`: лента каналов с категориями.
+- `PrizmaStreamer`: режим стримера и скругление аватаров.
+- `PrizmaAi`, `PrizmaAiSheet`, `PrizmaAiPill`: Gemini Nano на телефоне через ML Kit.
+- `PrizmaCapture`, `PrizmaZoomSlider`: пропорции фото, тишина при записи, зум кружков.
+- `PrizmaLinks`, `PrizmaAdBlock`, `PrizmaWidgetStrip`: чистка ссылок, блок рекламы, курсы и погода.

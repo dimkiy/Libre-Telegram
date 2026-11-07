@@ -4097,6 +4097,9 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     d("shouldInterceptRequest " + (request == null ? null : request.getUrl()));
+                    if (request != null && request.getUrl() != null && org.telegram.messenger.PrizmaAdBlock.blocked(request.getUrl().toString())) {
+                        return org.telegram.messenger.PrizmaAdBlock.empty();
+                    }
                     if (request != null && isTonsite(request.getUrl())) {
                         d("proxying ton");
                         firstRequest = false;
@@ -4217,6 +4220,9 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
                     d("shouldInterceptRequest " + url);
+                    if (org.telegram.messenger.PrizmaAdBlock.blocked(url)) {
+                        return org.telegram.messenger.PrizmaAdBlock.empty();
+                    }
                     if (isTonsite(url)) {
                         d("proxying ton");
                         return proxyTON("GET", url, null);

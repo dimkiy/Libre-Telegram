@@ -1457,6 +1457,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 return 0;
             }
         }
+        if (PrizmaConfig.mutedBottom()) {
+            boolean muted1 = isDialogMuted(dialog1.id, 0), muted2 = isDialogMuted(dialog2.id, 0);
+            if (muted1 != muted2) {
+                return muted1 ? 1 : -1;
+            }
+        }
         MediaDataController mediaDataController = getMediaDataController();
         long date1 = DialogObject.getLastMessageOrDraftDate(dialog1, mediaDataController.getDraft(dialog1.id, 0));
         long date2 = DialogObject.getLastMessageOrDraftDate(dialog2, mediaDataController.getDraft(dialog2.id, 0));
@@ -17613,6 +17619,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     protected void deleteMessagesByPush(long dialogId, ArrayList<Integer> _ids, long channelId) {
+        PrizmaHistory.saveDeleted(currentAccount, channelId, _ids);
         final ArrayList<Integer> ids = PrizmaAntiDelete.filterRemoteDeletion(currentAccount, channelId, _ids);
         if (ids.isEmpty()) return;
         getMessagesStorage().getStorageQueue().postRunnable(() -> {
@@ -19892,6 +19899,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 for (int a = 0, size2 = messageObjects.size(); a < size2; a++) {
                     messagesRes.messages.add(messageObjects.get(a).messageOwner);
                 }
+                PrizmaHistory.saveEdits(currentAccount, editingMessages.keyAt(b), messageObjects);
                 getMessagesStorage().putMessages(messagesRes, editingMessages.keyAt(b), -2, 0, false, 0, 0);
             }
             LongSparseArray<ArrayList<MessageObject>> editingMessagesFinal = editingMessages;
@@ -20312,7 +20320,8 @@ public class MessagesController extends BaseController implements NotificationCe
                         if (chat != null) {
                             if (dialog == null && chat instanceof TLRPC.TL_channel && !chat.left) {
                                 Utilities.stageQueue.postRunnable(() -> getChannelDifference(update.channel_id, 1, 0, null));
-                            } else if (ChatObject.isNotInChat(chat) && dialog != null && (promoDialog == null || promoDialog.id != dialog.id)) {
+                            } else if (ChatObject.isNotInChat(chat) && dialog != null && (promoDialog == null || promoDialog.id != dialog.id)
+                                    && !(PrizmaConfig.keepBanned() && (chat instanceof TLRPC.TL_channelForbidden || chat.kicked))) {
                                 deleteDialog(dialog.id, 0);
                             }
                             if (chat instanceof TLRPC.TL_channelForbidden || chat.kicked) {
@@ -21289,6 +21298,7 @@ public class MessagesController extends BaseController implements NotificationCe
         if (deletedMessages != null) {
             for (int a = 0, size = deletedMessages.size(); a < size; a++) {
                 long key = deletedMessages.keyAt(a);
+                PrizmaHistory.saveDeleted(currentAccount, key < 0 ? -key : 0, deletedMessages.valueAt(a));
                 ArrayList<Integer> arrayList = PrizmaAntiDelete.filterRemoteDeletion(currentAccount, key < 0 ? -key : 0, deletedMessages.valueAt(a));
                 if (arrayList.isEmpty()) continue;
                 getMessagesStorage().getStorageQueue().postRunnable(() -> {

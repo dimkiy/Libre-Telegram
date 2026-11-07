@@ -331,6 +331,11 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         buttonsLayout.setOrientation(LinearLayout.HORIZONTAL);
         addView(buttonsLayout, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 56, Gravity.LEFT | Gravity.BOTTOM, 1, 0, 0, 0));
 
+        prizmaZoom = new PrizmaZoomSlider(context);
+        prizmaZoom.setVisibility(GONE);
+        prizmaZoom.setListener(this::applyPrizmaZoom);
+        addView(prizmaZoom, LayoutHelper.createFrame(48, 240, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 10, 0));
+
         switchCameraButton = new FlashViews.ImageViewInvertable(context);
         switchCameraButton.setScaleType(ImageView.ScaleType.CENTER);
         switchCameraButton.setContentDescription(LocaleController.getString(R.string.AccDescrSwitchCamera));
@@ -709,6 +714,12 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
     public void showCamera(boolean fromPaused) {
         zoomBase = 1f;
+        org.telegram.messenger.PrizmaCapture.quiet(true);
+        if (prizmaZoom != null) {
+            prizmaZoom.setVisibility(org.telegram.messenger.PrizmaConfig.roundZoomSlider() ? VISIBLE : GONE);
+            prizmaZoom.setRange(1f, useCamera2 ? 4f : 2f, 1f);
+            prizmaZoom.bringToFront();
+        }
         if (textureView != null) {
             return;
         }
@@ -1127,6 +1138,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     public void hideCamera(boolean async) {
+        org.telegram.messenger.PrizmaCapture.quiet(false);
+        if (prizmaZoom != null) {
+            prizmaZoom.setVisibility(GONE);
+        }
         destroy(async);
         cameraContainer.setTranslationX(0);
         textureOverlayView.setTranslationX(0);
@@ -2180,7 +2195,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
         private static final String VIDEO_MIME_TYPE = "video/avc";
         private static final String AUDIO_MIME_TYPE = "audio/mp4a-latm";
-        private static final int FRAME_RATE = 30;
+        private final int FRAME_RATE = org.telegram.messenger.PrizmaConfig.round60() ? 60 : 30;
         private static final int IFRAME_INTERVAL = 1;
 
         private File videoFile;
@@ -3875,6 +3890,20 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     ValueAnimator finishZoomTransition;
+
+    private PrizmaZoomSlider prizmaZoom;
+
+    private void applyPrizmaZoom(float value) {
+        pinchScale = value;
+        zoomBase = value;
+        if (useCamera2) {
+            if (camera2SessionCurrent != null) {
+                camera2SessionCurrent.setZoom(Utilities.clamp(value, camera2SessionCurrent.getMaxZoom(), camera2SessionCurrent.getMinZoom()));
+            }
+        } else if (cameraSession != null) {
+            cameraSession.setZoom(Math.min(1f, Math.max(0, value - 1f)));
+        }
+    }
 
     public void finishZoom() {
         float limit = 2f;
