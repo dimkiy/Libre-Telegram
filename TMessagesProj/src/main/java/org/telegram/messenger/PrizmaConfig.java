@@ -849,6 +849,30 @@ public class PrizmaConfig {
         done(edit().putBoolean("search_widgets", v));
     }
 
+    public static boolean playerDrops() {
+        return getBool("player_drops", false);
+    }
+
+    public static void setPlayerDrops(boolean v) {
+        done(edit().putBoolean("player_drops", v));
+    }
+
+    public static boolean playerChroma() {
+        return getBool("player_chroma", false);
+    }
+
+    public static void setPlayerChroma(boolean v) {
+        done(edit().putBoolean("player_chroma", v));
+    }
+
+    public static boolean playerEdges() {
+        return getBool("player_edges", false);
+    }
+
+    public static void setPlayerEdges(boolean v) {
+        done(edit().putBoolean("player_edges", v));
+    }
+
     public static boolean playerRipple() {
         return getBool("player_ripple", true);
     }

@@ -597,6 +597,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final static int report = 24;
 
     private final static int edit_info = 30;
+    private final static int prizma_open_settings = 4870;
     private final static int logout = 31;
     private final static int search_button = 32;
     private final static int set_as_main = 33;
@@ -2991,6 +2992,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                 } else if (id == edit_info) {
                     presentFragment(new UserInfoActivity());
+                } else if (id == prizma_open_settings) {
+                    presentFragment(new SettingsActivity());
                 } else if (id == edit_color) {
 //                    if (!getUserConfig().isPremium()) {
 //                        showDialog(new PremiumFeatureBottomSheet(ProfileActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_NAME_COLOR, true));
@@ -5825,7 +5828,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 cameraDrawable = new RLottieDrawable(R.raw.camera_outline, AndroidUtilities.dp(56), AndroidUtilities.dp(56), false, null);
                 cellCameraDrawable = new RLottieDrawable(R.raw.camera_outline, AndroidUtilities.dp(42), AndroidUtilities.dp(42), false, null);
 
-                if (actionsView != null) {
+                if (actionsView != null && noProfileButtons()) {
+                    actionsView.setVisibility(View.GONE);
+                } else if (actionsView != null) {
                     actionsView.beginApplyingActions();
                     actionsView.addCameraAction();
                     actionsView.addEditInfo();
@@ -6366,7 +6371,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int getActionsExtraHeight(boolean withPills) {
         if (userId != 0 && imageUpdater != null && !myProfile)
             return 0;
+        if (noProfileButtons()) {
+            return withPills && (hasMusic || hasBalance) ? dp(25) : 0;
+        }
         return dp(74 + (withPills && (hasMusic || hasBalance) ? 25 : 0));
+    }
+
+    private boolean noProfileButtons() {
+        return userId != 0 && imageUpdater != null && myProfile && userId == getUserConfig().getClientUserId();
     }
 
     private int getHeaderExtraHeight() {
@@ -11694,16 +11706,26 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 //            float vh = avatarContainer.getHeight() * avatarContainer.getScaleY();
 //            musicView.clipHeight = avatarContainer.getY() + vh;
             musicView.setAlpha(avatarAnimationProgress);
-            musicView.updatePosition(listView.getMeasuredWidth() + dp(74), getActionsExtraHeight() - dp(74));
+            if (noProfileButtons()) {
+                musicView.updatePosition(listView.getMeasuredWidth(), getActionsExtraHeight());
+            } else {
+                musicView.updatePosition(listView.getMeasuredWidth() + dp(74), getActionsExtraHeight() - dp(74));
+            }
         } else {
             if (openAnimationInProgress) {
                 musicView.setAlpha(avatarAnimationProgress);
             }
 
 //            musicView.clipHeight = -1;
-            float bottom = extraHeight + newTop + dp(74);
-            float height = Math.min(getActionsExtraHeight(), bottom - newTop);
-            musicView.updatePosition(bottom - height, height - dp(74));
+            if (noProfileButtons()) {
+                float bottom = extraHeight + newTop;
+                float height = Math.min(getActionsExtraHeight(), bottom - newTop);
+                musicView.updatePosition(bottom - height, height);
+            } else {
+                float bottom = extraHeight + newTop + dp(74);
+                float height = Math.min(getActionsExtraHeight(), bottom - newTop);
+                musicView.updatePosition(bottom - height, height - dp(74));
+            }
         }
     }
 
@@ -12425,13 +12447,20 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
             if (UserObject.isUserSelf(user)) {
                 if (myProfile) {
-                    if (actionsView != null) {
+                    if (noProfileButtons()) {
+                        editItemVisible = false;
+                    } else if (actionsView != null) {
                         editItemVisible = !actionsView.supportsEditInfo();
                     } else {
                         editItemVisible = true;
                     }
                 }
-                if (!hasMainTabs) {
+                if (noProfileButtons()) {
+                    otherItem.addSubItem(add_photo, R.drawable.msg_addphoto, "Выбрать фото");
+                    otherItem.addSubItem(edit_info, R.drawable.msg_edit, "Изменить профиль");
+                    otherItem.addSubItem(prizma_open_settings, R.drawable.msg_settings, LocaleController.getString(R.string.Settings));
+                    otherItem.addColoredGap();
+                } else if (!hasMainTabs) {
                     otherItem.addSubItem(edit_info, R.drawable.msg_edit, LocaleController.getString(R.string.EditInfo));
                     if (imageUpdater != null) {
                         otherItem.addSubItem(add_photo, R.drawable.msg_addphoto, LocaleController.getString(R.string.AddPhoto));

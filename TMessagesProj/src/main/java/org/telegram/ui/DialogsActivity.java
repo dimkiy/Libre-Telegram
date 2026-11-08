@@ -624,6 +624,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private org.telegram.ui.Components.PrizmaWidgetStrip prizmaWidgets;
     private boolean prizmaDockHidden;
     private boolean prizmaWidgetsShown = true;
+    private long prizmaWidgetsForcedAt;
     private UnconfirmedAuthHintCell authHintCell;
     private Long cacheSize, deviceSize;
     private CommunityRequestsCell communityPendingRequests;
@@ -4471,10 +4472,27 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         contentView.updateBlurContent();
                     }
                     if (prizmaWidgets != null && topPanelLayout != null) {
-                        boolean atTop = !recyclerView.canScrollVertically(-1);
-                        if (atTop != prizmaWidgetsShown) {
-                            prizmaWidgetsShown = atTop;
-                            topPanelLayout.setViewVisible(prizmaWidgets, atTop, true);
+                        boolean canUp = recyclerView.canScrollVertically(-1);
+                        int first = recyclerView.getLayoutManager() instanceof LinearLayoutManager ? ((LinearLayoutManager) recyclerView.getLayoutManager()).findFirstVisibleItemPosition() : 0;
+                        boolean want;
+                        if (!canUp) {
+                            want = true;
+                        } else if (dy > 2) {
+                            want = false;
+                        } else if (dy < -2) {
+                            want = first <= 0;
+                        } else {
+                            want = topPanelLayout.isViewVisible(prizmaWidgets);
+                        }
+                        boolean holder = topPanelLayout.isViewVisible(prizmaWidgets);
+                        if (holder != want) {
+                            prizmaWidgetsShown = want;
+                            topPanelLayout.setViewVisible(prizmaWidgets, want, true);
+                        } else if (!want && prizmaWidgets.getVisibility() == View.VISIBLE && prizmaWidgets.getAlpha() > 0.99f && prizmaWidgets.getHeight() > 0 && dy > 2
+                                && System.currentTimeMillis() - prizmaWidgetsForcedAt > 700) {
+                            prizmaWidgetsForcedAt = System.currentTimeMillis();
+                            topPanelLayout.setViewVisible(prizmaWidgets, true, false);
+                            topPanelLayout.setViewVisible(prizmaWidgets, false, true);
                         }
                     }
                     if (org.telegram.messenger.PrizmaConfig.dockAutoHide() && Math.abs(dy) > 2) {

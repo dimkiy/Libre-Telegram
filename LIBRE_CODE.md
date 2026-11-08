@@ -105,7 +105,10 @@
 
 - `PrizmaHistory` и `PrizmaHistoryActivity`: удалённые сообщения и правки в своей базе на телефоне.
 - `PrizmaTranslate`: перевод чата без Premium через Google или Яндекс с сохранением разметки.
-- `PrizmaFeedActivity`: лента каналов с категориями.
+- `PrizmaFeedActivity`: лента каналов в стиле X — «Для вас» (свежие и интересные посты, рекомендации), «Вы читаете» (по времени), свои вкладки; кэш на диске для мгновенного открытия.
+- `PrizmaPostActivity`: экран поста — просмотры, реакции, ответы из обсуждения, поле ответа.
+- `Components/PrizmaPostCell`, `PrizmaPostMedia`, `PrizmaPostActions`, `PrizmaFeedIcons`, `PrizmaFeedKit`: карточка поста, медиа (альбомы, ссылки, опросы), ряд действий, иконки, общие помощники ленты.
+- `Components/PrizmaGlassFrame`: стекло — прогрессивное размытие шапки (Android 12+) и жидкое стекло с преломлением (Android 13+).
 - `PrizmaStreamer`: режим стримера и скругление аватаров.
 - `PrizmaAi`, `PrizmaAiSheet`, `PrizmaAiPill`: Gemini Nano на телефоне через ML Kit.
 - `PrizmaCapture`, `PrizmaZoomSlider`: пропорции фото, тишина при записи, зум кружков.

@@ -136,10 +136,18 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
     public void onBeat(float strength) {
         if (beatSink != null) beatSink.onBeat(strength);
         if (!PrizmaConfig.beatEffects()) return;
-        if (PrizmaConfig.playerRipple() && strength > 0.25f) {
-            rippleAt[rippleNext] = System.currentTimeMillis();
-            ripplePower[rippleNext] = strength;
-            rippleNext = (rippleNext + 1) % rippleAt.length;
+        if (PrizmaConfig.playerRipple() && strength > 0.22f) {
+            float cx = coverRect.isEmpty() ? getWidth() / 2f : coverRect.centerX();
+            float cy = coverRect.isEmpty() ? getHeight() * 0.36f : coverRect.centerY();
+            if ((beatCount++ & 1) == 1 && !coverRect.isEmpty()) {
+                cx += (Utilities.random.nextFloat() - 0.5f) * coverRect.width() * 0.5f;
+                cy += (Utilities.random.nextFloat() - 0.5f) * coverRect.height() * 0.5f;
+            }
+            spawnRipple(cx, cy, Math.min(1f, 0.35f + strength * 0.8f), coverRect.isEmpty() ? 0f : coverRect.width() * 0.42f);
+        }
+        if (PrizmaConfig.playerChroma() && strength > 0.62f) {
+            chromaAt = System.currentTimeMillis();
+            chromaPower = Math.min(1f, strength);
             invalidate();
         }
         boolean bg = PrizmaConfig.playerBgBeat();
@@ -290,31 +298,219 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         return live;
     }
 
-    private final long[] rippleAt = new long[5];
-    private final float[] ripplePower = new float[5];
+    private static final int WAVES = 6;
+    private static final long WAVE_LIFE_MS = 1900;
+    private final long[] rippleAt = new long[WAVES];
+    private final float[] ripplePower = new float[WAVES];
+    private final float[] rippleX = new float[WAVES];
+    private final float[] rippleY = new float[WAVES];
+    private final float[] rippleStart = new float[WAVES];
+    private final float[] rippleReach = new float[WAVES];
+    private final long[] rippleLife = new long[WAVES];
+    private long chromaAt;
+    private float chromaPower;
+    private long dropAt;
+    private float dropPrev;
+    private final Paint edgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private int edgeFor;
+    private float edgeLevel;
     private int rippleNext;
+    private int beatCount;
+    private float swell;
+    private Object water;
+    private boolean waterBroken;
+    private float chromaNow;
     private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    private static final String WATER = ""
+            + "uniform shader img;\n"
+            + "uniform float2 res;\n"
+            + "uniform float4 w0; uniform float4 w1; uniform float4 w2; uniform float4 w3; uniform float4 w4; uniform float4 w5;\n"
+            + "uniform float band;\n"
+            + "uniform float amp;\n"
+            + "uniform float time;\n"
+            + "uniform float swell;\n"
+            + "uniform float chroma;\n"
+            + "uniform float3 tint;\n"
+            + "float3 wave(float2 p, float4 w) {\n"
+            + "  if (w.w <= 0.001) return float3(0.0);\n"
+            + "  float2 d = p - w.xy;\n"
+            + "  float dist = length(d);\n"
+            + "  float x = (dist - w.z) / band;\n"
+            + "  if (x < -4.0 || x > 4.0) return float3(0.0);\n"
+            + "  float env = exp(-x * x * 0.45);\n"
+            + "  float2 dir = dist > 0.5 ? d / dist : float2(0.0);\n"
+            + "  float s = sin(x * 2.4) * env * w.w;\n"
+            + "  return float3(dir * s * amp, cos(x * 2.4) * env * w.w);\n"
+            + "}\n"
+            + "half4 main(float2 p) {\n"
+            + "  float3 acc = wave(p, w0) + wave(p, w1) + wave(p, w2) + wave(p, w3) + wave(p, w4) + wave(p, w5);\n"
+            + "  float2 off = acc.xy;\n"
+            + "  float2 q = p / max(res.x, 1.0) * 6.2831;\n"
+            + "  off += swell * float2(sin(q.y * 2.3 + time * 1.6) + 0.6 * sin(q.x * 3.1 - time * 1.1), cos(q.x * 2.1 + time * 1.3) + 0.6 * cos(q.y * 2.9 + time * 0.9));\n"
+            + "  float2 lo = float2(0.5);\n"
+            + "  float2 hi = res - float2(0.5);\n"
+            + "  half4 c = img.eval(clamp(p - off, lo, hi));\n"
+            + "  half4 r = img.eval(clamp(p - off * 1.22 + float2(chroma, 0.0), lo, hi));\n"
+            + "  half4 b = img.eval(clamp(p - off * 0.78 - float2(chroma, 0.0), lo, hi));\n"
+            + "  c.r = r.r;\n"
+            + "  c.b = b.b;\n"
+            + "  float l = clamp(acc.z, -1.0, 1.0);\n"
+            + "  float crest = max(l, 0.0);\n"
+            + "  float3 lit = float3(c.rgb) + (tint * 0.16 + float3(0.06)) * crest * float(c.a) - float3(0.07) * max(-l, 0.0) * float(c.a);\n"
+            + "  return half4(half3(clamp(lit, 0.0, 1.0)), c.a);\n"
+            + "}\n";
+
+    private void spawnRipple(float x, float y, float power, float start) {
+        spawnWave(x, y, power, start, 0f, WAVE_LIFE_MS);
+    }
+
+    private void spawnWave(float x, float y, float power, float start, float reach, long life) {
+        rippleReach[rippleNext] = reach;
+        rippleLife[rippleNext] = life;
+        rippleAt[rippleNext] = System.currentTimeMillis();
+        ripplePower[rippleNext] = power;
+        rippleX[rippleNext] = x;
+        rippleY[rippleNext] = y;
+        rippleStart[rippleNext] = start;
+        rippleNext = (rippleNext + 1) % WAVES;
+        invalidate();
+    }
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent event) {
+        if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN && PrizmaConfig.playerRipple() && android.os.Build.VERSION.SDK_INT >= 33) {
+            spawnRipple(event.getX(), event.getY(), 0.75f, 0f);
+        }
+        return false;
+    }
+
+    private long lifeOf(int i) {
+        return rippleLife[i] > 0 ? rippleLife[i] : WAVE_LIFE_MS;
+    }
+
+    private void checkDrops(long now, int w, int h) {
+        if (!PrizmaConfig.playerDrops() || !PrizmaConfig.beatEffects() || android.os.Build.VERSION.SDK_INT < 33) return;
+        float hi = 0f;
+        for (int b = PrizmaBeat.BANDS * 2 / 3; b < PrizmaBeat.BANDS; b++) hi = Math.max(hi, PrizmaBeat.band(b));
+        if (hi > 0.35f && hi > dropPrev + 0.12f && now - dropAt > 140) {
+            dropAt = now;
+            float x = w * (0.08f + 0.84f * Utilities.random.nextFloat());
+            float y = h * (0.06f + 0.88f * Utilities.random.nextFloat());
+            if (!coverRect.isEmpty() && coverRect.contains(x, y)) y = coverRect.bottom + (h - coverRect.bottom) * Utilities.random.nextFloat();
+            spawnWave(x, y, 0.28f + hi * 0.35f, 0f, AndroidUtilities.dpf2(120 + 80 * hi), 900);
+        }
+        dropPrev = dropPrev * 0.7f + hi * 0.3f;
+    }
+
+    private boolean drawEdges(Canvas canvas, int w, int h) {
+        if (!PrizmaConfig.playerEdges() || !PrizmaConfig.beatEffects()) {
+            edgeLevel = 0f;
+            return false;
+        }
+        float target = PrizmaBeat.level();
+        edgeLevel += (target - edgeLevel) * (target > edgeLevel ? 0.5f : 0.12f);
+        if (edgeLevel < 0.01f) return target > 0.01f;
+        int key = ringColor * 31 + w * 7 + h;
+        if (edgeFor != key) {
+            edgeFor = key;
+            float radius = (float) Math.hypot(w, h) * 0.62f;
+            edgePaint.setShader(new RadialGradient(w / 2f, h / 2f, radius,
+                    new int[]{ringColor & 0x00ffffff, ringColor & 0x00ffffff, (ringColor & 0x00ffffff) | 0x99000000},
+                    new float[]{0f, 0.62f, 1f}, Shader.TileMode.CLAMP));
+        }
+        edgePaint.setAlpha((int) (255 * Math.min(1f, edgeLevel * 1.3f)));
+        canvas.drawRect(0, 0, w, h, edgePaint);
+        return true;
+    }
+
+    private float waveRadius(int i, long now, float reach) {
+        if (rippleReach[i] > 0) reach = rippleReach[i];
+        float t = Math.min(1f, (now - rippleAt[i]) / (float) lifeOf(i));
+        float eased = 1f - (float) Math.pow(1f - t, 2.2f);
+        return rippleStart[i] + (reach - rippleStart[i]) * eased;
+    }
+
+    @android.annotation.SuppressLint("NewApi")
+    private boolean applyWater(long now, int w, int h) {
+        if (android.os.Build.VERSION.SDK_INT < 33 || waterBroken) return false;
+        checkDrops(now, w, h);
+        boolean enabled = (PrizmaConfig.playerRipple() || PrizmaConfig.playerDrops() || PrizmaConfig.playerChroma()) && PrizmaConfig.beatEffects();
+        float level = enabled && PrizmaConfig.playerRipple() ? PrizmaBeat.level() : 0f;
+        float target = PrizmaConfig.fancyEffects() ? Math.min(1f, level * 1.4f) : 0f;
+        swell += (target - swell) * 0.12f;
+        boolean any = false;
+        float[][] packs = new float[WAVES][];
+        float reach = (float) Math.hypot(w, h);
+        for (int i = 0; i < WAVES; i++) {
+            long age = now - rippleAt[i];
+            if (!enabled || rippleAt[i] == 0 || age > lifeOf(i)) {
+                packs[i] = new float[]{0, 0, 0, 0};
+                continue;
+            }
+            float t = age / (float) lifeOf(i);
+            float fade = (float) Math.pow(1f - t, 1.6f) * Math.min(1f, t * 8f);
+            packs[i] = new float[]{rippleX[i], rippleY[i], waveRadius(i, now, reach), ripplePower[i] * fade};
+            any = true;
+        }
+        float chroma = 0f;
+        if (enabled && chromaAt != 0 && now - chromaAt < 320) {
+            float ct = (now - chromaAt) / 320f;
+            chroma = AndroidUtilities.dpf2(7) * chromaPower * (1f - ct) * (1f - ct);
+            any = true;
+        }
+        chromaNow = chroma;
+        if (!any && swell < 0.01f && !(PrizmaConfig.playerDrops() && enabled && PrizmaBeat.level() > 0.01f)) {
+            if (water != null) setRenderEffect(null);
+            return false;
+        }
+        if (waterBroken) return false;
+        try {
+            if (water == null) water = new android.graphics.RuntimeShader(WATER);
+            return pushWater(now, w, h, packs);
+        } catch (Throwable e) {
+            waterBroken = true;
+            setRenderEffect(null);
+            return false;
+        }
+    }
+
+    @android.annotation.SuppressLint("NewApi")
+    private boolean pushWater(long now, int w, int h, float[][] packs) {
+        android.graphics.RuntimeShader sh = (android.graphics.RuntimeShader) water;
+        sh.setFloatUniform("res", w, h);
+        sh.setFloatUniform("w0", packs[0]);
+        sh.setFloatUniform("w1", packs[1]);
+        sh.setFloatUniform("w2", packs[2]);
+        sh.setFloatUniform("w3", packs[3]);
+        sh.setFloatUniform("w4", packs[4]);
+        sh.setFloatUniform("w5", packs[5]);
+        sh.setFloatUniform("band", AndroidUtilities.dpf2(30));
+        sh.setFloatUniform("amp", AndroidUtilities.dpf2(18));
+        sh.setFloatUniform("time", (now % 600000L) / 1000f);
+        sh.setFloatUniform("swell", swell * AndroidUtilities.dpf2(3.5f));
+        sh.setFloatUniform("chroma", chromaNow);
+        sh.setFloatUniform("tint", ((ringColor >> 16) & 0xff) / 255f, ((ringColor >> 8) & 0xff) / 255f, (ringColor & 0xff) / 255f);
+        setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(sh, "img"));
+        return true;
+    }
+
     private boolean drawRipples(Canvas canvas, long now, int w, int h) {
-        float cx = coverRect.isEmpty() ? w / 2f : coverRect.centerX();
-        float cy = coverRect.isEmpty() ? h * 0.36f : coverRect.centerY();
-        float reach = (float) Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy));
-        float start = coverRect.isEmpty() ? 0f : coverRect.width() * 0.5f;
+        float reach = (float) Math.hypot(w, h);
         ripplePaint.setStyle(Paint.Style.STROKE);
         boolean live = false;
-        for (int i = 0; i < rippleAt.length; i++) {
+        for (int i = 0; i < WAVES; i++) {
             long age = now - rippleAt[i];
-            if (rippleAt[i] == 0 || age > 1500) continue;
-            float t = age / 1500f;
-            float eased = 1f - (1f - t) * (1f - t);
-            float r = start + (reach - start) * eased;
+            if (rippleAt[i] == 0 || age > WAVE_LIFE_MS) continue;
+            float t = age / (float) WAVE_LIFE_MS;
+            float r = waveRadius(i, now, reach);
             float fade = (1f - t) * (1f - t);
             ripplePaint.setColor(ringColor);
             ripplePaint.setStrokeWidth(AndroidUtilities.dpf2(1.2f + 3.5f * ripplePower[i] * (1f - t)));
             ripplePaint.setAlpha((int) (150 * fade * ripplePower[i]));
-            canvas.drawCircle(cx, cy, r, ripplePaint);
+            canvas.drawCircle(rippleX[i], rippleY[i], r, ripplePaint);
             ripplePaint.setAlpha((int) (70 * fade * ripplePower[i]));
-            canvas.drawCircle(cx, cy, r * 0.82f, ripplePaint);
+            canvas.drawCircle(rippleX[i], rippleY[i], r * 0.82f, ripplePaint);
             live = true;
         }
         return live;
@@ -344,7 +540,10 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
             if (PrizmaConfig.playerBlob()) more |= drawBlob(canvas, now);
             if (PrizmaConfig.playerContour()) more |= drawContour(canvas);
         }
-        if (PrizmaConfig.playerRipple() && PrizmaConfig.beatEffects()) {
+        more |= drawEdges(canvas, w, h);
+        if (applyWater(now, w, h)) {
+            more = true;
+        } else if (PrizmaConfig.playerRipple() && PrizmaConfig.beatEffects()) {
             more |= drawRipples(canvas, now, w, h);
         }
         if (pulse > 0.01f) {

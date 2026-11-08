@@ -614,6 +614,9 @@ public class PrizmaSettingsActivity extends BaseFragment {
             }
         });
         toggle(MUSIC, "Рябь на весь фон", "Волны под басс расходятся по всему экрану плеера", PrizmaConfig::playerRipple, PrizmaConfig::setPlayerRipple);
+        toggle(MUSIC, "Капли под мелодию", "Высокие ноты падают на фон плеера мелкими каплями", PrizmaConfig::playerDrops, PrizmaConfig::setPlayerDrops);
+        toggle(MUSIC, "Удар цветом", "Фон на миг расслаивается на цвета на самых сильных ударах", PrizmaConfig::playerChroma, PrizmaConfig::setPlayerChroma);
+        toggle(MUSIC, "Пульс краёв", "Края экрана плеера подсвечиваются в такт басу", PrizmaConfig::playerEdges, PrizmaConfig::setPlayerEdges);
         action(MUSIC, "Плавный переход", PrizmaConfig.fadeSeconds() == 0 ? "Выключен" : "Затухание " + PrizmaConfig.fadeSeconds() + " с в начале и конце трека", () -> choose(ctx, "Плавный переход", new String[]{"Выключен", "2 секунды", "4 секунды", "6 секунд"}, new int[]{0, 2, 4, 6}, PrizmaConfig.fadeSeconds(), PrizmaConfig::setFadeSeconds));
         action(MUSIC, "Эквалайзер", "Пресеты, свои настройки, бас и объём", () -> org.telegram.ui.Components.PrizmaEqualizerSheet.show(ctx));
         action(MUSIC, "Звук уведомлений", "Свой звук на сообщения", () -> {

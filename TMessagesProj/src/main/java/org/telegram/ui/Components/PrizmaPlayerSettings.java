@@ -138,6 +138,16 @@ public final class PrizmaPlayerSettings {
         divider(beat);
         beat.addView(toggle("Удар по обложке", "Обложка коротко подпрыгивает на сильных долях.", PrizmaConfig::playerCoverKick, PrizmaConfig::setPlayerCoverKick));
         divider(beat);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            beat.addView(toggle("Рябь на весь фон", "На каждый удар баса по фону идёт волна, как по воде. Тапните по фону, чтобы пустить свою.", PrizmaConfig::playerRipple, PrizmaConfig::setPlayerRipple));
+            divider(beat);
+            beat.addView(toggle("Капли под мелодию", "Высокие ноты падают на фон мелкими каплями в случайных местах.", PrizmaConfig::playerDrops, PrizmaConfig::setPlayerDrops));
+            divider(beat);
+            beat.addView(toggle("Удар цветом", "На самых сильных ударах фон на миг расслаивается на красный и синий.", PrizmaConfig::playerChroma, PrizmaConfig::setPlayerChroma));
+            divider(beat);
+        }
+        beat.addView(toggle("Пульс краёв", "Края экрана подсвечиваются цветом обложки в такт басу.", PrizmaConfig::playerEdges, PrizmaConfig::setPlayerEdges));
+        divider(beat);
         beat.addView(toggle("Вибрация в такт", "Телефон легко отзывается на удары. Тратит чуть больше заряда.", PrizmaConfig::playerHaptics, PrizmaConfig::setPlayerHaptics));
         content.addView(beat);
 
