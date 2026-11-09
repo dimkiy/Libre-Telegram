@@ -4473,26 +4473,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     }
                     if (prizmaWidgets != null && topPanelLayout != null) {
                         boolean canUp = recyclerView.canScrollVertically(-1);
+                        int offset = recyclerView.computeVerticalScrollOffset();
                         int first = recyclerView.getLayoutManager() instanceof LinearLayoutManager ? ((LinearLayoutManager) recyclerView.getLayoutManager()).findFirstVisibleItemPosition() : 0;
-                        boolean want;
-                        if (!canUp) {
+                        boolean shown = topPanelLayout.isViewVisible(prizmaWidgets);
+                        boolean want = shown;
+                        if (!canUp || first <= 0 && offset < dp(56)) {
                             want = true;
-                        } else if (dy > 2) {
+                        } else if (dy > 0 && offset > dp(150)) {
                             want = false;
-                        } else if (dy < -2) {
-                            want = first <= 0;
-                        } else {
-                            want = topPanelLayout.isViewVisible(prizmaWidgets);
                         }
-                        boolean holder = topPanelLayout.isViewVisible(prizmaWidgets);
-                        if (holder != want) {
+                        long now = System.currentTimeMillis();
+                        if (want != shown && (!canUp || now - prizmaWidgetsForcedAt > 380)) {
+                            prizmaWidgetsForcedAt = now;
                             prizmaWidgetsShown = want;
                             topPanelLayout.setViewVisible(prizmaWidgets, want, true);
-                        } else if (!want && prizmaWidgets.getVisibility() == View.VISIBLE && prizmaWidgets.getAlpha() > 0.99f && prizmaWidgets.getHeight() > 0 && dy > 2
-                                && System.currentTimeMillis() - prizmaWidgetsForcedAt > 700) {
-                            prizmaWidgetsForcedAt = System.currentTimeMillis();
-                            topPanelLayout.setViewVisible(prizmaWidgets, true, false);
-                            topPanelLayout.setViewVisible(prizmaWidgets, false, true);
                         }
                     }
                     if (org.telegram.messenger.PrizmaConfig.dockAutoHide() && Math.abs(dy) > 2) {
@@ -4852,6 +4846,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 prizmaWidgets = new org.telegram.ui.Components.PrizmaWidgetStrip(context);
                 prizmaWidgets.setOnWallet(() -> getMessagesController().openByUserName("walt", DialogsActivity.this, 0));
                 topPanelLayout.addView(prizmaWidgets);
+                topPanelLayout.setPriority(prizmaWidgets, 10);
                 topPanelLayout.setViewVisible(prizmaWidgets, true, false);
             }
 

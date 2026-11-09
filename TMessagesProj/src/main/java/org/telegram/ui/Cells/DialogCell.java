@@ -449,6 +449,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private android.graphics.Paint prizmaArchiveCoverPaint;
     private String customMessage;
 
+    private boolean prizmaVeilBuilt;
+
+    private boolean prizmaVeilWanted() {
+        return folderId != 0 && currentDialogFolderId == 0 && prizmaHideArchive();
+    }
+
     private boolean prizmaHideArchive() {
         try {
             return org.telegram.messenger.PrizmaConfig.archiveHideNames() || org.telegram.ui.Components.PrizmaArchiveLock.isLocked();
@@ -1717,7 +1723,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                             messageString = formatCommunityDialogNames();
                         } else if (currentDialogFolderId != 0) {
                             if (org.telegram.messenger.PrizmaConfig.archiveHideNames() || org.telegram.ui.Components.PrizmaArchiveLock.isLocked()) {
-                                messageString = "•••••  ••••••••  •••••  •••••••";
+                                messageString = org.telegram.ui.Components.PrizmaVeilSpan.bar(currentDialogId, 3, AndroidUtilities.displaySize.x * 0.6f, 0.6f, 0.85f);
                             } else {
                                 messageString = formatArchivedDialogNames();
                             }
@@ -2450,8 +2456,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (nameString instanceof String) {
                 nameString = ((String) nameString).replace('\n', ' ');
             }
-            if (folderId != 0 && currentDialogFolderId == 0 && prizmaHideArchive()) {
-                nameString = "•••••••••";
+            prizmaVeilBuilt = prizmaVeilWanted();
+            if (prizmaVeilBuilt) {
+                nameString = org.telegram.ui.Components.PrizmaVeilSpan.bar(currentDialogId, 1, ellipsizeWidth, 0.32f, 0.62f);
             }
             CharSequence nameStringFinal = nameString;
             if (nameLayoutEllipsizeByGradient) {
@@ -2822,8 +2829,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             FileLog.e(e);
         }
 
-        if (folderId != 0 && currentDialogFolderId == 0 && prizmaHideArchive()) {
-            messageString = "••••••  ••••••••";
+        if (prizmaVeilWanted()) {
+            messageString = org.telegram.ui.Components.PrizmaVeilSpan.bar(currentDialogId, 2, messageWidth, 0.45f, 0.8f);
+            messageNameString = null;
+            thumbsCount = 0;
         }
         try {
             CharSequence messageStringFinal;
@@ -3869,6 +3878,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         if (currentDialogId == 0 && customDialog == null) {
             return;
         }
+        if (folderId != 0 && currentDialogFolderId == 0 && prizmaVeilBuilt != prizmaVeilWanted()) {
+            buildLayout();
+        }
         if (!visibleOnScreen) {
             return;
         }
@@ -4873,8 +4885,24 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (prizmaArchiveCoverPaint == null) {
                 prizmaArchiveCoverPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
             }
-            prizmaArchiveCoverPaint.setColor(0xff3a3d46);
-            canvas.drawCircle(storyParams.originalAvatarRect.centerX(), storyParams.originalAvatarRect.centerY(), storyParams.originalAvatarRect.width() / 2f, prizmaArchiveCoverPaint);
+            android.graphics.RectF ar = storyParams.originalAvatarRect;
+            int ink = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider);
+            int base = Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider);
+            prizmaArchiveCoverPaint.setStyle(android.graphics.Paint.Style.FILL);
+            prizmaArchiveCoverPaint.setColor(androidx.core.graphics.ColorUtils.blendARGB(base, ink, 0.1f));
+            int[] radii = avatarImage.getRoundRadius();
+            float rr = radii != null && radii.length > 0 ? Math.min(radii[0], ar.width() / 2f) : ar.width() / 2f;
+            canvas.drawRoundRect(ar, rr, rr, prizmaArchiveCoverPaint);
+            float u = ar.width() / 24f;
+            float cx = ar.centerX(), cy = ar.centerY();
+            prizmaArchiveCoverPaint.setColor(Theme.multAlpha(ink, 0.42f));
+            canvas.drawRoundRect(cx - 4.5f * u, cy - 0.5f * u, cx + 4.5f * u, cy + 5.5f * u, 1.4f * u, 1.4f * u, prizmaArchiveCoverPaint);
+            prizmaArchiveCoverPaint.setStyle(android.graphics.Paint.Style.STROKE);
+            prizmaArchiveCoverPaint.setStrokeWidth(1.5f * u);
+            canvas.drawArc(cx - 2.8f * u, cy - 5.4f * u, cx + 2.8f * u, cy + 0.2f * u, 180f, 180f, false, prizmaArchiveCoverPaint);
+            canvas.drawLine(cx - 2.8f * u, cy - 2.6f * u, cx - 2.8f * u, cy - 0.5f * u, prizmaArchiveCoverPaint);
+            canvas.drawLine(cx + 2.8f * u, cy - 2.6f * u, cx + 2.8f * u, cy - 0.5f * u, prizmaArchiveCoverPaint);
+            prizmaArchiveCoverPaint.setStyle(android.graphics.Paint.Style.FILL);
         }
 
         if (animatingArchiveAvatar) {

@@ -223,6 +223,14 @@ public class PrizmaConfig {
         return archivePinHash().length() > 0;
     }
 
+    public static int archivePinLength() {
+        return getInt("archive_pin_len", 0);
+    }
+
+    public static void setArchivePinLength(int v) {
+        done(edit().putInt("archive_pin_len", v));
+    }
+
     public static boolean alwaysOnline() {
         return getBool("always_online", false);
     }

@@ -528,7 +528,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
                     Toast.makeText(ctx, "Пароль на архив снят", Toast.LENGTH_SHORT).show();
                 });
             } else {
-                PrizmaArchiveLock.setupPin(ctx, () -> Toast.makeText(ctx, "Пароль на архив установлен", Toast.LENGTH_SHORT).show());
+                PrizmaArchiveLock.setupPin(ctx, () -> Toast.makeText(ctx, "Код на архив установлен", Toast.LENGTH_SHORT).show());
             }
         });
         action(GUARD, "Блокировка приложения", "Пароль и отпечаток на вход, автоблокировка", () -> presentFragment(new PasscodeActivity(PasscodeActivity.TYPE_MANAGE_CODE_SETTINGS)));

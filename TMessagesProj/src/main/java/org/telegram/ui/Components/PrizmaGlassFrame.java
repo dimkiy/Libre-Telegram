@@ -58,6 +58,12 @@ public class PrizmaGlassFrame extends FrameLayout {
     private final RectF rect = new RectF();
     private final float[] point = new float[2];
     private static boolean lensBroken;
+    private int liquidTint;
+
+    public void setLiquidTint(int color) {
+        liquidTint = color;
+        invalidate();
+    }
     private final ViewTreeObserver.OnPreDrawListener watcher = () -> {
         if (source != null && source.isDirty()) invalidate();
         return true;
@@ -263,7 +269,7 @@ public class PrizmaGlassFrame extends FrameLayout {
     private void drawLiquid(Canvas canvas, Pane p, boolean glass, float l, float t, float w, float h, float r, float alpha) {
         boolean darkTheme = dark();
         int bg = Theme.getColor(Theme.key_windowBackgroundWhite);
-        int tint = Theme.multAlpha(bg, glass ? (darkTheme ? 0.36f : 0.42f) : 0.95f);
+        int tint = liquidTint != 0 ? (glass ? liquidTint : Theme.multAlpha(liquidTint | 0xff000000, 0.3f)) : Theme.multAlpha(bg, glass ? (darkTheme ? 0.36f : 0.42f) : 0.95f);
         canvas.save();
         canvas.translate(l, t);
         rect.set(0, 0, w, h);
