@@ -1,46 +1,58 @@
-## Telegram messenger for Android
+# Libre
 
-[Telegram](https://telegram.org) is a messaging app with a focus on speed and security. It’s superfast, simple and free.
-This repo contains the official source code for [Telegram App for Android](https://play.google.com/store/apps/details?id=org.telegram.messenger).
+Libre — неофициальный клиент Telegram для Android. Это тот же Telegram с вашими чатами и контактами, но с дополнительными функциями: плеер с плейлистами, лента каналов, режим «невидимки», история удалённых сообщений и многое другое.
 
-## Creating your Telegram Application
+## Как установить
 
-We welcome all developers to use our API and source code to create applications on our platform.
-There are several things we require from **all developers** for the moment.
+Понадобится телефон на Android 6 или новее. На iPhone Libre не работает.
 
-1. [**Obtain your own api_id**](https://core.telegram.org/api/obtaining_api_id) for your application.
-2. Please **do not** use the name Telegram for your app — or make sure your users understand that it is unofficial.
-3. Kindly **do not** use our standard logo (white paper plane in a blue circle) as your app's logo.
-3. Please study our [**security guidelines**](https://core.telegram.org/mtproto/security_guidelines) and take good care of your users' data and privacy.
-4. Please remember to publish **your** code too in order to comply with the licences.
+### Шаг 1. Скачайте файл
 
-### API, Protocol documentation
+1. Откройте эту страницу на телефоне.
+2. Перейдите по ссылке: **[скачать последнюю версию Libre](https://github.com/dimkiy/Libre-Telegram/releases/latest)**.
+3. Пролистайте вниз до раздела **Assets**.
+4. Нажмите на файл, название которого заканчивается на **.apk**, например `Libre-1.2.4.apk`.
+5. Дождитесь, пока файл скачается.
 
-Telegram API manuals: https://core.telegram.org/api
+Не нажимайте **Source code** — это исходный код, а не приложение.
 
-MTproto protocol manuals: https://core.telegram.org/mtproto
+### Шаг 2. Установите
 
-### Compilation Guide
+1. Откройте скачанный файл — из уведомления о загрузке или из папки **Загрузки**.
+2. Телефон может спросить, можно ли устанавливать приложения из этого источника. Нажмите **Настройки**, включите переключатель **Разрешить из этого источника** и вернитесь назад.
+3. Нажмите **Установить**.
+4. Если появится предупреждение Google Play Защиты, нажмите **Подробнее**, а затем **Всё равно установить**. Так телефон реагирует на любое приложение не из Google Play.
 
-**Note**: In order to support [reproducible builds](https://core.telegram.org/reproducible-builds), this repo contains dummy release.keystore,  google-services.json and filled variables inside BuildVars.java. Before publishing your own APKs please make sure to replace all these files with your own.
+### Шаг 3. Войдите
 
-You will require Android Studio 2025.1.4, Android NDK 27.2.12479018 and Android SDK 36.
+1. Откройте Libre.
+2. Введите номер телефона, к которому привязан ваш Telegram.
+3. Введите код из сообщения, которое придёт в Telegram.
 
-1. Clone the Telegram source code with its submodules:
-   ```bash
-   git clone --recursive --shallow-submodules https://github.com/DrKLO/Telegram.git Telegram
-   ```
-   In case you forgot the `--recursive` flag, change to the `Telegram` directory and run:
-   ```bash
-   git submodule init && git submodule update --init --recursive --depth=1
-   ```
-2. Copy your release.keystore into TMessagesProj/config
-3. Fill out RELEASE_KEY_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_STORE_PASSWORD in gradle.properties to access your  release.keystore
-4.  Go to https://console.firebase.google.com/, create two android apps with application IDs org.telegram.messenger and org.telegram.messenger.beta, turn on firebase messaging and download google-services.json, which should be copied to the same folder as TMessagesProj.
-5. Open the project in the Studio (note that it should be opened, NOT imported).
-6. Fill out values in TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java – there’s a link for each of the variables showing where and which data to obtain.
-7. You are ready to compile Telegram.
+Готово: все чаты, каналы и контакты на месте. Обычный Telegram удалять не нужно — оба приложения могут стоять на телефоне одновременно.
 
-### Localization
+## Как обновить
 
-We moved all translations to https://translations.telegram.org/en/android/. Please use it.
+Libre сам сообщает о новой версии. Если хотите обновить вручную, скачайте новый файл по той же ссылке и установите его поверх — данные и настройки сохранятся.
+
+Не удаляйте старую версию перед установкой новой, иначе придётся входить заново.
+
+## Частые вопросы
+
+**Безопасно ли это?** Libre подключается к тем же серверам Telegram, что и обычное приложение. Весь код открыт и лежит в этом репозитории.
+
+**Телефон пишет «Приложение не установлено».** Проверьте, что на телефоне хватает свободного места. Если у вас стоит Libre, скачанный не отсюда, удалите его и установите заново.
+
+**Не приходит код для входа.** Код приходит в Telegram на другом вашем устройстве. Если Telegram больше нигде не открыт, нажмите «Отправить код по SMS».
+
+## Для разработчиков
+
+Устройство кода Libre описано в [LIBRE_CODE.md](LIBRE_CODE.md). Сервер Libre лежит в папке `server`.
+
+Libre основан на [исходном коде Telegram для Android](https://github.com/DrKLO/Telegram). Для сборки нужны Android Studio, Android NDK 27.2.12479018 и Android SDK 36. Свои `api_id` и `api_hash` укажите в `local.properties` (`TELEGRAM_APP_ID`, `TELEGRAM_APP_HASH`), получить их можно на [my.telegram.org](https://my.telegram.org).
+
+```bash
+git clone --recursive --shallow-submodules https://github.com/dimkiy/Libre-Telegram.git
+```
+
+Код распространяется под лицензией GPL v2, как и исходный Telegram.
