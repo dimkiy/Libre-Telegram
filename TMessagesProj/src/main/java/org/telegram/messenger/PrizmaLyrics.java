@@ -57,21 +57,8 @@ public class PrizmaLyrics {
         }
         final String track = t;
         final String artist = a;
-        Utilities.globalQueue.postRunnable(() -> {
-            Lyrics result = null;
-            try {
-                String answer = PrizmaCloud.enabled() ? askServer(track, artist, durationSec) : null;
-                if (answer != null) {
-                    result = parseEntry(new JSONObject(answer));
-                } else {
-                    result = requestGet(track, artist, durationSec);
-                    if (result == null) {
-                        result = requestSearch(track, artist);
-                    }
-                }
-            } catch (Throwable ignore) {
-            }
-            final Lyrics finalResult = result;
+        PrizmaJobs.net(() -> {
+            final Lyrics finalResult = find(track, artist, durationSec);
             synchronized (cache) {
                 if (finalResult != null) {
                     cache.put(key, finalResult);
@@ -82,6 +69,49 @@ public class PrizmaLyrics {
             }
             AndroidUtilities.runOnUIThread(() -> callback.onResult(finalResult));
         });
+    }
+
+    private interface Attempt {
+        Lyrics run() throws Exception;
+    }
+
+    private static Lyrics attempt(Attempt a) {
+        try {
+            return a.run();
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    private static Lyrics find(String track, String artist, int durationSec) {
+        final String plainTrack = PrizmaClips.cleanTitle(stripArtist(track, artist));
+        final String plainArtist = PrizmaClips.cleanArtist(artist);
+        final boolean cleaned = !plainTrack.isEmpty() && (!plainTrack.equals(track) || !plainArtist.equals(artist));
+        Lyrics result = null;
+        if (PrizmaCloud.enabled()) {
+            result = attempt(() -> fromServer(track, artist, durationSec));
+            if (result == null && cleaned) result = attempt(() -> fromServer(plainTrack, plainArtist, durationSec));
+        }
+        if (result == null) result = attempt(() -> requestGet(track, artist, durationSec));
+        if (result == null && cleaned) result = attempt(() -> requestGet(plainTrack, plainArtist, durationSec));
+        final String title = plainTrack.isEmpty() ? track : plainTrack;
+        if (result == null) result = attempt(() -> requestSearch((title + " " + plainArtist).trim(), durationSec));
+        if (result == null && !plainArtist.isEmpty() && durationSec > 0) result = attempt(() -> requestSearch(title, durationSec));
+        return result;
+    }
+
+    private static String stripArtist(String track, String artist) {
+        String t = track.replace('_', ' ').replaceAll("(?i)\\.(mp3|m4a|flac|ogg|wav|opus)$", "").trim();
+        if (!artist.isEmpty() && t.toLowerCase().startsWith(artist.toLowerCase())) {
+            String rest = t.substring(artist.length()).trim();
+            if (rest.startsWith("-") || rest.startsWith("—") || rest.startsWith("–")) return rest.substring(1).trim();
+        }
+        return t;
+    }
+
+    private static Lyrics fromServer(String track, String artist, int durationSec) throws Exception {
+        String answer = askServer(track, artist, durationSec);
+        return answer == null ? null : parseEntry(new JSONObject(answer));
     }
 
     public static Lyrics fromTags(String text) {
@@ -124,21 +154,24 @@ public class PrizmaLyrics {
         return parseEntry(new JSONObject(body));
     }
 
-    private static Lyrics requestSearch(String track, String artist) throws Exception {
-        String q = (track + " " + artist).trim();
+    private static Lyrics requestSearch(String q, int durationSec) throws Exception {
+        if (q.isEmpty()) return null;
         String url = "https://lrclib.net/api/search?q=" + URLEncoder.encode(q, "UTF-8");
         String body = httpGet(url);
         if (body == null) {
             return null;
         }
         JSONArray arr = new JSONArray(body);
+        Lyrics first = null;
         for (int i = 0; i < arr.length(); i++) {
-            Lyrics l = parseEntry(arr.getJSONObject(i));
-            if (l != null) {
-                return l;
-            }
+            JSONObject row = arr.getJSONObject(i);
+            Lyrics l = parseEntry(row);
+            if (l == null) continue;
+            double length = row.optDouble("duration", 0);
+            if (durationSec <= 0 || length <= 0 || Math.abs(length - durationSec) <= 3) return l;
+            if (first == null && Math.abs(length - durationSec) <= 12) first = l;
         }
-        return null;
+        return first;
     }
 
     private static Lyrics parseEntry(JSONObject obj) {

@@ -586,21 +586,34 @@ public class PrizmaProfileCard extends LinearLayout {
         LinearLayout v = new LinearLayout(ctx);
         v.setOrientation(VERTICAL);
         v.setGravity(Gravity.CENTER_HORIZONTAL);
-        v.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(26), AndroidUtilities.dp(24), AndroidUtilities.dp(16));
-        v.addView(badge(ctx, a.icon, a.color, 80, 40), LayoutHelper.createLinear(80, 80));
+        v.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(10), AndroidUtilities.dp(24), AndroidUtilities.dp(16));
+        PrizmaMedal medal = new PrizmaMedal(ctx);
+        medal.set(a.icon, a.color, a.earned, a.earned ? "получено" : "ещё не получено");
+        v.addView(medal, LayoutHelper.createLinear(208, 208));
         TextView t = new TextView(ctx);
         t.setText(a.title);
         t.setTextColor(color(Theme.key_windowBackgroundWhiteBlackText));
         t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
         t.setTypeface(AndroidUtilities.bold());
         t.setGravity(Gravity.CENTER);
-        v.addView(t, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 14, 0, 0));
+        v.addView(t, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
         TextView d = new TextView(ctx);
-        d.setText(a.desc);
+        String about = a.earned || a.how == null ? a.desc : a.how;
+        if (!a.earned && a.goal > 0) about += " · " + a.progress + " из " + a.goal;
+        d.setText(about);
         d.setTextColor(color(Theme.key_windowBackgroundWhiteGrayText));
         d.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         d.setGravity(Gravity.CENTER);
         v.addView(d, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 6, 0, 0));
+        if (!a.earned && a.goal > 0) {
+            v.addView(progress(ctx, a), LayoutHelper.createLinear(160, 4, Gravity.CENTER_HORIZONTAL, 0, 12, 0, 0));
+        }
+        TextView hint = new TextView(ctx);
+        hint.setText("Проведите по медали, чтобы повернуть её");
+        hint.setTextColor(Theme.multAlpha(color(Theme.key_windowBackgroundWhiteGrayText), 0.75f));
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.5f);
+        hint.setGravity(Gravity.CENTER);
+        v.addView(hint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
         final BottomSheet[] ref = new BottomSheet[1];
         TextView ok = button(ctx, "Понятно");
         ok.setOnClickListener(x -> {
@@ -657,6 +670,8 @@ public class PrizmaProfileCard extends LinearLayout {
             }
             r.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
             if (!a.earned) r.setAlpha(0.55f);
+            r.setBackground(Theme.createSelectorDrawable(color(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL));
+            r.setOnClickListener(x -> showAchievement(a));
             list.addView(r);
         }
         ScrollView sv = new ScrollView(ctx) {

@@ -36,6 +36,10 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
     private final BackupImageView cover;
     private final TextView title, author;
     private final ImageView next, close;
+    private final TextView live;
+    private final Runnable togetherChanged = this::applyTogether;
+    private String togetherKey = "";
+    private String plainAuthor = "";
     private final PlayKey ring;
     private final PulseLine pulse;
     private final Paint fill = new Paint();
@@ -100,6 +104,22 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         });
         body.addView(ring, LayoutHelper.createLinear(42, 36, Gravity.CENTER_VERTICAL, 2, 0, 0, 0));
 
+        live = new TextView(context);
+        live.setTextSize(12.5f);
+        live.setTypeface(AndroidUtilities.bold());
+        live.setGravity(Gravity.CENTER);
+        live.setPadding(AndroidUtilities.dp(12), 0, AndroidUtilities.dp(12), 0);
+        live.setVisibility(GONE);
+        live.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            PrizmaTogether t = PrizmaTogether.get();
+            if (t.isHosting()) t.stopHosting();
+            else if (t.isFollowing()) t.leave();
+            applyTogether();
+        });
+        PrizmaGlass.pressable(live);
+        body.addView(live, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 30, Gravity.CENTER_VERTICAL, 0, 0, 4, 0));
+
         next = button(R.drawable.prizma_ic_next, "Следующий трек");
         next.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
@@ -133,6 +153,8 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         next.setColorFilter(f);
         close.setColorFilter(f);
         ring.setColors(tint, color);
+        live.setTextColor(color);
+        live.setBackground(PrizmaShape.fill(tint, AndroidUtilities.dp(13)));
         pulse.setColors(tint, (tint & 0x00ffffff) | 0x38000000);
         invalidate();
     }
@@ -225,21 +247,27 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        account = UserConfig.selectedAccount;
-        NotificationCenter n = NotificationCenter.getInstance(account);
-        n.addObserver(this, NotificationCenter.messagePlayingDidStart);
-        n.addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
-        n.addObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            NotificationCenter n = NotificationCenter.getInstance(a);
+            n.addObserver(this, NotificationCenter.messagePlayingDidStart);
+            n.addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
+            n.addObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
+        }
+        PrizmaTogether.get().addListener(togetherChanged);
         refresh();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        NotificationCenter n = NotificationCenter.getInstance(account);
-        n.removeObserver(this, NotificationCenter.messagePlayingDidStart);
-        n.removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
-        n.removeObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
+        AndroidUtilities.cancelRunOnUIThread(longPress);
+        PrizmaTogether.get().removeListener(togetherChanged);
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            NotificationCenter n = NotificationCenter.getInstance(a);
+            n.removeObserver(this, NotificationCenter.messagePlayingDidStart);
+            n.removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
+            n.removeObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
+        }
     }
 
     @Override
@@ -259,13 +287,36 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         pulse.setProgress(mo.audioProgress);
         ring.setPlaying(!MediaController.getInstance().isMessagePaused());
         if (paletteKey != key) tryPalette(key);
+        applyTogether();
+    }
+
+    private void applyTogether() {
+        PrizmaTogether t = PrizmaTogether.get();
+        String status = null, action = null;
+        if (t.isHosting()) {
+            String who = t.audienceNames();
+            status = who.isEmpty() ? "Эфир · пока никто не слушает" : "Эфир · слушают: " + who;
+            action = "Стоп";
+        } else if (t.isFollowing()) {
+            String host = t.getGuestHostName();
+            status = host.isEmpty() ? "Слушаете вместе" : "Слушаете вместе · ведёт " + host;
+            action = "Выйти";
+        }
+        String key = status == null ? "" : status;
+        if (key.equals(togetherKey)) return;
+        togetherKey = key;
+        author.setText(status != null ? status : plainAuthor);
+        live.setVisibility(status != null ? VISIBLE : GONE);
+        next.setVisibility(status != null ? GONE : VISIBLE);
+        if (action != null) live.setText(action);
     }
 
     private void bind(MessageObject mo, boolean animate) {
         String t = mo.getMusicTitle(), a = mo.getMusicAuthor();
         Runnable set = () -> {
             title.setText(TextUtils.isEmpty(t) ? "Неизвестный трек" : t);
-            author.setText(a == null ? "" : a);
+            plainAuthor = a == null ? "" : a;
+            author.setText(togetherKey.isEmpty() ? plainAuthor : togetherKey);
             Bitmap bmp = embedded();
             if (bmp != null) {
                 cover.setImageBitmap(bmp);

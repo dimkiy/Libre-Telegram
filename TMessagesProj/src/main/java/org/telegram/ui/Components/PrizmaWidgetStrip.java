@@ -91,7 +91,7 @@ public class PrizmaWidgetStrip extends HorizontalScrollView {
         long now = System.currentTimeMillis();
         if (now - quotesAt > FRESH_MS) {
             quotesAt = now;
-            Utilities.globalQueue.postRunnable(() -> {
+            org.telegram.messenger.PrizmaJobs.net(() -> {
                 Quote[] q = loadQuotes();
                 AndroidUtilities.runOnUIThread(() -> {
                     if (q != null) quotes = q;
@@ -103,12 +103,14 @@ public class PrizmaWidgetStrip extends HorizontalScrollView {
         String city = PrizmaConfig.weatherCity();
         if (!TextUtils.isEmpty(city) && (now - weatherAt > 30 * 60 * 1000L || !city.equals(weatherFor))) {
             weatherAt = now;
-            Utilities.globalQueue.postRunnable(() -> {
+            org.telegram.messenger.PrizmaJobs.net(() -> {
                 String text = loadWeather(city);
                 AndroidUtilities.runOnUIThread(() -> {
                     if (text != null) {
                         weatherText = text;
                         weatherFor = city;
+                    } else {
+                        weatherAt = System.currentTimeMillis() - 29 * 60 * 1000L;
                     }
                     weather.invalidate();
                 });
@@ -129,8 +131,9 @@ public class PrizmaWidgetStrip extends HorizontalScrollView {
                 if (index < 0) continue;
                 Quote q = new Quote();
                 q.price = o.optDouble("current_price");
-                q.change = o.optDouble("price_change_24h");
-                q.percent = o.optDouble("price_change_percentage_24h");
+                if (Double.isNaN(q.price)) continue;
+                q.change = o.optDouble("price_change_24h", 0);
+                q.percent = o.optDouble("price_change_percentage_24h", 0);
                 JSONObject spark = o.optJSONObject("sparkline_in_7d");
                 JSONArray points = spark != null ? spark.optJSONArray("price") : null;
                 if (points != null && points.length() > 1) {
@@ -216,7 +219,10 @@ public class PrizmaWidgetStrip extends HorizontalScrollView {
         private final TextPaint glyph = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
         private final Path area = new Path();
+        private final Path clip = new Path();
         private final RectF rect = new RectF();
+        private Shader areaShader;
+        private int areaShaderTone, areaShaderHeight, clipWidth, clipHeight;
 
         Card(Context context, int index) {
             super(context);
@@ -265,7 +271,7 @@ public class PrizmaWidgetStrip extends HorizontalScrollView {
             float priceY = AndroidUtilities.dp(58);
             if (q == null) {
                 small.setColor(gray);
-                canvas.drawText("Загружаю…", pad, priceY, small);
+                canvas.drawText(PrizmaNet.proxyBlocks() ? "Нет связи через прокси" : "Загружаю…", pad, priceY, small);
                 return;
             }
             canvas.drawText(money(q.price), pad, priceY, price);
@@ -316,10 +322,19 @@ public class PrizmaWidgetStrip extends HorizontalScrollView {
             area.close();
             canvas.save();
             rect.set(0, 0, w, h);
-            Path clip = new Path();
-            clip.addRoundRect(rect, AndroidUtilities.dp(22), AndroidUtilities.dp(22), Path.Direction.CW);
+            if (clipWidth != w || clipHeight != h) {
+                clipWidth = w;
+                clipHeight = h;
+                clip.rewind();
+                clip.addRoundRect(rect, AndroidUtilities.dp(22), AndroidUtilities.dp(22), Path.Direction.CW);
+            }
             canvas.clipPath(clip);
-            fill.setShader(new LinearGradient(0, top, 0, h, (tone & 0x00ffffff) | 0x52000000, tone & 0x00ffffff, Shader.TileMode.CLAMP));
+            if (areaShader == null || areaShaderTone != tone || areaShaderHeight != h) {
+                areaShaderTone = tone;
+                areaShaderHeight = h;
+                areaShader = new LinearGradient(0, top, 0, h, (tone & 0x00ffffff) | 0x52000000, tone & 0x00ffffff, Shader.TileMode.CLAMP);
+            }
+            fill.setShader(areaShader);
             canvas.drawPath(area, fill);
             stroke.setColor(tone);
             canvas.drawPath(path, stroke);

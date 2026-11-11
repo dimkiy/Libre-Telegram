@@ -1,13 +1,10 @@
 package org.telegram.messenger;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.tgnet.TLRPC;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -287,6 +284,7 @@ public final class PrizmaWall {
                 AndroidUtilities.runOnUIThread(() -> {
                     if (jpeg == null) {
                         w.posts.remove(draft);
+                        PrizmaCloud.notifyChanged();
                         done.run(null, "Не удалось прочитать фото");
                         return;
                     }
@@ -472,6 +470,8 @@ public final class PrizmaWall {
 
     private static final HashMap<String, String> photoFiles = new HashMap<>();
     private static final HashSet<String> photoLoading = new HashSet<>();
+    private static final HashMap<String, Long> photoFailedAt = new HashMap<>();
+    private static final long PHOTO_RETRY_MS = 60_000L;
 
     private static void rememberPhoto(String url, String path) {
         photoFiles.put(url, path);
@@ -494,14 +494,19 @@ public final class PrizmaWall {
             photoFiles.put(url, dst.getAbsolutePath());
             return dst.getAbsolutePath();
         }
+        Long failedAt = photoFailedAt.get(url);
+        if (failedAt != null && System.currentTimeMillis() - failedAt < PHOTO_RETRY_MS) return null;
         if (photoLoading.add(url)) {
             io.postRunnable(() -> {
                 boolean ok = PrizmaNet.download(url, dst, 8L * 1024 * 1024, 30000);
                 AndroidUtilities.runOnUIThread(() -> {
                     photoLoading.remove(url);
                     if (ok) {
+                        photoFailedAt.remove(url);
                         photoFiles.put(url, dst.getAbsolutePath());
                         if (ready != null) ready.run();
+                    } else {
+                        photoFailedAt.put(url, System.currentTimeMillis());
                     }
                 });
             });
@@ -510,28 +515,6 @@ public final class PrizmaWall {
     }
 
     private static byte[] readJpeg(String path) {
-        try {
-            BitmapFactory.Options o = new BitmapFactory.Options();
-            o.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(path, o);
-            int sample = 1;
-            while (Math.max(o.outWidth, o.outHeight) / (sample * 2) >= 1600) sample *= 2;
-            o = new BitmapFactory.Options();
-            o.inSampleSize = sample;
-            Bitmap b = BitmapFactory.decodeFile(path, o);
-            if (b == null) return null;
-            float scale = Math.min(1f, 1600f / Math.max(b.getWidth(), b.getHeight()));
-            if (scale < 1f) {
-                Bitmap s = Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * scale), Math.round(b.getHeight() * scale), true);
-                if (s != b) b.recycle();
-                b = s;
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            b.compress(Bitmap.CompressFormat.JPEG, 85, out);
-            b.recycle();
-            return out.toByteArray();
-        } catch (Throwable e) {
-            return null;
-        }
+        return PrizmaBitmaps.jpeg(path, 1600, 85);
     }
 }

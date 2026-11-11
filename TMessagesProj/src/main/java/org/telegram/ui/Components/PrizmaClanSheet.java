@@ -50,45 +50,19 @@ public final class PrizmaClanSheet {
 
     public static void show(BaseFragment fragment, int account, long userId, Runnable onChanged) {
         if (fragment == null || fragment.getParentActivity() == null || !serverReady()) return;
-        boolean self = userId == UserConfig.getInstance(account).getClientUserId();
-        if (self) {
-            AlertDialog progress = new AlertDialog(fragment.getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
-            progress.showDelayed(250);
-            PrizmaClans.refreshMine(account, (String err) -> {
-                progress.dismiss();
-                if (fragment.getParentActivity() == null) return;
-                PrizmaSocial.Clan mine = PrizmaClans.mine(account);
-                if (mine != null) {
-                    showClan(fragment, account, mine.id, onChanged);
-                } else if (err != null) {
-                    toast(err);
-                } else {
-                    showNoClan(fragment, account, onChanged);
-                }
-            });
+        if (userId == UserConfig.getInstance(account).getClientUserId()) {
+            fragment.presentFragment(new org.telegram.ui.PrizmaClanActivity(0));
             return;
         }
         PrizmaSocial.Profile p = PrizmaSocial.profile(account, userId);
         if (p != null && p.clan != null && p.clan.id != 0) {
-            showClan(fragment, account, p.clan.id, onChanged);
+            fragment.presentFragment(new org.telegram.ui.PrizmaClanActivity(p.clan.id));
         } else {
             toast("Клан ещё загружается — попробуйте через секунду");
         }
     }
 
-    private static void showNoClan(BaseFragment fragment, int account, Runnable onChanged) {
-        final Context ctx = fragment.getParentActivity();
-        new AlertDialog.Builder(ctx, fragment.getResourceProvider())
-                .setTitle("Клан")
-                .setItems(new CharSequence[]{"Создать свой клан", "Вступить по ссылке или коду", "Рейтинг кланов"}, (d, which) -> {
-                    if (which == 0) showCreate(fragment, account, onChanged);
-                    else if (which == 1) askCode(fragment, account, onChanged);
-                    else showTop(fragment, account, onChanged);
-                })
-                .show();
-    }
-
-    private static void askCode(BaseFragment fragment, int account, Runnable onChanged) {
+    public static void askCode(BaseFragment fragment, int account, Runnable onChanged) {
         final Context ctx = fragment.getParentActivity();
         final Theme.ResourcesProvider rp = fragment.getResourceProvider();
         FrameLayout box = new FrameLayout(ctx);
@@ -151,202 +125,11 @@ public final class PrizmaClanSheet {
     }
 
     private static void showClan(BaseFragment fragment, int account, long clanId, Runnable onChanged) {
-        PrizmaClans.load(account, clanId, (clan, err) -> {
-            if (clan == null) {
-                toast(err);
-                return;
-            }
-            if (fragment.getParentActivity() != null) render(fragment, account, clan, onChanged);
-        });
+        if (fragment == null || fragment.getParentActivity() == null) return;
+        fragment.presentFragment(new org.telegram.ui.PrizmaClanActivity(clanId), fragment instanceof org.telegram.ui.PrizmaClanActivity);
     }
 
-    private static void render(BaseFragment fragment, int account, PrizmaSocial.Clan clan, Runnable onChanged) {
-        final Context ctx = fragment.getParentActivity();
-        final Theme.ResourcesProvider rp = fragment.getResourceProvider();
-        final BottomSheet[] ref = new BottomSheet[1];
-        final Runnable reopen = () -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showClan(fragment, account, clan.id, onChanged);
-        };
-        LinearLayout v = new LinearLayout(ctx);
-        v.setOrientation(LinearLayout.VERTICAL);
-        v.setPadding(0, AndroidUtilities.dp(24), 0, AndroidUtilities.dp(12));
-
-        LinearLayout head = new LinearLayout(ctx);
-        head.setOrientation(LinearLayout.VERTICAL);
-        head.setGravity(Gravity.CENTER_HORIZONTAL);
-        head.addView(emblem(ctx, clan.tag, clan.color, 72), LayoutHelper.createLinear(72, 72));
-        TextView name = new TextView(ctx);
-        name.setText(clan.name);
-        name.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, rp));
-        name.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 21);
-        name.setTypeface(AndroidUtilities.bold());
-        name.setGravity(Gravity.CENTER);
-        head.addView(name, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 12, 20, 0));
-        TextView sub = new TextView(ctx);
-        sub.setText("[" + clan.tag + "]" + (clan.mine ? " · вы " + PrizmaSocial.roleName(clan.myRole).toLowerCase() : ""));
-        sub.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14.5f);
-        sub.setGravity(Gravity.CENTER);
-        head.addView(sub, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 3, 20, 0));
-        v.addView(head);
-
-        LinearLayout stats = new LinearLayout(ctx);
-        stats.setOrientation(LinearLayout.HORIZONTAL);
-        addStat(ctx, rp, stats, String.valueOf(clan.level), "уровень", true);
-        addStat(ctx, rp, stats, PrizmaProfileCard.formatNumber(clan.rating), "рейтинг", false);
-        addStat(ctx, rp, stats, String.valueOf(clan.members), PrizmaSocial.plural(clan.members, "участник", "участника", "участников"), false);
-        v.addView(stats, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 12, 18, 12, 6));
-
-        LinearLayout links = new LinearLayout(ctx);
-        links.setOrientation(LinearLayout.HORIZONTAL);
-        TextView wall = button(ctx, "Стена клана", false, rp);
-        wall.setOnClickListener(x -> {
-            if (ref[0] != null) ref[0].dismiss();
-            fragment.presentFragment(new PrizmaWallActivity(-clan.id, 0));
-        });
-        links.addView(wall, LayoutHelper.createLinear(0, 44, 1f, 0, 0, 6, 0));
-        TextView top = button(ctx, "Рейтинг", false, rp);
-        top.setOnClickListener(x -> {
-            if (ref[0] != null) ref[0].dismiss();
-            showTop(fragment, account, onChanged);
-        });
-        links.addView(top, LayoutHelper.createLinear(0, 44, 1f, 6, 0, 0, 0));
-        v.addView(links, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 20, 10, 20, 4));
-
-        TextView membersHead = new TextView(ctx);
-        membersHead.setText("Участники");
-        membersHead.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueHeader, rp));
-        membersHead.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        membersHead.setTypeface(AndroidUtilities.bold());
-        v.addView(membersHead, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 14, 20, 4));
-
-        final long me = UserConfig.getInstance(account).getClientUserId();
-        for (PrizmaSocial.Member m : clan.list) {
-            LinearLayout r = new LinearLayout(ctx);
-            r.setOrientation(LinearLayout.HORIZONTAL);
-            r.setGravity(Gravity.CENTER_VERTICAL);
-            r.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(7), AndroidUtilities.dp(20), AndroidUtilities.dp(7));
-            r.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector, rp), 2));
-            BackupImageView avatar = new BackupImageView(ctx);
-            avatar.setRoundRadius(AndroidUtilities.dp(19));
-            AvatarDrawable ad = new AvatarDrawable();
-            TLRPC.User u = MessagesController.getInstance(account).getUser(m.userId);
-            if (u != null) {
-                ad.setInfo(account, u);
-                avatar.setForUserOrChat(u, ad);
-            } else {
-                ad.setInfo(m.userId, m.name, null);
-                avatar.setImageDrawable(ad);
-            }
-            r.addView(avatar, LayoutHelper.createLinear(38, 38, Gravity.CENTER_VERTICAL, 0, 0, 12, 0));
-            TextView n = new TextView(ctx);
-            n.setText(m.userId == me ? m.name + " (вы)" : m.name);
-            n.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, rp));
-            n.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15.5f);
-            n.setSingleLine(true);
-            n.setEllipsize(TextUtils.TruncateAt.END);
-            r.addView(n, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
-            TextView role = new TextView(ctx);
-            role.setText(m.role);
-            role.setTextColor(m.roleId == PrizmaSocial.ROLE_HEAD ? clan.color : Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-            role.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13.5f);
-            r.addView(role, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-            r.setOnClickListener(x -> {
-                if (u == null) return;
-                if (ref[0] != null) ref[0].dismiss();
-                Bundle args = new Bundle();
-                args.putLong("user_id", m.userId);
-                fragment.presentFragment(new ProfileActivity(args));
-            });
-            boolean canManage = m.userId != me && (clan.myRole == PrizmaSocial.ROLE_HEAD
-                    || clan.myRole == PrizmaSocial.ROLE_OFFICER && m.roleId == PrizmaSocial.ROLE_MEMBER);
-            if (canManage) {
-                r.setOnLongClickListener(x -> {
-                    manageMember(fragment, account, clan, m, reopen);
-                    return true;
-                });
-            }
-            v.addView(r);
-        }
-        if (clan.myRole >= PrizmaSocial.ROLE_OFFICER) {
-            TextView hint = new TextView(ctx);
-            hint.setText("Долгое нажатие на участника — роль или исключить");
-            hint.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-            hint.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-            v.addView(hint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 4, 20, 0));
-        }
-
-        if (clan.myRole >= PrizmaSocial.ROLE_OFFICER) {
-            TextView invite = button(ctx, "Пригласить в клан", false, rp);
-            invite.setOnClickListener(x -> PrizmaClans.invite(account, clan.id, (link, err) -> {
-                if (link == null) {
-                    toast(err);
-                    return;
-                }
-                String text = "Вступай в мой клан «" + clan.name + "» [" + clan.tag + "] в Libre: " + link;
-                try {
-                    Intent send = new Intent(Intent.ACTION_SEND);
-                    send.setType("text/plain");
-                    send.putExtra(Intent.EXTRA_TEXT, text);
-                    ctx.startActivity(Intent.createChooser(send, "Приглашение в клан"));
-                } catch (Throwable e) {
-                    AndroidUtilities.addToClipboard(text);
-                    toast("Ссылка-приглашение скопирована");
-                }
-            }));
-            v.addView(invite, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 20, 16, 20, 0));
-        }
-        if (clan.mine) {
-            final boolean isHead = clan.myRole == PrizmaSocial.ROLE_HEAD;
-            TextView leave = button(ctx, "Выйти из клана", true, rp);
-            leave.setOnClickListener(x -> new AlertDialog.Builder(ctx, rp)
-                    .setTitle("Выйти из клана?")
-                    .setMessage(isHead && clan.members > 1 ? "Главой станет офицер или самый давний участник." : isHead ? "Вы последний участник — клан закроется." : "Вернуться можно будет по приглашению.")
-                    .setPositiveButton("Выйти", (d, w) -> PrizmaClans.leave(account, e -> {
-                        toast(e);
-                        if (e != null) return;
-                        if (ref[0] != null) ref[0].dismiss();
-                        if (onChanged != null) onChanged.run();
-                    }))
-                    .setNegativeButton("Отмена", null)
-                    .makeRed(AlertDialog.BUTTON_POSITIVE)
-                    .show());
-            v.addView(leave, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 20, 6, 20, 0));
-            if (isHead) {
-                TextView disband = button(ctx, "Распустить клан", true, rp);
-                disband.setOnClickListener(x -> new AlertDialog.Builder(ctx, rp)
-                        .setTitle("Распустить клан?")
-                        .setMessage("Клан «" + clan.name + "» исчезнет вместе с участниками, стеной и рейтингом.")
-                        .setPositiveButton("Распустить", (d, w) -> PrizmaClans.disband(account, clan.id, e -> {
-                            toast(e);
-                            if (e != null) return;
-                            if (ref[0] != null) ref[0].dismiss();
-                            if (onChanged != null) onChanged.run();
-                        }))
-                        .setNegativeButton("Отмена", null)
-                        .makeRed(AlertDialog.BUTTON_POSITIVE)
-                        .show());
-                v.addView(disband, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 20, 0, 20, 0));
-            }
-        }
-
-        ScrollView sv = new ScrollView(ctx) {
-            @Override
-            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec((int) (AndroidUtilities.displaySize.y * 0.8f), MeasureSpec.AT_MOST));
-            }
-        };
-        sv.setNestedScrollingEnabled(true);
-        sv.addView(v);
-        BottomSheet.Builder b = new BottomSheet.Builder(ctx, false, rp);
-        b.setCustomView(sv);
-        ref[0] = b.create();
-        ref[0].setCanDismissWithSwipe(false);
-        ref[0].show();
-    }
-
-    private static void manageMember(BaseFragment fragment, int account, PrizmaSocial.Clan clan, PrizmaSocial.Member m, Runnable reopen) {
+    public static void manageMember(BaseFragment fragment, int account, PrizmaSocial.Clan clan, PrizmaSocial.Member m, Runnable reopen) {
         final Context ctx = fragment.getParentActivity();
         ArrayList<CharSequence> rows = new ArrayList<>();
         ArrayList<Runnable> actions = new ArrayList<>();
@@ -379,97 +162,7 @@ public final class PrizmaClanSheet {
         else reopen.run();
     }
 
-    private static void showTop(BaseFragment fragment, int account, Runnable onChanged) {
-        PrizmaClans.top(account, (list, err) -> {
-            Context ctx = fragment.getParentActivity();
-            if (list == null || ctx == null) {
-                toast(err);
-                return;
-            }
-            Theme.ResourcesProvider rp = fragment.getResourceProvider();
-            final BottomSheet[] ref = new BottomSheet[1];
-            LinearLayout v = new LinearLayout(ctx);
-            v.setOrientation(LinearLayout.VERTICAL);
-            v.setPadding(0, AndroidUtilities.dp(18), 0, AndroidUtilities.dp(12));
-            TextView title = new TextView(ctx);
-            title.setText("Рейтинг кланов");
-            title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, rp));
-            title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 19);
-            title.setTypeface(AndroidUtilities.bold());
-            v.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 0, 20, 4));
-            TextView how = new TextView(ctx);
-            how.setText("Очки: 100 за участника, 10 за запись на стене клана, 1 за каждый лайк");
-            how.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-            how.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-            v.addView(how, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 0, 20, 10));
-            if (list.isEmpty()) {
-                TextView empty = new TextView(ctx);
-                empty.setText("Кланов пока нет — создайте первый");
-                empty.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-                empty.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-                empty.setGravity(Gravity.CENTER);
-                v.addView(empty, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 24, 20, 24));
-            }
-            int place = 0;
-            for (PrizmaSocial.Clan c : list) {
-                place++;
-                LinearLayout r = new LinearLayout(ctx);
-                r.setOrientation(LinearLayout.HORIZONTAL);
-                r.setGravity(Gravity.CENTER_VERTICAL);
-                r.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(8), AndroidUtilities.dp(20), AndroidUtilities.dp(8));
-                r.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector, rp), 2));
-                TextView pos = new TextView(ctx);
-                pos.setText(String.valueOf(place));
-                pos.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-                pos.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-                pos.setGravity(Gravity.CENTER);
-                r.addView(pos, LayoutHelper.createLinear(28, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 8, 0));
-                r.addView(emblem(ctx, c.tag, c.color, 38), LayoutHelper.createLinear(38, 38, Gravity.CENTER_VERTICAL, 0, 0, 12, 0));
-                LinearLayout texts = new LinearLayout(ctx);
-                texts.setOrientation(LinearLayout.VERTICAL);
-                TextView n = new TextView(ctx);
-                n.setText(c.name);
-                n.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, rp));
-                n.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15.5f);
-                n.setTypeface(AndroidUtilities.bold());
-                n.setSingleLine(true);
-                n.setEllipsize(TextUtils.TruncateAt.END);
-                texts.addView(n);
-                TextView s = new TextView(ctx);
-                s.setText("[" + c.tag + "] · " + c.members + " " + PrizmaSocial.plural(c.members, "участник", "участника", "участников"));
-                s.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, rp));
-                s.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-                texts.addView(s);
-                r.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
-                TextView pts = new TextView(ctx);
-                pts.setText(PrizmaProfileCard.formatNumber(c.rating));
-                pts.setTextColor(c.color);
-                pts.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-                pts.setTypeface(AndroidUtilities.bold());
-                r.addView(pts, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-                r.setOnClickListener(x -> {
-                    if (ref[0] != null) ref[0].dismiss();
-                    showClan(fragment, account, c.id, onChanged);
-                });
-                v.addView(r);
-            }
-            ScrollView sv = new ScrollView(ctx) {
-                @Override
-                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec((int) (AndroidUtilities.displaySize.y * 0.75f), MeasureSpec.AT_MOST));
-                }
-            };
-            sv.setNestedScrollingEnabled(true);
-            sv.addView(v);
-            BottomSheet.Builder b = new BottomSheet.Builder(ctx, false, rp);
-            b.setCustomView(sv);
-            ref[0] = b.create();
-            ref[0].setCanDismissWithSwipe(false);
-            ref[0].show();
-        });
-    }
-
-    private static void showCreate(BaseFragment fragment, int account, Runnable onChanged) {
+    public static void showCreate(BaseFragment fragment, int account, Runnable onChanged) {
         final Context ctx = fragment.getParentActivity();
         final Theme.ResourcesProvider rp = fragment.getResourceProvider();
         LinearLayout v = new LinearLayout(ctx);
@@ -549,13 +242,13 @@ public final class PrizmaClanSheet {
                     }
                     dialog.dismiss();
                     if (onChanged != null) onChanged.run();
-                    render(fragment, account, clan, onChanged);
+                    showClan(fragment, account, clan.id, onChanged);
                 });
             });
         }
     }
 
-    static FrameLayout emblem(Context ctx, String tag, int color, int sizeDp) {
+    public static FrameLayout emblem(Context ctx, String tag, int color, int sizeDp) {
         FrameLayout f = new FrameLayout(ctx);
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(AndroidUtilities.dp(sizeDp * 0.28f));

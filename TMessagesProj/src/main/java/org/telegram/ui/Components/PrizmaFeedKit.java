@@ -149,7 +149,7 @@ public final class PrizmaFeedKit {
         }
         final ArrayList<TLRPC.Chat> chatsCopy = new ArrayList<>(chats);
         final int now = (int) (System.currentTimeMillis() / 1000);
-        org.telegram.messenger.Utilities.globalQueue.postRunnable(() -> {
+        org.telegram.messenger.PrizmaJobs.disk(() -> {
             try {
                 org.telegram.tgnet.SerializedData data = new org.telegram.tgnet.SerializedData(false);
                 data.writeInt32(2);
@@ -178,7 +178,7 @@ public final class PrizmaFeedKit {
     }
 
     public static void loadCache(int account, String mode, org.telegram.messenger.Utilities.Callback<Cached> done) {
-        org.telegram.messenger.Utilities.globalQueue.postRunnable(() -> {
+        org.telegram.messenger.PrizmaJobs.disk(() -> {
             Cached out = null;
             try {
                 java.io.File f = cacheFile(account, mode);

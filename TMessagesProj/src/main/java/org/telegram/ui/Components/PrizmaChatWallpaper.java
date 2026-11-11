@@ -69,6 +69,7 @@ public class PrizmaChatWallpaper {
                 }
                 final String path = dst.getAbsolutePath();
                 final boolean video = isVideo;
+                if (!video) org.telegram.messenger.PrizmaExif.normalize(path);
                 AndroidUtilities.runOnUIThread(() -> {
                     String old = PrizmaConfig.chatWallpaperPath();
                     PrizmaConfig.setChatWallpaperPath(path);

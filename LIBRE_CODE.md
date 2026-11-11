@@ -57,7 +57,7 @@
 | `PrizmaEqualizerSheet` | Экран эквалайзера |
 | `PrizmaLyricsSheet` | Экран текста песни |
 | `PrizmaMusicSearchSheet` | Поиск музыки по Telegram |
-| `PrizmaTogether`, `PrizmaTogetherBar` | «Слушать вместе» |
+| `PrizmaTogether` | «Слушать вместе»: статус эфира показывают мини-плеер и большой плеер |
 | `PrizmaNowPlayingIsland` | Плашка «сейчас играет» |
 | `PrizmaGifts`, `PrizmaGiftsSheet`, `PrizmaGiftCard`, `PrizmaGiftTransfer`, `PrizmaCraftPicker` | Витрина подарков, Libre-NFT, передача, крафт |
 | `PrizmaBanner` | Баннер профиля |
@@ -113,3 +113,17 @@
 - `PrizmaAi`, `PrizmaAiSheet`, `PrizmaAiPill`: Gemini Nano на телефоне через ML Kit.
 - `PrizmaCapture`, `PrizmaZoomSlider`: пропорции фото, тишина при записи, зум кружков.
 - `PrizmaLinks`, `PrizmaAdBlock`, `PrizmaWidgetStrip`: чистка ссылок, блок рекламы, курсы и погода.
+
+## 1.2.4
+
+- `PrizmaOffline`: треки на телефоне для прослушивания без интернета (кнопка в плейлисте и в меню плеера).
+- `PrizmaPublicPlaylistSheet`, `PrizmaCloud.hostTracks`: плейлисты в профиле — треки без публичного канала хранятся на сервере Libre (`PUT /v1/track/{doc}`, папка `media/t`).
+- `PrizmaPlaylist.repair`, `buildAligned`: восстановление треков, сохранённых без файла.
+- `Components/PrizmaMedal`: объёмная медаль достижения и герб клана, вращается пальцем.
+- `PrizmaClanActivity`: полноэкранный клан — герб, уровень, участники по ролям, рейтинг.
+- `Components/PrizmaGlassBar`: общая стеклянная шапка для экранов на `PrizmaGlassFrame` (настройки Libre, история, клан).
+- `PrizmaZoomSlider`: горизонтальная шкала зума под кружком; запись кружков в 512 пикселей (`PrizmaConfig.roundHd`).
+- `PrizmaSendErrors`: причина неудачной отправки сообщением на экране.
+- `PrizmaJobs`: свои очереди для сети, тяжёлых задач и диска вместо общей очереди Telegram.
+- `PrizmaBitmaps`, `PrizmaExif.normalize`: общий декодер картинок, учёт поворота снимка для баннера, обоев и стены.
+- Сервер: таблица `tracks`, поиск текста песен с очисткой названия.

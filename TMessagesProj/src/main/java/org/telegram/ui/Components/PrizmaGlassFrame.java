@@ -40,6 +40,7 @@ public class PrizmaGlassFrame extends FrameLayout {
         final Paint tint = new Paint(Paint.ANTI_ALIAS_FLAG);
         int maskFor, tintFor, rimFor;
         final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final Outline outline = new Outline();
 
         Pane(View view, float radius, int kind) {
             this.view = view;
@@ -59,10 +60,20 @@ public class PrizmaGlassFrame extends FrameLayout {
     private final float[] point = new float[2];
     private static boolean lensBroken;
     private int liquidTint;
+    private int baseColor;
 
     public void setLiquidTint(int color) {
         liquidTint = color;
         invalidate();
+    }
+
+    public void setBaseColor(int color) {
+        baseColor = color;
+        invalidate();
+    }
+
+    private int base() {
+        return baseColor != 0 ? baseColor : Theme.getColor(Theme.key_windowBackgroundWhite);
     }
     private final ViewTreeObserver.OnPreDrawListener watcher = () -> {
         if (source != null && source.isDirty()) invalidate();
@@ -102,7 +113,7 @@ public class PrizmaGlassFrame extends FrameLayout {
     }
 
     private boolean dark() {
-        int c = Theme.getColor(Theme.key_windowBackgroundWhite);
+        int c = base();
         return (0.299 * ((c >> 16) & 0xff) + 0.587 * ((c >> 8) & 0xff) + 0.114 * (c & 0xff)) < 128;
     }
 
@@ -175,13 +186,14 @@ public class PrizmaGlassFrame extends FrameLayout {
             node.setPosition(0, 0, getWidth(), getHeight());
             Canvas rc = node.beginRecording();
             rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
-            if (child.getAlpha() < 1f) {
+            rc.clipRect(0, 0, child.getWidth(), child.getHeight());
+            boolean layer = child.getAlpha() < 1f;
+            if (layer) {
                 rc.saveLayerAlpha(0, 0, child.getWidth(), child.getHeight(), (int) (255 * child.getAlpha()));
-                child.draw(rc);
-                rc.restore();
-            } else {
-                child.draw(rc);
             }
+            rc.translate(-child.getScrollX(), -child.getScrollY());
+            child.draw(rc);
+            if (layer) rc.restore();
             node.endRecording();
             canvas.drawRenderNode(node);
             return false;
@@ -219,11 +231,11 @@ public class PrizmaGlassFrame extends FrameLayout {
         float fade = AndroidUtilities.dpf2(bottom ? 22 : 34);
         float top = bottom ? t - fade : t;
         float H = h + fade;
-        int bg = Theme.getColor(Theme.key_windowBackgroundWhite);
+        int bg = base();
         boolean darkTheme = dark();
         canvas.save();
         canvas.translate(l, top);
-        int key = (int) H * 7 + (bottom ? 1 : 0) + (glass ? 2 : 0) + (darkTheme ? 4 : 0);
+        int key = ((int) H * 8 + (bottom ? 1 : 0) + (glass ? 2 : 0) + (darkTheme ? 4 : 0)) * 31 + bg;
         if (p.tintFor != key || p.tint.getShader() == null) {
             p.tintFor = key;
             float solidEnd = bottom ? fade / H : (h * 0.55f) / H;
@@ -268,7 +280,7 @@ public class PrizmaGlassFrame extends FrameLayout {
 
     private void drawLiquid(Canvas canvas, Pane p, boolean glass, float l, float t, float w, float h, float r, float alpha) {
         boolean darkTheme = dark();
-        int bg = Theme.getColor(Theme.key_windowBackgroundWhite);
+        int bg = base();
         int tint = liquidTint != 0 ? (glass ? liquidTint : Theme.multAlpha(liquidTint | 0xff000000, 0.3f)) : Theme.multAlpha(bg, glass ? (darkTheme ? 0.36f : 0.42f) : 0.95f);
         canvas.save();
         canvas.translate(l, t);
@@ -288,7 +300,7 @@ public class PrizmaGlassFrame extends FrameLayout {
                 float br = AndroidUtilities.dpf2(9);
                 blur.setRenderEffect(RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP));
             }
-            Outline outline = new Outline();
+            Outline outline = p.outline;
             outline.setRoundRect(0, 0, iw, ih, r);
             Canvas bc = blur.beginRecording();
             bc.translate(-l, -t);

@@ -3198,6 +3198,30 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         applyQueue(ordered);
     }
 
+    public void prizmaAppend(MessageObject mo) {
+        if (mo == null || playingMessageObject == null) {
+            return;
+        }
+        ArrayList<MessageObject> ordered = prizmaQueue();
+        for (int i = 0; i < ordered.size(); i++) {
+            MessageObject other = ordered.get(i);
+            if (other.getId() == mo.getId() && other.getDialogId() == mo.getDialogId()) {
+                return;
+            }
+        }
+        if (ordered.isEmpty()) {
+            return;
+        }
+        ordered.add(mo);
+        if (SharedConfig.shuffleMusic && !playlist.contains(mo)) {
+            playlist.add(mo);
+        }
+        if (!SharedConfig.shuffleMusic && !shuffledPlaylist.isEmpty() && !shuffledPlaylist.contains(mo)) {
+            shuffledPlaylist.add(mo);
+        }
+        applyQueue(ordered);
+    }
+
     public void prizmaSortQueue(java.util.Comparator<MessageObject> order) {
         ArrayList<MessageObject> ordered = prizmaQueue();
         if (ordered.size() < 3) {

@@ -60,6 +60,15 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
     private static final int MAX_RECOMMENDED = 16;
     private static final int PARALLEL = 10;
     private static final int PAGE = 20;
+    private static final long FIRST_PAGE_TTL = 4 * 60_000L;
+
+    private static final class FirstPage {
+        ArrayList<TLRPC.Message> messages;
+        boolean exhausted;
+        long at;
+    }
+
+    private static final HashMap<String, FirstPage> firstPages = new HashMap<>();
     private static final String FOR_YOU = "\u0000for_you";
     private static final String FOLLOWING = "\u0000following";
 
@@ -256,6 +265,11 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
         drawTabs();
         reload();
         return root;
+    }
+
+    @Override
+    public boolean isLightStatusBar() {
+        return androidx.core.graphics.ColorUtils.calculateLuminance(Theme.getColor(Theme.key_windowBackgroundWhite)) > 0.7f;
     }
 
     @Override
@@ -824,39 +838,62 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             req.limit = limit;
             Integer from = oldest.get(chat.id);
             req.offset_id = from == null ? 0 : from;
-            getConnectionsManager().sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            final boolean firstPage = from == null;
+            final String pageKey = currentAccount + ":" + chat.id;
+            FirstPage cached = firstPage && !manual ? firstPages.get(pageKey) : null;
+            if (cached != null && System.currentTimeMillis() - cached.at < FIRST_PAGE_TTL) {
+                onHistory(chat, cached.messages, cached.exhausted, gen, pump[0]);
+                return;
+            }
+            int id = getConnectionsManager().sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
                 if (gen != generation) return;
-                ArrayList<MessageObject> batch = new ArrayList<>();
                 if (res instanceof TLRPC.messages_Messages) {
                     TLRPC.messages_Messages m = (TLRPC.messages_Messages) res;
                     getMessagesController().putUsers(m.users, false);
                     getMessagesController().putChats(m.chats, false);
-                    int min = Integer.MAX_VALUE, minDate = Integer.MAX_VALUE;
-                    for (TLRPC.Message msg : m.messages) {
-                        min = Math.min(min, msg.id);
-                        minDate = Math.min(minDate, msg.date);
-                        if (msg instanceof TLRPC.TL_messageService) continue;
-                        batch.add(new MessageObject(currentAccount, msg, false, false));
+                    boolean end = m.messages.size() < req.limit;
+                    if (firstPage) {
+                        FirstPage page = new FirstPage();
+                        page.messages = m.messages;
+                        page.exhausted = end;
+                        page.at = System.currentTimeMillis();
+                        firstPages.put(pageKey, page);
                     }
-                    if (m.messages.size() < req.limit) exhausted.add(chat.id);
-                    if (min != Integer.MAX_VALUE) {
-                        oldest.put(chat.id, min);
-                        oldestDate.put(chat.id, minDate);
-                    }
+                    onHistory(chat, m.messages, end, gen, pump[0]);
                 } else {
-                    exhausted.add(chat.id);
-                }
-                collect(batch);
-                inflight--;
-                if (inflight <= 0) {
-                    inflight = 0;
-                    onWaveDone(gen);
-                } else {
-                    pump[0].run();
+                    onHistory(chat, null, true, gen, pump[0]);
                 }
             }));
+            getConnectionsManager().bindRequestToGuid(id, classGuid);
         };
         for (int i = 0; i < PARALLEL; i++) pump[0].run();
+    }
+
+    private void onHistory(TLRPC.Chat chat, ArrayList<TLRPC.Message> messages, boolean end, int gen, Runnable next) {
+        if (gen != generation) return;
+        ArrayList<MessageObject> batch = new ArrayList<>();
+        if (messages != null) {
+            int min = Integer.MAX_VALUE, minDate = Integer.MAX_VALUE;
+            for (TLRPC.Message msg : messages) {
+                min = Math.min(min, msg.id);
+                minDate = Math.min(minDate, msg.date);
+                if (msg instanceof TLRPC.TL_messageService) continue;
+                batch.add(new MessageObject(currentAccount, msg, false, false));
+            }
+            if (min != Integer.MAX_VALUE) {
+                oldest.put(chat.id, min);
+                oldestDate.put(chat.id, minDate);
+            }
+        }
+        if (end) exhausted.add(chat.id);
+        collect(batch);
+        inflight--;
+        if (inflight <= 0) {
+            inflight = 0;
+            onWaveDone(gen);
+        } else {
+            next.run();
+        }
     }
 
     private void collect(ArrayList<MessageObject> batch) {
@@ -900,8 +937,8 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             windowHours *= 2;
             loadMore();
         }
-        adapter.notifyItemChanged(posts.size());
         if (posts.isEmpty()) showState(false, "Новых постов нет. Нажмите на логотип, чтобы обновить");
+        else adapter.notifyItemChanged(posts.size());
     }
 
     private void publish(int gen) {
@@ -980,7 +1017,13 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
         if (next.isEmpty()) return;
         int start = posts.size();
         posts.addAll(next);
-        adapter.notifyItemRangeInserted(start, next.size());
+        if (start == 0) {
+            adapter.notifyDataSetChanged();
+            showState(false, null);
+            revealList();
+        } else {
+            adapter.notifyItemRangeInserted(start, next.size());
+        }
     }
 
     private static boolean isAd(String text) {
@@ -1111,7 +1154,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             return;
         }
         loading = true;
-        adapter.notifyItemChanged(posts.size());
+        if (!posts.isEmpty()) adapter.notifyItemChanged(posts.size());
         fetch(next, 6, generation);
     }
 
@@ -1145,7 +1188,8 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             int pos = posts.indexOf(group);
             if (pos >= 0) {
                 posts.remove(pos);
-                adapter.notifyItemRemoved(pos);
+                if (posts.isEmpty()) adapter.notifyDataSetChanged();
+                else adapter.notifyItemRemoved(pos);
             }
             BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, "Таких постов будет меньше").show();
         });
@@ -1162,12 +1206,20 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             items.add(joined ? "Перестать читать " + who : "Читать " + who);
             icons.add(joined ? R.drawable.msg_leave : R.drawable.msg_addcontact);
             actions.add(() -> {
-                if (joined) {
-                    getMessagesController().deleteParticipantFromChat(chatId, getUserConfig().getCurrentUser());
-                } else {
+                if (!joined) {
                     getMessagesController().addUserToChat(chatId, getUserConfig().getCurrentUser(), 0, null, this, null);
+                    adapter.notifyDataSetChanged();
+                    return;
                 }
-                adapter.notifyDataSetChanged();
+                new AlertDialog.Builder(context)
+                        .setTitle("Перестать читать?")
+                        .setMessage("Вы выйдете из канала " + who + ". В закрытый канал без приглашения вернуться не получится.")
+                        .setPositiveButton("Выйти", (d, w) -> {
+                            getMessagesController().deleteParticipantFromChat(chatId, getUserConfig().getCurrentUser());
+                            adapter.notifyDataSetChanged();
+                        })
+                        .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                        .show();
             });
         }
         items.add("Открыть в канале");
@@ -1332,7 +1384,6 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
                 String key = keys.get(i);
                 TextView t = new TextView(getContext());
                 t.setText(titles.get(i));
-                t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
                 t.setGravity(Gravity.CENTER);
                 t.setSingleLine(true);
                 t.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
@@ -1423,11 +1474,17 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             anim.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
             anim.addUpdateListener(a -> {
                 float t = (float) a.getAnimatedValue();
-                float lead = Math.min(1f, t * 1.35f), trail = Math.max(0f, Math.min(1f, t * 1.35f - 0.35f) / 0.65f);
+                float lead = Math.min(1f, t * 1.35f), trail = Math.max(0f, (t - 0.35f) / 0.65f);
                 left = AndroidUtilities.lerp(l0, tg[0], forward ? trail : lead);
                 right = AndroidUtilities.lerp(r0, tg[1], forward ? lead : trail);
                 row.invalidate();
                 root.invalidate();
+            });
+            anim.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(android.animation.Animator animation) {
+                    if (anim == animation) snapIndicator();
+                }
             });
             anim.start();
         }
@@ -1437,6 +1494,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
         private final LinearLayout faces;
         private final TextView label;
         private Runnable action;
+        private boolean shown;
 
         Pill(Context context) {
             super(context);
@@ -1476,19 +1534,27 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
                 faces.addView(a, LayoutHelper.createLinear(26, 26, i == 0 ? 0 : -8, 0, 0, 0));
             }
             faces.setVisibility(chats.isEmpty() ? GONE : VISIBLE);
-            if (getVisibility() == VISIBLE) return;
-            setVisibility(VISIBLE);
-            setAlpha(0f);
-            setScaleX(0.7f);
-            setScaleY(0.7f);
+            if (shown) return;
+            shown = true;
+            animate().cancel();
+            if (getVisibility() != VISIBLE) {
+                setVisibility(VISIBLE);
+                setAlpha(0f);
+                setScaleX(0.7f);
+                setScaleY(0.7f);
+            }
             animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK)
                     .setUpdateListener(a -> root.invalidate()).start();
         }
 
         void hide() {
-            if (getVisibility() != VISIBLE) return;
+            if (!shown) return;
+            shown = false;
+            animate().cancel();
             animate().alpha(0f).scaleX(0.8f).scaleY(0.8f).setDuration(200).setUpdateListener(a -> root.invalidate())
-                    .withEndAction(() -> setVisibility(GONE)).start();
+                    .withEndAction(() -> {
+                        if (!shown) setVisibility(GONE);
+                    }).start();
         }
     }
 }

@@ -11,21 +11,44 @@ import java.io.FileOutputStream;
 
 public final class PrizmaCapture {
     private static final int[] STREAMS = {AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_RING, AudioManager.STREAM_SYSTEM};
-    private static boolean quiet;
+    private static int muted;
 
     private PrizmaCapture() {
     }
 
+    private static android.content.SharedPreferences prefs() {
+        return ApplicationLoader.applicationContext.getSharedPreferences("libre_capture", Context.MODE_PRIVATE);
+    }
+
     public static void quiet(boolean on) {
-        if (on && !PrizmaConfig.muteSystemOnRecord() || on == quiet) return;
-        quiet = on;
+        if (on ? !PrizmaConfig.muteSystemOnRecord() || muted != 0 : muted == 0) return;
         try {
             AudioManager am = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
-            for (int stream : STREAMS) {
+            int mask = 0;
+            for (int i = 0; i < STREAMS.length; i++) {
                 try {
-                    am.adjustStreamVolume(stream, on ? AudioManager.ADJUST_MUTE : AudioManager.ADJUST_UNMUTE, 0);
+                    if (on) {
+                        if (am.isStreamMute(STREAMS[i])) continue;
+                        am.adjustStreamVolume(STREAMS[i], AudioManager.ADJUST_MUTE, 0);
+                        mask |= 1 << i;
+                    } else if ((muted & (1 << i)) != 0) {
+                        am.adjustStreamVolume(STREAMS[i], AudioManager.ADJUST_UNMUTE, 0);
+                    }
                 } catch (Throwable ignore) {
                 }
+            }
+            muted = mask;
+            prefs().edit().putInt("muted", mask).apply();
+        } catch (Throwable ignore) {
+        }
+    }
+
+    public static void recover() {
+        try {
+            int left = prefs().getInt("muted", 0);
+            if (left != 0 && muted == 0) {
+                muted = left;
+                quiet(false);
             }
         } catch (Throwable ignore) {
         }

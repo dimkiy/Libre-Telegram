@@ -24,6 +24,9 @@ WALL_PHOTOS = os.path.join(DATA, "media", "w")
 BACKUPS = os.path.join(DATA, "backup")
 CLIPS = os.path.join(DATA, "media", "c")
 CLIP_MAX = 40 * 1024 * 1024
+TRACKS = os.path.join(DATA, "media", "t")
+MAX_TRACK = 16 * 1024 * 1024
+TRACKS_PER_USER = int(os.environ.get("TRACKS_USER_MB", "600")) * 1024 * 1024
 CLIPS_TOTAL = int(os.environ.get("CLIPS_MAX_MB", "4096")) * 1024 * 1024
 MAX_BANNER = 16 * 1024 * 1024
 TOKEN_TTL = 180 * 86400
@@ -178,6 +181,14 @@ ensure_column("users", "wear", "TEXT")
 ensure_column("users", "anon", "TEXT")
 
 db.executescript("""
+CREATE TABLE IF NOT EXISTS tracks (
+    doc      INTEGER PRIMARY KEY,
+    user     INTEGER NOT NULL,
+    file     TEXT NOT NULL,
+    size     INTEGER NOT NULL,
+    created  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tracks_user ON tracks(user);
 CREATE TABLE IF NOT EXISTS relay (
     doc      INTEGER PRIMARY KEY,
     src      TEXT NOT NULL,
@@ -554,6 +565,7 @@ async def delete_me(request: web.Request):
     db.execute("DELETE FROM showcases WHERE user_id=?", (uid,))
     db.execute("DELETE FROM cards WHERE from_id=? OR to_id=?", (uid, uid))
     db.execute("DELETE FROM public_playlists WHERE user_id=?", (uid,))
+    forget_tracks(uid, set())
     db.execute("DELETE FROM relay_wait WHERE user=?", (uid,))
     db.execute("DELETE FROM nft_numbers WHERE owner=?", (uid,))
     leave_clan(uid)
@@ -1351,6 +1363,65 @@ async def invite_page(request):
 MAX_PLAYLIST = 3 * 1024 * 1024
 
 
+def audio_kind(data: bytes):
+    if data[:3] == b"ID3" or (len(data) > 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0):
+        return "mp3"
+    if data[4:8] == b"ftyp":
+        return "m4a"
+    if data[:4] == b"OggS":
+        return "ogg"
+    if data[:4] == b"fLaC":
+        return "flac"
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return "wav"
+    return None
+
+
+def forget_tracks(uid, keep):
+    for doc, name in db.execute("SELECT doc, file FROM tracks WHERE user=?", (uid,)).fetchall():
+        if doc in keep:
+            continue
+        try:
+            os.remove(os.path.join(TRACKS, name))
+        except OSError:
+            pass
+        db.execute("DELETE FROM tracks WHERE doc=?", (doc,))
+
+
+@need_user
+async def put_track(request: web.Request):
+    uid = request["uid"]
+    doc = int_arg(request, "doc")
+    if not doc:
+        return web.json_response({"error": "bad request"}, status=400)
+    if limited(("track", uid), 60):
+        return web.json_response({"error": "slow down"}, status=429)
+    row = db.execute("SELECT payload FROM public_playlists WHERE user_id=?", (uid,)).fetchone()
+    listed = row and any(isinstance(t, dict) and int_or0(t.get("doc")) == doc for t in json.loads(row[0]))
+    if not listed:
+        return web.json_response({"error": "not in playlist"}, status=404)
+    have = db.execute("SELECT file FROM tracks WHERE doc=?", (doc,)).fetchone()
+    if have and os.path.exists(os.path.join(TRACKS, have[0])):
+        return web.json_response({"ok": True})
+    data = await request.read()
+    if not data or len(data) > MAX_TRACK:
+        return web.json_response({"error": "too big"}, status=413)
+    ext = audio_kind(data)
+    if not ext:
+        return web.json_response({"error": "not audio"}, status=415)
+    used = db.execute("SELECT COALESCE(SUM(size), 0) FROM tracks WHERE user=?", (uid,)).fetchone()[0]
+    if used + len(data) > TRACKS_PER_USER:
+        return web.json_response({"error": "quota"}, status=507)
+    os.makedirs(TRACKS, exist_ok=True)
+    name = f"{secrets.token_hex(12)}.{ext}"
+    tmp = os.path.join(TRACKS, name + ".part")
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, os.path.join(TRACKS, name))
+    db.execute("INSERT OR REPLACE INTO tracks(doc, user, file, size, created) VALUES(?, ?, ?, ?, ?)", (doc, uid, name, len(data), now()))
+    return web.json_response({"ok": True})
+
+
 @need_user
 async def put_playlist(request: web.Request):
     uid = request["uid"]
@@ -1368,16 +1439,23 @@ async def put_playlist(request: web.Request):
     except Exception:
         return web.json_response({"error": "bad request"}, status=400)
     need = []
+    upload = []
+    docs = set()
     for t in tracks:
         if not isinstance(t, dict):
             continue
+        t.pop("url", None)
         if not SOURCE.fullmatch(str(t.get("src") or "")):
             t.pop("src", None)
         doc, size = int_or0(t.get("doc")), int_or0(t.get("size"))
+        if doc:
+            docs.add(doc)
         if t.get("src") or not doc:
             continue
         if db.execute("SELECT 1 FROM relay WHERE doc=?", (doc,)).fetchone():
             continue
+        if not db.execute("SELECT 1 FROM tracks WHERE doc=?", (doc,)).fetchone() and 0 < size <= MAX_TRACK and len(upload) < 200:
+            upload.append(doc)
         if MUSIC_CHANNEL and size > 0 and len(need) < 100:
             db.execute("INSERT OR REPLACE INTO relay_wait(user, size, doc, created) VALUES(?, ?, ?, ?)", (uid, size, doc, now()))
             need.append(doc)
@@ -1385,12 +1463,14 @@ async def put_playlist(request: web.Request):
     db.execute("""INSERT INTO public_playlists(user_id, name, count, payload, ver) VALUES(?, ?, ?, ?, 1)
                   ON CONFLICT(user_id) DO UPDATE SET name=excluded.name, count=excluded.count, payload=excluded.payload,
                   ver=public_playlists.ver+1""", (uid, name, len(tracks), payload))
-    return web.json_response({"ok": True, "need": need})
+    forget_tracks(uid, docs)
+    return web.json_response({"ok": True, "need": need, "upload": upload})
 
 
 @need_user
 async def delete_playlist(request: web.Request):
     db.execute("DELETE FROM public_playlists WHERE user_id=?", (request["uid"],))
+    forget_tracks(request["uid"], set())
     return web.json_response({"ok": True})
 
 
@@ -1405,6 +1485,10 @@ async def get_playlist(request: web.Request):
             r = db.execute("SELECT src FROM relay WHERE doc=?", (int_or0(t.get("doc")),)).fetchone()
             if r:
                 t["src"] = r[0]
+                continue
+            hosted = db.execute("SELECT file FROM tracks WHERE doc=?", (int_or0(t.get("doc")),)).fetchone()
+            if hosted:
+                t["url"] = f"{PUBLIC_URL}/media/t/{hosted[0]}"
     return web.json_response({"name": row[0], "count": row[1], "tracks": tracks, "ver": row[3]})
 
 
@@ -1894,18 +1978,36 @@ async def get_clip(request: web.Request):
         return clip_reply(name, exact)
 
 
+LYRICS_NOISE = re.compile(r"[\(\[][^\)\]]*(official|video|audio|lyric|remaster|feat|prod|explicit|hq|hd)[^\)\]]*[\)\]]", re.I)
+
+
+def has_lyrics(row):
+    return isinstance(row, dict) and (row.get("syncedLyrics") or row.get("plainLyrics") or row.get("instrumental"))
+
+
 async def find_lyrics(artist, title, duration):
     base = "https://lrclib.net/api"
-    params = {"track_name": title, "artist_name": artist}
-    if duration > 0:
-        params["duration"] = duration
-    data = await side_json(f"{base}/get", params)
-    if isinstance(data, dict) and (data.get("syncedLyrics") or data.get("plainLyrics") or data.get("instrumental")):
-        return data
-    rows = await side_json(f"{base}/search", {"q": f"{title} {artist}"})
-    for row in rows if isinstance(rows, list) else []:
-        if row.get("syncedLyrics") or row.get("plainLyrics") or row.get("instrumental"):
-            return row
+    plain = LYRICS_NOISE.sub("", title).strip() or title
+    for name in dict.fromkeys([title, plain]):
+        params = {"track_name": name, "artist_name": artist}
+        if duration > 0:
+            params["duration"] = duration
+        data = await side_json(f"{base}/get", params)
+        if has_lyrics(data):
+            return data
+    for query in dict.fromkeys([f"{plain} {artist}".strip(), plain]):
+        rows = await side_json(f"{base}/search", {"q": query})
+        fallback = None
+        for row in rows if isinstance(rows, list) else []:
+            if not has_lyrics(row):
+                continue
+            length = row.get("duration") or 0
+            if duration <= 0 or not length or abs(length - duration) <= 3:
+                return row
+            if fallback is None and abs(length - duration) <= 12:
+                fallback = row
+        if fallback:
+            return fallback
     return None
 
 
@@ -2016,6 +2118,7 @@ def main():
     app.router.add_delete("/v1/clan/{id}", clan_disband)
     app.router.add_get("/c/{code}", invite_page)
     app.router.add_put("/v1/playlist", put_playlist)
+    app.router.add_put("/v1/track/{doc}", put_track)
     app.router.add_delete("/v1/playlist", delete_playlist)
     app.router.add_get("/v1/playlist/{id}", get_playlist)
     app.router.add_put("/v1/backup", put_backup)

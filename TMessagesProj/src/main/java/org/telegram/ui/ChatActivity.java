@@ -723,7 +723,6 @@ public class ChatActivity extends BaseFragment implements
 
     public String quickReplyShortcut;
     private int chatMode;
-    private org.telegram.ui.Components.PrizmaTogetherBar prizmaTogetherBar;
     private org.telegram.ui.Components.PrizmaCalcChip prizmaCalcChip;
     private int scheduledMessagesCount = -1;
     public boolean isSubscriberSuggestions;
@@ -7234,9 +7233,7 @@ public class ChatActivity extends BaseFragment implements
             contentView.addView(sideControlsButtonsLayout, indexToAdd, LayoutHelper.createFrame(57, 300, Gravity.RIGHT | Gravity.BOTTOM));
         }
         if (chatMode == 0) {
-            prizmaTogetherBar = new org.telegram.ui.Components.PrizmaTogetherBar(context, this);
             final int indexToAdd = chatActivityFadeView != null ? contentView.indexOfChild(chatActivityFadeView) : -1;
-            contentView.addView(prizmaTogetherBar, indexToAdd, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 62, 0, 62, 0));
             prizmaCalcChip = new org.telegram.ui.Components.PrizmaCalcChip(context, themeDelegate, text -> {
                 if (chatActivityEnterView != null) {
                     chatActivityEnterView.setFieldText(text);
@@ -11483,9 +11480,6 @@ public class ChatActivity extends BaseFragment implements
                 - getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
                 - dp(ChatInputViewsContainer.INPUT_BUBBLE_BOTTOM + 4);
             sideControlsButtonsLayout.setTranslationY(baseTranslationY2);
-            if (prizmaTogetherBar != null) {
-                prizmaTogetherBar.setTranslationY(baseTranslationY2 - dp(4));
-            }
             if (prizmaCalcChip != null) {
                 prizmaCalcChip.setTranslationY(baseTranslationY2 - dp(6));
             }

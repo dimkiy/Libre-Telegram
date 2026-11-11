@@ -106,6 +106,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
     private PrizmaSeekBars seek;
     private LinearLayout seekRow;
     private TextView timeCur, timeDur;
+    private int shownSecond = -1;
     private DotIcon shuffleButton, repeatButton;
     private PillButton prevButton, playButton, nextButton;
     private PlayPauseDrawable playPause;
@@ -205,6 +206,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         seek.listener = (progress, committed) -> {
             MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
             if (mo == null) return;
+            shownSecond = -1;
             timeCur.setText(formatTime((int) (mo.getDuration() * progress)));
             if (committed) MediaController.getInstance().seekToProgress(mo, progress);
         };
@@ -292,11 +294,8 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         togetherBar = new LinearLayout(ctx);
         togetherBar.setOrientation(LinearLayout.HORIZONTAL);
         togetherBar.setGravity(Gravity.CENTER_VERTICAL);
-        togetherBar.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(AndroidUtilities.dp(18));
-        bg.setColor(0x1fffffff);
-        togetherBar.setBackground(bg);
+        togetherBar.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(9), AndroidUtilities.dp(9), AndroidUtilities.dp(9));
+        togetherBar.setBackground(PrizmaShape.fill(0x1fffffff, AndroidUtilities.dp(20)));
         LinearLayout texts = new LinearLayout(ctx);
         texts.setOrientation(LinearLayout.VERTICAL);
         togetherEyebrow = new TextView(ctx);
@@ -315,10 +314,8 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         togetherButton.setTextSize(13);
         togetherButton.setTypeface(AndroidUtilities.bold());
         togetherButton.setPadding(AndroidUtilities.dp(13), AndroidUtilities.dp(6), AndroidUtilities.dp(13), AndroidUtilities.dp(6));
-        GradientDrawable button = new GradientDrawable();
-        button.setCornerRadius(AndroidUtilities.dp(14));
-        button.setColor(0x33ffffff);
-        togetherButton.setBackground(button);
+        togetherButton.setBackground(PrizmaShape.fill(0x33ffffff, AndroidUtilities.dp(14)));
+        PrizmaGlass.pressable(togetherButton);
         togetherButton.setOnClickListener(v -> {
             PrizmaTogether t = PrizmaTogether.get();
             if (t.isHosting()) {
@@ -797,7 +794,10 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         clipView.setPaused(paused);
         if (!seek.isDragging()) {
             seek.setValue(mo.audioProgress);
-            timeCur.setText(formatTime(mo.audioProgressSec));
+            if (shownSecond != mo.audioProgressSec) {
+                shownSecond = mo.audioProgressSec;
+                timeCur.setText(formatTime(shownSecond));
+            }
         }
         float speed = MediaController.getInstance().getPlaybackSpeed(true);
         String label = formatSpeed(speed) + "x";
@@ -1135,6 +1135,12 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
             popup.item(R.drawable.msg_forward, "Переслать", () -> forward(mo));
             popup.item(R.drawable.msg_share, "Поделиться", () -> share(mo));
             popup.item(R.drawable.msg_download, "Сохранить в Музыку", () -> saveToMusic(mo));
+            if (org.telegram.messenger.PrizmaOffline.has(mo)) {
+                popup.item(R.drawable.msg_delete, "Удалить с телефона", () -> org.telegram.messenger.PrizmaOffline.remove(mo));
+            } else {
+                popup.item(R.drawable.msg_download, "Скачать для офлайна", () -> org.telegram.messenger.PrizmaOffline.save(mo.currentAccount, mo, ok ->
+                        Toast.makeText(ctx, ok ? "Трек сохранён на телефоне — играет без интернета" : "Не получилось скачать трек", Toast.LENGTH_SHORT).show()));
+            }
             popup.item(R.drawable.msg_openin, "Открыть в чате", () -> openInChat(mo));
         }
         popup.item(R.drawable.prizma_ic_music, "Моя музыка", () -> PrizmaPlaylistSheet.show(ctx));

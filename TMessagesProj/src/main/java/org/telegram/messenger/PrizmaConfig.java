@@ -817,12 +817,12 @@ public class PrizmaConfig {
         done(edit().putBoolean("round_zoom_slider", v));
     }
 
-    public static boolean wideStart() {
-        return getBool("wide_start", false);
+    public static boolean roundHd() {
+        return getBool("round_hd", true);
     }
 
-    public static void setWideStart(boolean v) {
-        done(edit().putBoolean("wide_start", v));
+    public static void setRoundHd(boolean v) {
+        done(edit().putBoolean("round_hd", v));
     }
 
     public static boolean stereoVoice() {

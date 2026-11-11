@@ -19,23 +19,24 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.ActionBar;
-import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.PrizmaGlassBar;
+import org.telegram.ui.Components.PrizmaGlassFrame;
 import org.telegram.ui.Components.PrizmaShape;
 
 import java.util.ArrayList;
 
 public class PrizmaHistoryActivity extends BaseFragment {
-    private static final int CLEAR = 1;
+    private static final int PAGE = 60;
 
     private final long dialogId;
     private LinearLayout column;
     private TextView empty;
+    private int loadRequest;
 
     public PrizmaHistoryActivity(long dialogId) {
         this.dialogId = dialogId;
@@ -43,31 +44,24 @@ public class PrizmaHistoryActivity extends BaseFragment {
 
     @Override
     public View createView(Context context) {
-        actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle("Удалённые и правки");
-        actionBar.setSubtitle(dialogName());
-        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
-            @Override
-            public void onItemClick(int id) {
-                if (id == -1) {
-                    finishFragment();
-                } else if (id == CLEAR) {
-                    askClear(context);
-                }
-            }
-        });
-        ActionBarMenu menu = actionBar.createMenu();
-        menu.addItem(CLEAR, R.drawable.msg_delete);
+        actionBar.setAddToContainer(false);
 
-        FrameLayout root = new FrameLayout(context);
+        PrizmaGlassFrame root = new PrizmaGlassFrame(context);
         root.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
+        root.setBaseColor(Theme.getColor(Theme.key_windowBackgroundGray));
         ScrollView scroll = new ScrollView(context);
+        scroll.setClipToPadding(false);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(24));
+        column.setPadding(AndroidUtilities.dp(12), PrizmaGlassBar.height() + AndroidUtilities.dp(6), AndroidUtilities.dp(12), AndroidUtilities.dp(24));
         scroll.addView(column);
         root.addView(scroll, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        PrizmaGlassBar bar = new PrizmaGlassBar(context, root, "Удалённые и правки", this::finishFragment);
+        bar.setSubtitle(dialogName());
+        bar.addAction(R.drawable.msg_delete, "Очистить историю", () -> askClear(context));
+        bar.follow(scroll);
 
         empty = new TextView(context);
         empty.setText("Здесь появятся удалённые сообщения и старые версии правок.\nОни хранятся только на этом телефоне и не пропадают после очистки кэша.");
@@ -92,22 +86,58 @@ public class PrizmaHistoryActivity extends BaseFragment {
         return c != null ? c.title : null;
     }
 
+    @Override
+    public boolean isLightStatusBar() {
+        return PrizmaGlassBar.lightStatusBar(Theme.getColor(Theme.key_windowBackgroundGray));
+    }
+
+    private static final class Row {
+        PrizmaHistory.Entry entry;
+        CharSequence text;
+    }
+
     private void load(Context context) {
+        final int request = ++loadRequest;
         Utilities.globalQueue.postRunnable(() -> {
             ArrayList<PrizmaHistory.Entry> list = PrizmaHistory.list(currentAccount, dialogId);
-            AndroidUtilities.runOnUIThread(() -> show(context, list));
+            ArrayList<Row> rows = new ArrayList<>(list.size());
+            for (PrizmaHistory.Entry e : list) {
+                Row row = new Row();
+                row.entry = e;
+                row.text = text(e.message);
+                rows.add(row);
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                if (request == loadRequest && fragmentView != null && !isFinishing()) show(context, rows, 0);
+            });
         });
     }
 
-    private void show(Context context, ArrayList<PrizmaHistory.Entry> list) {
-        column.removeAllViews();
-        empty.setVisibility(list.isEmpty() ? View.VISIBLE : View.GONE);
-        for (PrizmaHistory.Entry e : list) {
-            column.addView(card(context, e), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
+    private void show(Context context, ArrayList<Row> rows, int from) {
+        if (from == 0) column.removeAllViews();
+        empty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
+        int to = Math.min(rows.size(), from + PAGE);
+        for (int i = from; i < to; i++) {
+            column.addView(card(context, rows.get(i)), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
+        }
+        if (to < rows.size()) {
+            TextView more = new TextView(context);
+            more.setText("Показать ещё " + Math.min(PAGE, rows.size() - to));
+            more.setGravity(Gravity.CENTER);
+            more.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+            more.setTypeface(AndroidUtilities.bold());
+            more.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
+            more.setBackground(PrizmaShape.fill(Theme.getColor(Theme.key_windowBackgroundWhite), AndroidUtilities.dp(22)));
+            more.setOnClickListener(v -> {
+                column.removeView(more);
+                show(context, rows, to);
+            });
+            column.addView(more, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
         }
     }
 
-    private View card(Context context, PrizmaHistory.Entry e) {
+    private View card(Context context, Row row) {
+        final PrizmaHistory.Entry e = row.entry;
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(12), AndroidUtilities.dp(16), AndroidUtilities.dp(12));
@@ -125,7 +155,7 @@ public class PrizmaHistoryActivity extends BaseFragment {
         body.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         body.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         body.setTextIsSelectable(true);
-        CharSequence text = text(e.message);
+        CharSequence text = row.text;
         body.setText(text);
         card.addView(body, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 4, 0, 0));
 

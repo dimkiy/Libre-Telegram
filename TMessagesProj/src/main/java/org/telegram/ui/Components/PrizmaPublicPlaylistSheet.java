@@ -38,6 +38,10 @@ public final class PrizmaPublicPlaylistSheet {
         MessageObject track;
         boolean done;
         TextView subtitle;
+        String hosted;
+        long doc;
+        int duration;
+        boolean loading;
     }
 
     public static void show(Context ctx, int account, long userId) {
@@ -71,6 +75,10 @@ public final class PrizmaPublicPlaylistSheet {
                 e.channel = src.substring(0, slash);
                 e.messageId = parseIntOr0(src.substring(slash + 1));
             }
+            String url = t.optString("url", "");
+            e.hosted = url.startsWith("http") ? url : null;
+            e.doc = t.optLong("doc", 0);
+            e.duration = t.optInt("d", 0);
             entries.add(e);
         }
         TLRPC.User owner = MessagesController.getInstance(account).getUser(userId);
@@ -98,9 +106,9 @@ public final class PrizmaPublicPlaylistSheet {
         LinearLayout buttons = new LinearLayout(ctx);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
         TextView play = pill(ctx, "Слушать", true);
-        play.setOnClickListener(x -> {
-            if (playFrom(ctx, entries, firstPlayable(entries)) && ref[0] != null) ref[0].dismiss();
-        });
+        play.setOnClickListener(x -> playFrom(ctx, account, userId, entries, firstPlayable(entries), () -> {
+            if (ref[0] != null) ref[0].dismiss();
+        }));
         buttons.addView(play, LayoutHelper.createLinear(0, 44, 1f, 0, 0, 6, 0));
         TextView keep = pill(ctx, "Сохранить себе", false);
         keep.setOnClickListener(x -> {
@@ -110,7 +118,14 @@ public final class PrizmaPublicPlaylistSheet {
                 return;
             }
             PrizmaPlaylist.importTracks(name + " · " + ownerName, ready);
-            Toast.makeText(ctx, "Плейлист сохранён в «Мои плейлисты»", Toast.LENGTH_SHORT).show();
+            for (MessageObject mo : ready) {
+                if (mo.messageOwner != null && !TextUtils.isEmpty(mo.messageOwner.attachPath)) {
+                    org.telegram.messenger.PrizmaOffline.save(account, mo, null);
+                }
+            }
+            Toast.makeText(ctx, ready.size() < entries.size()
+                    ? "Сохранено треков: " + ready.size() + " из " + entries.size() + ". Остальные ещё не загружены или недоступны"
+                    : "Плейлист сохранён в «Мои плейлисты»", Toast.LENGTH_LONG).show();
             if (ref[0] != null) ref[0].dismiss();
         });
         buttons.addView(keep, LayoutHelper.createLinear(0, 44, 1f, 6, 0, 0, 0));
@@ -149,9 +164,9 @@ public final class PrizmaPublicPlaylistSheet {
             texts.addView(a);
             e.subtitle = a;
             row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 10, 0, 0, 0));
-            row.setOnClickListener(x -> {
-                if (playFrom(ctx, entries, index) && ref[0] != null) ref[0].dismiss();
-            });
+            row.setOnClickListener(x -> playFrom(ctx, account, userId, entries, index, () -> {
+                if (ref[0] != null) ref[0].dismiss();
+            }));
             v.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         }
 
@@ -169,14 +184,148 @@ public final class PrizmaPublicPlaylistSheet {
         ref[0].setCanDismissWithSwipe(false);
         ref[0].show();
 
-        loadTracks(account, entries);
+        loadTracks(account, userId, entries);
     }
 
-    private static void loadTracks(int account, ArrayList<Entry> entries) {
+    private static final long MAX_HOSTED = 17L * 1024 * 1024;
+    private static final long CACHE_LIMIT = 400L * 1024 * 1024;
+
+    private static java.io.File hostedFile(Entry e) {
+        java.io.File dir = new java.io.File(org.telegram.messenger.ApplicationLoader.applicationContext.getCacheDir(), "libre_tracks");
+        dir.mkdirs();
+        String ext = "mp3";
+        int dot = e.hosted == null ? -1 : e.hosted.lastIndexOf('.');
+        if (dot > 0 && e.hosted.length() - dot <= 6) {
+            String tail = e.hosted.substring(dot + 1).toLowerCase();
+            if (tail.matches("[a-z0-9]{2,5}")) ext = tail;
+        }
+        return new java.io.File(dir, e.doc + "." + ext);
+    }
+
+    private static void trimCache(java.io.File keep) {
+        java.io.File[] files = keep.getParentFile() == null ? null : keep.getParentFile().listFiles();
+        if (files == null) return;
+        long total = 0;
+        for (java.io.File f : files) total += f.length();
+        if (total <= CACHE_LIMIT) return;
+        java.util.Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+        for (java.io.File f : files) {
+            if (total <= CACHE_LIMIT * 3 / 4) break;
+            if (f.equals(keep)) continue;
+            total -= f.length();
+            f.delete();
+        }
+    }
+
+    private static String mimeOf(String name) {
+        if (name.endsWith(".m4a")) return "audio/mp4";
+        if (name.endsWith(".ogg")) return "audio/ogg";
+        if (name.endsWith(".flac")) return "audio/flac";
+        if (name.endsWith(".wav")) return "audio/wav";
+        return "audio/mpeg";
+    }
+
+    private static MessageObject hostedMessage(int account, long ownerId, Entry e, java.io.File file) {
+        try {
+            TLRPC.TL_document doc = new TLRPC.TL_document();
+            doc.id = e.doc;
+            doc.file_reference = new byte[0];
+            doc.date = (int) (System.currentTimeMillis() / 1000);
+            doc.mime_type = mimeOf(file.getName());
+            doc.size = file.length();
+            TLRPC.TL_documentAttributeAudio audio = new TLRPC.TL_documentAttributeAudio();
+            audio.duration = e.duration;
+            audio.title = e.title;
+            audio.performer = e.author;
+            audio.flags |= 3;
+            doc.attributes.add(audio);
+            TLRPC.TL_documentAttributeFilename fileName = new TLRPC.TL_documentAttributeFilename();
+            fileName.file_name = file.getName();
+            doc.attributes.add(fileName);
+            TLRPC.TL_message m = new TLRPC.TL_message();
+            m.id = 1_000_000_000 + (int) (Math.abs(e.doc) % 1_000_000_000L);
+            m.date = doc.date;
+            m.message = "";
+            m.peer_id = new TLRPC.TL_peerUser();
+            m.peer_id.user_id = org.telegram.messenger.UserConfig.getInstance(account).getClientUserId();
+            m.from_id = new TLRPC.TL_peerUser();
+            m.from_id.user_id = ownerId;
+            m.dialog_id = ownerId;
+            m.media = new TLRPC.TL_messageMediaDocument();
+            m.media.flags |= 1;
+            m.media.document = doc;
+            m.flags |= TLRPC.MESSAGE_FLAG_HAS_MEDIA | TLRPC.MESSAGE_FLAG_HAS_FROM_ID;
+            m.attachPath = file.getAbsolutePath();
+            return new MessageObject(account, m, false, true);
+        } catch (Throwable t) {
+            org.telegram.messenger.FileLog.e(t);
+            return null;
+        }
+    }
+
+    private static void label(Entry e, String state) {
+        if (e.subtitle != null) e.subtitle.setText(TextUtils.isEmpty(e.author) ? state : e.author + " · " + state);
+    }
+
+    private static void prepare(int account, long ownerId, Entry e, Runnable ready) {
+        if (e.track != null || e.hosted == null) {
+            ready.run();
+            return;
+        }
+        if (e.loading) return;
+        e.loading = true;
+        label(e, "загружается…");
+        org.telegram.messenger.PrizmaJobs.net(() -> {
+            final java.io.File f = hostedFile(e);
+            final boolean ok = f.exists() && f.length() > 0 || org.telegram.messenger.PrizmaNet.download(e.hosted, f, MAX_HOSTED, 30000);
+            if (ok) {
+                f.setLastModified(System.currentTimeMillis());
+                trimCache(f);
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                e.loading = false;
+                if (ok) e.track = hostedMessage(account, ownerId, e, f);
+                label(e, e.track != null ? "из облака Libre" : "не загрузился");
+                ready.run();
+            });
+        });
+    }
+
+    private static boolean ours(ArrayList<Entry> entries) {
+        MessageObject cur = MediaController.getInstance().getPlayingMessageObject();
+        if (cur == null) return false;
+        for (Entry e : entries) {
+            if (e.track != null && e.track.getId() == cur.getId() && e.track.getDialogId() == cur.getDialogId()) return true;
+        }
+        return false;
+    }
+
+    private static void prefetch(int account, long ownerId, ArrayList<Entry> entries, int from, int checked) {
+        if (checked >= entries.size() || org.telegram.messenger.PrizmaClips.metered() || !ours(entries)) return;
+        final int at = from % entries.size();
+        final Entry e = entries.get(at);
+        if (e.track != null || e.hosted == null || e.loading) {
+            prefetch(account, ownerId, entries, at + 1, checked + 1);
+            return;
+        }
+        prepare(account, ownerId, e, () -> {
+            if (e.track != null && ours(entries)) MediaController.getInstance().prizmaAppend(e.track);
+            prefetch(account, ownerId, entries, at + 1, checked + 1);
+        });
+    }
+
+    private static void loadTracks(int account, long ownerId, ArrayList<Entry> entries) {
         HashMap<String, ArrayList<Entry>> byChannel = new HashMap<>();
         for (Entry e : entries) {
             if (e.channel == null || e.messageId <= 0) {
-                markUnavailable(e, "из личного чата — пока недоступен");
+                if (e.hosted != null && e.doc != 0) {
+                    e.done = true;
+                    java.io.File f = hostedFile(e);
+                    if (f.exists() && f.length() > 0) e.track = hostedMessage(account, ownerId, e, f);
+                    label(e, "из облака Libre");
+                } else {
+                    markUnavailable(e, "владелец ещё не выложил этот трек");
+                }
                 continue;
             }
             ArrayList<Entry> list = byChannel.get(e.channel);
@@ -245,28 +394,40 @@ public final class PrizmaPublicPlaylistSheet {
 
     private static int firstPlayable(ArrayList<Entry> entries) {
         for (int i = 0; i < entries.size(); i++) if (entries.get(i).track != null) return i;
+        for (int i = 0; i < entries.size(); i++) if (entries.get(i).hosted != null) return i;
         return 0;
     }
 
-    private static boolean playFrom(Context ctx, ArrayList<Entry> entries, int index) {
-        if (index < 0 || index >= entries.size()) return false;
-        Entry chosen = entries.get(index);
-        if (chosen.track == null) {
-            Toast.makeText(ctx, !chosen.done ? "Трек ещё загружается — секунду" : "Этот трек сейчас недоступен", Toast.LENGTH_SHORT).show();
-            return false;
+    private static void playFrom(Context ctx, int account, long ownerId, ArrayList<Entry> entries, int index, Runnable started) {
+        if (index < 0 || index >= entries.size()) return;
+        final Entry chosen = entries.get(index);
+        if (chosen.track == null && chosen.hosted == null) {
+            Toast.makeText(ctx, !chosen.done ? "Трек ещё загружается — секунду" : "Этот трек пока недоступен: владелец плейлиста ещё не выложил его", Toast.LENGTH_SHORT).show();
+            return;
         }
-        try {
-            ArrayList<MessageObject> list = playable(entries);
-            if (!MediaController.getInstance().setPlaylist(list, chosen.track, 0)) {
-                Toast.makeText(ctx, "Этот трек сейчас недоступен", Toast.LENGTH_SHORT).show();
-                return false;
+        if (chosen.loading) {
+            Toast.makeText(ctx, "Трек уже загружается — секунду", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        prepare(account, ownerId, chosen, () -> {
+            if (chosen.track == null) {
+                Toast.makeText(ctx, "Не удалось загрузить трек — проверьте интернет", Toast.LENGTH_SHORT).show();
+                return;
             }
-            return true;
-        } catch (Throwable e) {
-            org.telegram.messenger.FileLog.e(e);
-            Toast.makeText(ctx, "Не удалось включить трек", Toast.LENGTH_SHORT).show();
-            return false;
-        }
+            try {
+                ArrayList<MessageObject> list = playable(entries);
+                if (!MediaController.getInstance().setPlaylist(list, chosen.track, 0)) {
+                    Toast.makeText(ctx, "Этот трек сейчас недоступен", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                started.run();
+                PrizmaFullPlayer.show(ctx);
+                prefetch(account, ownerId, entries, index + 1, 0);
+            } catch (Throwable e) {
+                org.telegram.messenger.FileLog.e(e);
+                Toast.makeText(ctx, "Не удалось включить трек", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private static int parseIntOr0(String s) {

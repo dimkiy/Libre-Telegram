@@ -231,6 +231,7 @@ public final class PrizmaBackup {
                 }
                 ed.commit();
             }
+            org.telegram.messenger.PrizmaPlaylist.reload();
             return true;
         } catch (Throwable e) {
             FileLog.e(e);

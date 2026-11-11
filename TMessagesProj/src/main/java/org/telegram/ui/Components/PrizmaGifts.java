@@ -265,11 +265,12 @@ public class PrizmaGifts {
         return added;
     }
 
-    private static boolean catalogObserverAdded = false;
+    private static final java.util.HashSet<Integer> catalogObservers = new java.util.HashSet<>();
 
     private static void ensureCatalogObserver(int account) {
-        if (catalogObserverAdded) return;
-        catalogObserverAdded = true;
+        synchronized (catalogObservers) {
+            if (!catalogObservers.add(account)) return;
+        }
         AndroidUtilities.runOnUIThread(() -> {
             try {
                 org.telegram.messenger.NotificationCenter.getInstance(account).addObserver(

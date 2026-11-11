@@ -32,7 +32,9 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.PrizmaCloud;
+import org.telegram.messenger.PrizmaOffline;
 import org.telegram.messenger.PrizmaPlaylist;
+import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -369,24 +371,35 @@ public class PrizmaLibrary extends Dialog {
     }
 
     private void play(long id, String name, int trackIndex, int mode) {
+        play(id, name, trackIndex, mode, true);
+    }
+
+    private void play(long id, String name, int trackIndex, int mode, boolean mayRepair) {
         try {
-            ArrayList<PrizmaPlaylist.Track> meta = PrizmaPlaylist.tracks(id);
-            if (meta.isEmpty()) return;
-            if (trackIndex < 0 || trackIndex >= meta.size()) trackIndex = 0;
-            ArrayList<MessageObject> all = PrizmaPlaylist.buildMessages(id);
-            if (mode == PLAY_SHUFFLE) {
-                trackIndex = new java.util.Random().nextInt(meta.size());
-            }
-            PrizmaPlaylist.Track tr = meta.get(trackIndex);
-            MessageObject target = null;
-            for (MessageObject m : all) {
-                if (m != null && m.getDialogId() == tr.did && m.getId() == tr.mid) {
-                    target = m;
-                    break;
+            ArrayList<MessageObject> aligned = PrizmaPlaylist.buildAligned(id);
+            if (aligned.isEmpty()) return;
+            if (trackIndex < 0 || trackIndex >= aligned.size()) trackIndex = 0;
+            ArrayList<MessageObject> all = new ArrayList<>();
+            for (MessageObject m : aligned) if (m != null) all.add(m);
+            MessageObject target = aligned.get(trackIndex);
+            if (mode == PLAY_SHUFFLE || mode == PLAY_ORDER) {
+                if (all.isEmpty() && !mayRepair) {
+                    Toast.makeText(ctx, "В плейлисте нет треков, которые можно включить", Toast.LENGTH_LONG).show();
+                    return;
                 }
+                if (!all.isEmpty()) target = mode == PLAY_SHUFFLE ? all.get(new java.util.Random().nextInt(all.size())) : all.get(0);
             }
-            if (target == null || target.getDocument() == null || target.getDuration() <= 0) {
-                Toast.makeText(ctx, "Трек сохранён не полностью. Откройте его в чате и добавьте заново", Toast.LENGTH_LONG).show();
+            if (target == null) {
+                if (!mayRepair) {
+                    Toast.makeText(ctx, "Этот трек удалён из чата, восстановить его не получилось. Уберите его из плейлиста", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                final int index = trackIndex;
+                Toast.makeText(ctx, "Восстанавливаю трек…", Toast.LENGTH_SHORT).show();
+                PrizmaPlaylist.repair(UserConfig.selectedAccount, fixed -> {
+                    if (page != null) page.reload();
+                    play(id, name, index, mode, false);
+                });
                 return;
             }
             if (mode == PLAY_SHUFFLE && !SharedConfig.shuffleMusic) {
@@ -567,10 +580,65 @@ public class PrizmaLibrary extends Dialog {
             tracks.clear();
             tracks.addAll(PrizmaPlaylist.tracks(id));
             messages.clear();
-            for (MessageObject m : PrizmaPlaylist.buildMessages(id)) {
-                if (m != null) messages.put(keyOf(m.getDialogId(), m.getId()), m);
+            ArrayList<MessageObject> aligned = PrizmaPlaylist.buildAligned(id);
+            int broken = 0;
+            for (int i = 0; i < tracks.size() && i < aligned.size(); i++) {
+                MessageObject m = aligned.get(i);
+                if (m != null) messages.put(keyOf(tracks.get(i).did, tracks.get(i).mid), m);
+                else broken++;
             }
             adapter.notifyDataSetChanged();
+            if (broken > 0 && !repairAsked) {
+                repairAsked = true;
+                PrizmaPlaylist.repair(UserConfig.selectedAccount, fixed -> {
+                    if (fixed > 0 && page == this) reload();
+                });
+            }
+        }
+
+        private boolean repairAsked;
+        private boolean savingAll;
+
+        private int offlineCount() {
+            int n = 0;
+            for (MessageObject m : messages.values()) if (PrizmaOffline.has(m)) n++;
+            return n;
+        }
+
+        private String offlineLabel() {
+            int have = offlineCount(), total = messages.size();
+            if (savingAll) return "Скачиваю " + have + " из " + total;
+            if (total > 0 && have >= total) return "Скачано для офлайна";
+            return have > 0 ? "Докачать (" + have + " из " + total + ")" : "Скачать для офлайна";
+        }
+
+        private void saveAll(TextView button) {
+            if (savingAll) return;
+            final ArrayList<MessageObject> todo = new ArrayList<>();
+            for (MessageObject m : messages.values()) if (!PrizmaOffline.has(m)) todo.add(m);
+            if (todo.isEmpty()) {
+                new PrizmaPopup(root, 0xff24252b, TEXT)
+                        .danger(R.drawable.msg_delete, "Удалить скачанное с телефона", () -> {
+                            for (MessageObject m : messages.values()) PrizmaOffline.remove(m);
+                            adapter.notifyDataSetChanged();
+                        })
+                        .showAt(button, true);
+                return;
+            }
+            savingAll = true;
+            button.setText(offlineLabel());
+            final int[] left = {todo.size()};
+            final int[] failed = {0};
+            for (MessageObject m : todo) {
+                PrizmaOffline.save(UserConfig.selectedAccount, m, ok -> {
+                    if (!ok) failed[0]++;
+                    if (--left[0] == 0) {
+                        savingAll = false;
+                        if (failed[0] > 0) Toast.makeText(ctx, "Не скачалось треков: " + failed[0] + ". Проверьте интернет и нажмите ещё раз", Toast.LENGTH_LONG).show();
+                    }
+                    if (page == this) adapter.notifyDataSetChanged();
+                });
+            }
         }
 
         private long keyOf(long did, int mid) {
@@ -622,6 +690,10 @@ public class PrizmaLibrary extends Dialog {
             mixed.setOnClickListener(v -> play(id, playlist.name, 0, PLAY_SHUFFLE));
             actions.addView(mixed, LayoutHelper.createLinear(0, 52, 1f, 5, 0, 0, 0));
             box.addView(actions, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 18, 0, 0));
+            TextView offline = pill(offlineLabel(), 0x14ffffff, TEXT);
+            offline.setTextSize(14);
+            offline.setOnClickListener(v -> saveAll(offline));
+            box.addView(offline, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 10, 0, 0));
             return box;
         }
 
@@ -646,6 +718,17 @@ public class PrizmaLibrary extends Dialog {
             }
             if (mo != null) {
                 popup.item(R.drawable.msg_fave, "В другой плейлист", () -> PrizmaPlaylistSheet.showAddToPlaylist(ctx, root, tone.accent, mo, null));
+                if (PrizmaOffline.has(mo)) {
+                    popup.item(R.drawable.msg_delete, "Удалить с телефона", () -> {
+                        PrizmaOffline.remove(mo);
+                        adapter.notifyDataSetChanged();
+                    });
+                } else {
+                    popup.item(R.drawable.msg_download, "Скачать для офлайна", () -> PrizmaOffline.save(UserConfig.selectedAccount, mo, ok -> {
+                        if (!ok) Toast.makeText(ctx, "Не получилось скачать трек — проверьте интернет", Toast.LENGTH_SHORT).show();
+                        if (page == this) adapter.notifyDataSetChanged();
+                    }));
+                }
             }
             popup.danger(R.drawable.msg_delete, "Убрать из плейлиста", () -> {
                 PrizmaPlaylist.removeTrackAt(id, at);
@@ -741,7 +824,15 @@ public class PrizmaLibrary extends Dialog {
                 boolean current = playing != null && playing.getDialogId() == tr.did && playing.getId() == tr.mid;
                 title.setText(TextUtils.isEmpty(tr.title) ? "Трек" : tr.title);
                 title.setTextColor(current ? tone.accent : TEXT);
-                author.setText(tr.author == null ? "" : tr.author);
+                String by = tr.author == null ? "" : tr.author;
+                if (mo == null) {
+                    by = "недоступен — восстанавливается";
+                } else if (PrizmaOffline.has(mo)) {
+                    by = by.isEmpty() ? "на телефоне" : "на телефоне · " + by;
+                } else if (PrizmaOffline.busy(mo)) {
+                    by = by.isEmpty() ? "скачивается…" : "скачивается… · " + by;
+                }
+                author.setText(by);
                 if (mo != null) {
                     PrizmaTrackCover.bindSmall(cover, mo);
                 } else {

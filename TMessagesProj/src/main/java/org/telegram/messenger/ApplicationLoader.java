@@ -319,6 +319,7 @@ public class ApplicationLoader extends Application {
         try {
             PrizmaFonts.applyGlobal();
         } catch (Throwable ignore) {}
+        PrizmaCapture.recover();
         try {
             if (PrizmaConfig.alwaysOnline()) PrizmaOnline.start();
         } catch (Throwable ignore) {}

@@ -32,6 +32,7 @@ public final class PrizmaClips {
     private static final long MAX_CLIP = 40L * 1024 * 1024;
     private static final long CACHE_LIMIT = 220L * 1024 * 1024;
     private static final long MISS_RETRY_MS = 6 * 3600 * 1000L;
+    private static final long FAILED_RETRY_MS = 2 * 60 * 1000L;
 
     private static final HashMap<String, Long> misses = new HashMap<>();
 
@@ -74,10 +75,12 @@ public final class PrizmaClips {
                 return;
             }
         }
-        Utilities.globalQueue.postRunnable(() -> {
+        PrizmaJobs.heavy(() -> {
             Clip result = null;
             try {
                 String[] found = lookup(title, artist);
+                final boolean failed = found == null;
+                if (found != null && found.length == 0) found = null;
                 boolean exact = found != null && "1".equals(found[1]);
                 if (found != null && (exact || allowArtist)) {
                     File target = exact ? exactFile : artistFile;
@@ -88,7 +91,7 @@ public final class PrizmaClips {
                 }
                 if (!exact) {
                     synchronized (misses) {
-                        misses.put(key, System.currentTimeMillis());
+                        misses.put(key, System.currentTimeMillis() - (failed ? MISS_RETRY_MS - FAILED_RETRY_MS : 0));
                     }
                 }
             } catch (Throwable ignore) {
@@ -98,7 +101,7 @@ public final class PrizmaClips {
         });
     }
 
-    private static boolean metered() {
+    public static boolean metered() {
         try {
             android.net.ConnectivityManager cm = (android.net.ConnectivityManager) ApplicationLoader.applicationContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
             return cm == null || cm.isActiveNetworkMetered();
@@ -110,7 +113,7 @@ public final class PrizmaClips {
     private static String[] lookup(String title, String artist) {
         if (PrizmaCloud.enabled()) {
             String[] viaServer = lookupServer(title, artist);
-            if (viaServer != null) return viaServer.length == 0 ? null : viaServer;
+            if (viaServer != null) return viaServer;
         }
         return lookupDirect(title, artist);
     }
@@ -135,8 +138,10 @@ public final class PrizmaClips {
             String[] hit = pick(body, title, artist);
             if (hit != null && "1".equals(hit[1])) return hit;
             String more = PrizmaNet.get("https://itunes.apple.com/search?entity=musicVideo&limit=12&attribute=artistTerm&term=" + URLEncoder.encode(artist, "UTF-8"), 9000);
+            if (body == null && more == null) return null;
             String[] byArtist = pick(more, title, artist);
-            return byArtist != null ? byArtist : hit;
+            String[] best = byArtist != null ? byArtist : hit;
+            return best != null ? best : new String[0];
         } catch (Throwable e) {
             return null;
         }

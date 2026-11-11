@@ -237,6 +237,11 @@ public class PrizmaPostActivity extends BaseFragment implements PrizmaPostCell.H
     }
 
     @Override
+    public boolean isLightStatusBar() {
+        return androidx.core.graphics.ColorUtils.calculateLuminance(Theme.getColor(Theme.key_windowBackgroundWhite)) > 0.7f;
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         if (adapter != null) {
@@ -309,11 +314,19 @@ public class PrizmaPostActivity extends BaseFragment implements PrizmaPostCell.H
             if (ChatObject.isNotInChat(c)) {
                 getMessagesController().addUserToChat(c.id, getUserConfig().getCurrentUser(), 0, null, this, null);
                 c.left = false;
-            } else {
-                getMessagesController().deleteParticipantFromChat(c.id, getUserConfig().getCurrentUser());
-                c.left = true;
+                styleFollow();
+                return;
             }
-            styleFollow();
+            new org.telegram.ui.ActionBar.AlertDialog.Builder(context)
+                    .setTitle("Перестать читать?")
+                    .setMessage("Вы выйдете из канала. В закрытый канал без приглашения вернуться не получится.")
+                    .setPositiveButton("Выйти", (d, w) -> {
+                        getMessagesController().deleteParticipantFromChat(c.id, getUserConfig().getCurrentUser());
+                        c.left = true;
+                        styleFollow();
+                    })
+                    .setNegativeButton(LocaleController.getString(org.telegram.messenger.R.string.Cancel), null)
+                    .show();
         });
         View.OnClickListener toChannel = v -> {
             if (chat != null) PrizmaFeedKit.openChannel(this, chat.id);
@@ -548,7 +561,7 @@ public class PrizmaPostActivity extends BaseFragment implements PrizmaPostCell.H
         ArrayList<TLRPC.ReactionCount> sorted = new ArrayList<>(m.reactions.results);
         Collections.sort(sorted, (a, b) -> Integer.compare(b.count, a.count));
         for (TLRPC.ReactionCount rc : sorted) {
-            chips.addView(new Chip(getParentActivity(), rc), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 32, 0, 0, 8, 0));
+            chips.addView(new Chip(chips.getContext(), rc), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 32, 0, 0, 8, 0));
         }
     }
 

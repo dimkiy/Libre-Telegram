@@ -73,6 +73,7 @@ public class PrizmaBanner {
                 }
                 final String path = dst.getAbsolutePath();
                 final boolean video = isVideo;
+                if (!video) org.telegram.messenger.PrizmaExif.normalize(path);
                 AndroidUtilities.runOnUIThread(() -> {
                     String old = PrizmaConfig.bannerPath();
                     PrizmaConfig.setBannerPath(path);

@@ -334,7 +334,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         prizmaZoom = new PrizmaZoomSlider(context);
         prizmaZoom.setVisibility(GONE);
         prizmaZoom.setListener(this::applyPrizmaZoom);
-        addView(prizmaZoom, LayoutHelper.createFrame(48, 240, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 10, 0));
+        addView(prizmaZoom, LayoutHelper.createFrame(248, 48, Gravity.CENTER));
 
         switchCameraButton = new FlashViews.ImageViewInvertable(context);
         switchCameraButton.setScaleType(ImageView.ScaleType.CENTER);
@@ -718,6 +718,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         if (prizmaZoom != null) {
             prizmaZoom.setVisibility(org.telegram.messenger.PrizmaConfig.roundZoomSlider() ? VISIBLE : GONE);
             prizmaZoom.setRange(1f, useCamera2 ? 4f : 2f, 1f);
+            prizmaZoom.setTranslationY(textureViewSize / 2f + dp(40));
             prizmaZoom.bringToFront();
         }
         if (textureView != null) {
@@ -798,7 +799,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (bothCameras) {
                 for (int a = 0; a < 2; ++a) {
                     if (camera2Sessions[a] == null) {
-                        camera2Sessions[a] = Camera2Session.create(a == 0, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                        camera2Sessions[a] = Camera2Session.create(a == 0, prizmaRoundSize(), prizmaRoundSize());
                         if (camera2Sessions[a] != null) {
                             camera2Sessions[a].setRecordingVideo(true);
                             previewSize[a] = new Size(camera2Sessions[a].getPreviewWidth(), camera2Sessions[a].getPreviewHeight());
@@ -818,7 +819,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 if (camera2SessionCurrent == null) return;
             } else {
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, prizmaRoundSize(), prizmaRoundSize());
                 if (camera2SessionCurrent == null) return;
                 camera2SessionCurrent.setRecordingVideo(true);
                 previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
@@ -1195,7 +1196,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     camera2SessionCurrent = null;
                     camera2Sessions[isFrontface ? 1 : 0] = null;
                 }
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, prizmaRoundSize(), prizmaRoundSize());
                 if (camera2SessionCurrent == null) {
                     legacyCameraSwitchAwaitingFrame = false;
                     logLegacyCameraSwitchStage("failed: Camera2Session.create returned null");
@@ -2399,8 +2400,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             started = true;
-            int resolution = MessagesController.getInstance(currentAccount).roundVideoSize;
-            int bitrate = MessagesController.getInstance(currentAccount).roundVideoBitrate * 1024;
+            int resolution = prizmaRoundSize();
+            int bitrate = prizmaRoundBitrate() * 1024;
             AndroidUtilities.runOnUIThread(() -> {
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 512);
             });
@@ -3278,7 +3279,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 audioFormat.setString(MediaFormat.KEY_MIME, AUDIO_MIME_TYPE);
                 audioFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, audioSampleRate);
                 audioFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
-                audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, MessagesController.getInstance(currentAccount).roundAudioBitrate * 1024);
+                audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, prizmaRoundAudioBitrate() * 1024);
                 audioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2048 * AudioBufferInfo.MAX_SAMPLES);
 
                 audioEncoder = MediaCodec.createEncoderByType(AUDIO_MIME_TYPE);
@@ -3893,6 +3894,21 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
     private PrizmaZoomSlider prizmaZoom;
 
+    private static int prizmaRoundSize() {
+        int base = MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize;
+        return org.telegram.messenger.PrizmaConfig.roundHd() && !SharedConfig.deviceIsLow() ? Math.max(base, 512) : base;
+    }
+
+    private static int prizmaRoundBitrate() {
+        int base = MessagesController.getInstance(UserConfig.selectedAccount).roundVideoBitrate;
+        return org.telegram.messenger.PrizmaConfig.roundHd() && !SharedConfig.deviceIsLow() ? Math.max(base, 1800) : base;
+    }
+
+    private static int prizmaRoundAudioBitrate() {
+        int base = MessagesController.getInstance(UserConfig.selectedAccount).roundAudioBitrate;
+        return org.telegram.messenger.PrizmaConfig.roundHd() ? Math.max(base, 96) : base;
+    }
+
     private void applyPrizmaZoom(float value) {
         pinchScale = value;
         zoomBase = value;
@@ -3911,6 +3927,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             limit = camera2SessionCurrent.getMaxZoom();
         }
         zoomBase = Math.max(1f, Math.min(limit, pinchScale));
+        if (prizmaZoom != null) prizmaZoom.setValue(zoomBase);
     }
 
     public interface Delegate {

@@ -12,7 +12,6 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.URLDecoder;
@@ -26,6 +25,8 @@ public final class PrizmaCloud {
 
     private static final long PROFILE_TTL = 5 * 60_000L;
     private static final long MAX_VIDEO_BANNER = 15L * 1024 * 1024;
+    private static final long AUTH_RETRY_MS = 15_000L;
+    private static final int MAX_FIX_ROUNDS = 3;
 
     private PrizmaCloud() {}
 
@@ -355,7 +356,7 @@ public final class PrizmaCloud {
                     fetchedAt.put(userId, System.currentTimeMillis());
                     if (code == 401) {
                         dropToken(account);
-                        fetchedAt.remove(userId);
+                        fetchedAt.put(userId, System.currentTimeMillis() - PROFILE_TTL + AUTH_RETRY_MS);
                         return;
                     }
                     if (result != null) {
@@ -461,6 +462,7 @@ public final class PrizmaCloud {
     }
 
     private static final Runnable[] showcaseSync = new Runnable[1];
+    private static int showcaseFixRounds;
 
     public static void syncShowcaseSoon(int account) {
         if (!enabled()) return;
@@ -495,7 +497,11 @@ public final class PrizmaCloud {
             prefs().edit().putString(key, hash).apply();
             try {
                 org.json.JSONArray fixes = r.body != null ? new JSONObject(r.body).optJSONArray("fixes") : null;
-                if (fixes == null || fixes.length() == 0) return;
+                if (fixes == null || fixes.length() == 0) {
+                    showcaseFixRounds = 0;
+                    return;
+                }
+                if (++showcaseFixRounds > MAX_FIX_ROUNDS) return;
                 for (int i = 0; i < fixes.length(); i++) {
                     JSONObject f = fixes.getJSONObject(i);
                     if (f.has("inst") && !f.isNull("inst")) PrizmaConfig.setNftNum(f.getLong("inst"), f.getString("num"));
@@ -598,7 +604,11 @@ public final class PrizmaCloud {
             return;
         }
         final String hash = Utilities.MD5(body);
-        if (hash == null || hash.equals(prefs().getString(key, ""))) return;
+        if (hash == null) return;
+        if (hash.equals(prefs().getString(key, ""))) {
+            if (playlistChecked) return;
+        }
+        playlistChecked = true;
         byte[] data;
         try {
             data = body.getBytes("UTF-8");
@@ -610,13 +620,67 @@ public final class PrizmaCloud {
                 prefs().edit().putString(key, hash).apply();
                 forget(self);
                 try {
-                    org.json.JSONArray need = new JSONObject(r.body).optJSONArray("need");
+                    JSONObject answer = new JSONObject(r.body);
+                    org.json.JSONArray need = answer.optJSONArray("need");
                     if (need != null && need.length() > 0) relayTracks(account, id, need);
+                    org.json.JSONArray host = answer.optJSONArray("upload");
+                    if (host != null && host.length() > 0) hostTracks(account, id, host);
                 } catch (Throwable ignore) {
                 }
             } else if (r.code == 413) {
                 Toast.makeText(ApplicationLoader.applicationContext, "Плейлист слишком большой для профиля — оставьте до 500 треков", Toast.LENGTH_LONG).show();
             }
+        });
+    }
+
+    private static final long MAX_HOSTED_TRACK = 16L * 1024 * 1024;
+    private static boolean playlistChecked;
+    private static boolean hosting;
+
+    private static void hostTracks(int account, long playlistId, org.json.JSONArray docs) {
+        if (hosting || PrizmaClips.metered()) return;
+        final ArrayList<Long> todo = new ArrayList<>();
+        for (int i = 0; i < docs.length(); i++) {
+            long doc = docs.optLong(i);
+            if (doc != 0) todo.add(doc);
+        }
+        if (todo.isEmpty()) return;
+        hosting = true;
+        hostNext(account, playlistId, todo, 0);
+    }
+
+    private static void hostNext(int account, long playlistId, ArrayList<Long> todo, int at) {
+        if (at >= todo.size() || PrizmaClips.metered() || playlistId != PrizmaPlaylist.publicId()) {
+            hosting = false;
+            return;
+        }
+        final long docId = todo.get(at);
+        final MessageObject mo = PrizmaPlaylist.byDocument(playlistId, docId);
+        if (mo == null) {
+            hostNext(account, playlistId, todo, at + 1);
+            return;
+        }
+        PrizmaOffline.locate(account, mo, file -> {
+            if (file == null || file.length() == 0 || file.length() > MAX_HOSTED_TRACK) {
+                hostNext(account, playlistId, todo, at + 1);
+                return;
+            }
+            PrizmaJobs.disk(() -> {
+                final byte[] data = readVideo(file.getAbsolutePath());
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (data == null) {
+                        hostNext(account, playlistId, todo, at + 1);
+                        return;
+                    }
+                    upload(account, "PUT", "/v1/track/" + docId, data, "application/octet-stream", r -> {
+                        if (r.code == -1 || r.code == 429 || r.code == 507 || r.code == 404) {
+                            hosting = false;
+                            return;
+                        }
+                        hostNext(account, playlistId, todo, at + 1);
+                    });
+                });
+            });
         });
     }
 
@@ -675,9 +739,10 @@ public final class PrizmaCloud {
         }
     };
     private static final HashSet<String> decoding = new HashSet<>();
+    private static final HashSet<String> undecodable = new HashSet<>();
 
     public static Bitmap bannerBitmap(String path) {
-        if (path == null) return null;
+        if (path == null || undecodable.contains(path)) return null;
         Bitmap b = bitmaps.get(path);
         if (b != null && !b.isRecycled()) return b;
         if (decoding.add(path)) {
@@ -699,6 +764,7 @@ public final class PrizmaCloud {
                 AndroidUtilities.runOnUIThread(() -> {
                     decoding.remove(path);
                     if (decoded != null) bitmaps.put(path, decoded);
+                    else undecodable.add(path);
                 });
             });
         }
@@ -789,29 +855,7 @@ public final class PrizmaCloud {
     }
 
     private static byte[] encodeImage(String path) {
-        try {
-            BitmapFactory.Options o = new BitmapFactory.Options();
-            o.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(path, o);
-            int sample = 1;
-            while (o.outWidth / (sample * 2) >= 1440) sample *= 2;
-            o = new BitmapFactory.Options();
-            o.inSampleSize = sample;
-            Bitmap b = BitmapFactory.decodeFile(path, o);
-            if (b == null) return null;
-            float scale = Math.min(1f, 1440f / b.getWidth());
-            if (scale < 1f) {
-                Bitmap s = Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * scale), Math.round(b.getHeight() * scale), true);
-                if (s != b) b.recycle();
-                b = s;
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            b.compress(Bitmap.CompressFormat.JPEG, 86, out);
-            b.recycle();
-            return out.toByteArray();
-        } catch (Throwable e) {
-            return null;
-        }
+        return PrizmaBitmaps.jpeg(path, 1440, 86);
     }
 
     public static void call(int account, String method, String path, JSONObject json, Utilities.Callback<PrizmaNet.Response> done) {

@@ -24,7 +24,11 @@ public final class PrizmaHistory {
         public TLRPC.Message message;
     }
 
+    private static final int MAX_ROWS = 20000;
+    private static final int TRIM_EVERY = 200;
+
     private static Store store;
+    private static int putsSinceTrim = TRIM_EVERY - 1;
 
     private PrizmaHistory() {
     }
@@ -70,7 +74,7 @@ public final class PrizmaHistory {
         return a.media.getClass() == b.media.getClass();
     }
 
-    private static TLRPC.Message readCached(int account, int id, long dialogId) {
+    static TLRPC.Message readCached(int account, int id, long dialogId) {
         SQLiteCursor cursor = null;
         try {
             MessagesStorage storage = MessagesStorage.getInstance(account);
@@ -111,6 +115,10 @@ public final class PrizmaHistory {
                         new String[]{String.valueOf(account), String.valueOf(MessageObject.getDialogId(m)), String.valueOf(m.id)});
             }
             db().insert("history", null, v);
+            if (++putsSinceTrim >= TRIM_EVERY) {
+                putsSinceTrim = 0;
+                db().execSQL("DELETE FROM history WHERE rowid IN (SELECT rowid FROM history ORDER BY saved DESC LIMIT -1 OFFSET " + MAX_ROWS + ")");
+            }
         } catch (Throwable e) {
             FileLog.e(e);
         }

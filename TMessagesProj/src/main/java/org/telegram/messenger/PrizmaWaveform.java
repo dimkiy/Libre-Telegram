@@ -37,7 +37,7 @@ public final class PrizmaWaveform {
             if (!working.add(key)) return;
         }
         final long durationUs = (long) (mo.getDuration() * 1_000_000L);
-        Utilities.globalQueue.postRunnable(() -> {
+        PrizmaJobs.heavy(() -> {
             float[] result = null;
             try {
                 result = read(file, durationUs);

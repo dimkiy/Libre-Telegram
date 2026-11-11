@@ -6,12 +6,9 @@ import org.json.JSONObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.TranslateAlert2;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -118,7 +115,7 @@ public final class PrizmaTranslate {
 
     private static void run(String text, String to, Utilities.Callback<String> done) {
         if (PrizmaConfig.translateEngine() == YANDEX) {
-            Utilities.globalQueue.postRunnable(() -> {
+            PrizmaJobs.net(() -> {
                 String result = yandex(text, to);
                 if (result != null) {
                     AndroidUtilities.runOnUIThread(() -> done.run(result));
@@ -136,30 +133,18 @@ public final class PrizmaTranslate {
     }
 
     private static String yandex(String text, String to) {
-        HttpURLConnection c = null;
         try {
             if (yandexId == null) yandexId = UUID.randomUUID().toString().replace("-", "");
             String url = "https://translate.yandex.net/api/v1/tr.json/translate?srv=android&id=" + yandexId + "-0-0&lang=" + Uri.encode(to);
-            c = (HttpURLConnection) new URL(url).openConnection();
-            c.setConnectTimeout(8000);
-            c.setReadTimeout(12000);
-            c.setRequestMethod("POST");
-            c.setDoOutput(true);
-            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            c.getOutputStream().write(("text=" + Uri.encode(text)).getBytes("UTF-8"));
-            if (c.getResponseCode() != 200) return null;
-            InputStream in = c.getInputStream();
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int r;
-            while ((r = in.read(buf)) > 0) bytes.write(buf, 0, r);
-            JSONObject json = new JSONObject(bytes.toString("UTF-8"));
+            HashMap<String, String> headers = new HashMap<>();
+            headers.put("Content-Type", "application/x-www-form-urlencoded");
+            PrizmaNet.Response response = PrizmaNet.request("POST", url, headers, ("text=" + Uri.encode(text)).getBytes("UTF-8"), 12000);
+            if (response.code != 200 || response.body == null) return null;
+            JSONObject json = new JSONObject(response.body);
             if (json.optInt("code") != 200) return null;
             return json.getJSONArray("text").getString(0);
         } catch (Throwable e) {
             return null;
-        } finally {
-            if (c != null) c.disconnect();
         }
     }
 }

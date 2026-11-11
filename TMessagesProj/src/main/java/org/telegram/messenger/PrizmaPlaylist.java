@@ -39,19 +39,30 @@ public class PrizmaPlaylist {
         return ApplicationLoader.applicationContext.getSharedPreferences("prizma_playlist", Context.MODE_PRIVATE);
     }
 
-    private static JSONArray roots() {
+    private static JSONArray rootsCache;
+
+    private static synchronized JSONArray roots() {
+        if (rootsCache != null) return rootsCache;
         ensureInit();
+        JSONArray parsed = null;
         try {
             String s = prefs().getString("playlists", "");
             if (s != null && s.length() > 0) {
-                return new JSONArray(s);
+                parsed = new JSONArray(s);
             }
         } catch (Throwable ignore) {
         }
-        return new JSONArray();
+        rootsCache = parsed != null ? parsed : new JSONArray();
+        return rootsCache;
     }
 
-    private static void saveRoots(JSONArray a) {
+    public static synchronized void reload() {
+        rootsCache = null;
+        countCache.clear();
+    }
+
+    private static synchronized void saveRoots(JSONArray a) {
+        rootsCache = a;
         countCache.clear();
         prefs().edit().putString("playlists", a.toString()).apply();
         if (publicId() != 0) PrizmaCloud.syncPlaylistSoon(UserConfig.selectedAccount);
@@ -87,6 +98,7 @@ public class PrizmaPlaylist {
                 if (doc != null) {
                     e.put("doc", doc.id);
                     e.put("size", doc.size);
+                    e.put("d", (int) MessageObject.getDocumentDuration(doc));
                 }
                 out.put(e);
             } catch (Throwable ignore) {
@@ -109,6 +121,14 @@ public class PrizmaPlaylist {
         if (fwd != null && fwd.saved_from_peer instanceof TLRPC.TL_peerChannel && fwd.saved_from_msg_id != 0) {
             String name = ChatObject.getPublicUsername(mc.getChat(fwd.saved_from_peer.channel_id));
             if (name != null && !name.isEmpty()) return name + "/" + fwd.saved_from_msg_id;
+        }
+        return null;
+    }
+
+    public static MessageObject byDocument(long playlistId, long docId) {
+        for (MessageObject mo : buildMessages(playlistId)) {
+            TLRPC.Document doc = mo.getDocument();
+            if (doc != null && doc.id == docId) return mo;
         }
         return null;
     }
@@ -322,6 +342,7 @@ public class PrizmaPlaylist {
         try {
             long did = mo.getDialogId();
             int mid = mo.getId();
+            if (mo.getDocument() == null) return false;
             String data = encode(mo.messageOwner);
             if (data == null) return false;
             JSONObject o = new JSONObject();
@@ -430,7 +451,24 @@ public class PrizmaPlaylist {
         return addTo(id, mo);
     }
 
-    public static ArrayList<MessageObject> buildMessages(long id) {
+    private static MessageObject messageOf(JSONObject o) {
+        MessageObject mo = liveCache.get(key(o.optLong("did"), o.optInt("mid")));
+        if (mo == null) {
+            TLRPC.Message msg = decode(o.optString("data", ""));
+            if (msg == null) return null;
+            try {
+                mo = new MessageObject(UserConfig.selectedAccount, msg, false, false);
+            } catch (Throwable e) {
+                FileLog.e(e);
+                return null;
+            }
+        }
+        if (mo.getDocument() == null) return null;
+        PrizmaOffline.attach(mo);
+        return mo;
+    }
+
+    public static ArrayList<MessageObject> buildAligned(long id) {
         ArrayList<MessageObject> out = new ArrayList<>();
         JSONArray a = roots();
         int idx = indexOf(a, id);
@@ -439,22 +477,119 @@ public class PrizmaPlaylist {
         for (int i = 0; i < t.length(); i++) {
             JSONObject o = t.optJSONObject(i);
             if (o == null) continue;
-            MessageObject live = liveCache.get(key(o.optLong("did"), o.optInt("mid")));
-            if (live != null) {
-                out.add(live);
-                continue;
-            }
-            TLRPC.Message msg = decode(o.optString("data", ""));
-            if (msg != null) {
-                try {
-                    MessageObject m = new MessageObject(UserConfig.selectedAccount, msg, false, false);
-                    out.add(m);
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                }
-            }
+            out.add(messageOf(o));
         }
         return out;
+    }
+
+    public static ArrayList<MessageObject> buildMessages(long id) {
+        ArrayList<MessageObject> out = new ArrayList<>();
+        for (MessageObject mo : buildAligned(id)) {
+            if (mo != null) out.add(mo);
+        }
+        return out;
+    }
+
+    public static void repair(int account, Utilities.Callback<Integer> done) {
+        final ArrayList<long[]> broken = new ArrayList<>();
+        final java.util.HashSet<String> seen = new java.util.HashSet<>();
+        JSONArray a = roots();
+        for (int p = 0; p < a.length(); p++) {
+            JSONObject pl = a.optJSONObject(p);
+            if (pl == null) continue;
+            JSONArray t = tracksArr(pl);
+            for (int i = 0; i < t.length(); i++) {
+                JSONObject o = t.optJSONObject(i);
+                if (o == null || messageOf(o) != null) continue;
+                long did = o.optLong("did");
+                int mid = o.optInt("mid");
+                if (did != 0 && mid > 0 && seen.add(key(did, mid))) broken.add(new long[]{did, mid});
+            }
+        }
+        if (broken.isEmpty()) {
+            if (done != null) done.run(0);
+            return;
+        }
+        final java.util.HashMap<String, TLRPC.Message> found = new java.util.HashMap<>();
+        MessagesStorage.getInstance(account).getStorageQueue().postRunnable(() -> {
+            final ArrayList<long[]> missing = new ArrayList<>();
+            for (long[] b : broken) {
+                TLRPC.Message m = PrizmaHistory.readCached(account, (int) b[1], b[0]);
+                if (m != null && MessageObject.getDocument(m) != null) {
+                    found.put(key(b[0], (int) b[1]), m);
+                } else {
+                    missing.add(b);
+                }
+            }
+            AndroidUtilities.runOnUIThread(() -> fetchMissing(account, missing, found, done));
+        });
+    }
+
+    private static void fetchMissing(int account, ArrayList<long[]> missing, java.util.HashMap<String, TLRPC.Message> found, Utilities.Callback<Integer> done) {
+        final java.util.HashMap<Long, ArrayList<Integer>> byDialog = new java.util.HashMap<>();
+        for (long[] b : missing) {
+            ArrayList<Integer> ids = byDialog.get(b[0]);
+            if (ids == null) byDialog.put(b[0], ids = new ArrayList<>());
+            ids.add((int) b[1]);
+        }
+        if (byDialog.isEmpty()) {
+            finishRepair(found, done);
+            return;
+        }
+        final MessagesController mc = MessagesController.getInstance(account);
+        final int[] left = {byDialog.size()};
+        for (java.util.Map.Entry<Long, ArrayList<Integer>> e : byDialog.entrySet()) {
+            final long did = e.getKey();
+            org.telegram.tgnet.TLObject req;
+            if (did < 0 && ChatObject.isChannel(-did, account)) {
+                TLRPC.TL_channels_getMessages r = new TLRPC.TL_channels_getMessages();
+                r.channel = mc.getInputChannel(-did);
+                r.id.addAll(e.getValue());
+                req = r;
+            } else {
+                TLRPC.TL_messages_getMessages r = new TLRPC.TL_messages_getMessages();
+                r.id.addAll(e.getValue());
+                req = r;
+            }
+            org.telegram.tgnet.ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+                if (res instanceof TLRPC.messages_Messages) {
+                    TLRPC.messages_Messages m = (TLRPC.messages_Messages) res;
+                    mc.putUsers(m.users, false);
+                    mc.putChats(m.chats, false);
+                    for (TLRPC.Message msg : m.messages) {
+                        if (MessageObject.getDocument(msg) != null && MessageObject.getDialogId(msg) == did) found.put(key(did, msg.id), msg);
+                    }
+                }
+                if (--left[0] == 0) finishRepair(found, done);
+            }));
+        }
+    }
+
+    private static void finishRepair(java.util.HashMap<String, TLRPC.Message> found, Utilities.Callback<Integer> done) {
+        int fixed = 0;
+        if (!found.isEmpty()) {
+            JSONArray a = roots();
+            for (int p = 0; p < a.length(); p++) {
+                JSONObject pl = a.optJSONObject(p);
+                if (pl == null) continue;
+                JSONArray t = tracksArr(pl);
+                for (int i = 0; i < t.length(); i++) {
+                    JSONObject o = t.optJSONObject(i);
+                    if (o == null) continue;
+                    TLRPC.Message msg = found.get(key(o.optLong("did"), o.optInt("mid")));
+                    if (msg == null || messageOf(o) != null) continue;
+                    String data = encode(msg);
+                    if (data == null) continue;
+                    try {
+                        o.put("data", data);
+                        fixed++;
+                    } catch (Throwable ignore) {
+                    }
+                }
+            }
+            if (fixed > 0) saveRoots(a);
+        }
+        if (done != null) done.run(fixed);
     }
 
     private static long playingId;
@@ -479,19 +614,8 @@ public class PrizmaPlaylist {
         for (int i = 0; i < t.length() && out.size() < limit; i++) {
             JSONObject o = t.optJSONObject(i);
             if (o == null) continue;
-            MessageObject live = liveCache.get(key(o.optLong("did"), o.optInt("mid")));
-            if (live != null) {
-                out.add(live);
-                continue;
-            }
-            TLRPC.Message msg = decode(o.optString("data", ""));
-            if (msg != null) {
-                try {
-                    out.add(new MessageObject(UserConfig.selectedAccount, msg, false, false));
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                }
-            }
+            MessageObject mo = messageOf(o);
+            if (mo != null) out.add(mo);
         }
         return out;
     }
@@ -521,35 +645,40 @@ public class PrizmaPlaylist {
     }
 
     private static String encode(TLRPC.Message msg) {
+        NativeByteBuffer data = null;
         try {
-            NativeByteBuffer data = new NativeByteBuffer(msg.getObjectSize());
+            if (msg.media != null) msg.flags |= TLRPC.MESSAGE_FLAG_HAS_MEDIA;
+            if (msg.from_id != null) msg.flags |= TLRPC.MESSAGE_FLAG_HAS_FROM_ID;
+            data = new NativeByteBuffer(msg.getObjectSize());
             msg.serializeToStream(data);
             int len = data.buffer.position();
             byte[] bytes = new byte[len];
             data.buffer.position(0);
             data.buffer.get(bytes, 0, len);
-            data.reuse();
             return Base64.encodeToString(bytes, Base64.NO_WRAP);
         } catch (Throwable e) {
             FileLog.e(e);
             return null;
+        } finally {
+            if (data != null) data.reuse();
         }
     }
 
     private static TLRPC.Message decode(String s) {
         if (s == null || s.isEmpty()) return null;
+        NativeByteBuffer buffer = null;
         try {
             byte[] bytes = Base64.decode(s, Base64.NO_WRAP);
-            NativeByteBuffer buffer = new NativeByteBuffer(bytes.length);
+            buffer = new NativeByteBuffer(bytes.length);
             buffer.writeBytes(bytes);
             buffer.position(0);
             int constructor = buffer.readInt32(false);
-            TLRPC.Message msg = TLRPC.Message.TLdeserialize(buffer, constructor, false);
-            buffer.reuse();
-            return msg;
+            return TLRPC.Message.TLdeserialize(buffer, constructor, false);
         } catch (Throwable e) {
             FileLog.e(e);
             return null;
+        } finally {
+            if (buffer != null) buffer.reuse();
         }
     }
 }

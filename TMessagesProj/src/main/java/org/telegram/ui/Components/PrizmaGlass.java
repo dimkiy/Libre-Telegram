@@ -465,6 +465,17 @@ public final class PrizmaGlass {
         }
 
         @Override
+        public void show() {
+            android.app.Activity activity = AndroidUtilities.findActivity(getContext());
+            if (activity != null && (activity.isFinishing() || activity.isDestroyed())) return;
+            try {
+                super.show();
+            } catch (Throwable e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
+        }
+
+        @Override
         public void dismiss() {
             if (dismissing || panel == null) {
                 try {

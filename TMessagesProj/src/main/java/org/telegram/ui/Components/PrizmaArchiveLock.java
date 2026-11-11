@@ -39,6 +39,25 @@ public class PrizmaArchiveLock {
     private static final long COOLDOWN_MS = 30000;
     private static int fails;
     private static long blockedUntil;
+    private static boolean restored;
+
+    private static android.content.SharedPreferences guard() {
+        return org.telegram.messenger.ApplicationLoader.applicationContext.getSharedPreferences("libre_archive_lock", android.content.Context.MODE_PRIVATE);
+    }
+
+    private static void restore() {
+        if (restored) return;
+        restored = true;
+        android.content.SharedPreferences p = guard();
+        fails = p.getInt("fails", 0);
+        long left = p.getLong("until", 0) - System.currentTimeMillis();
+        if (left > 0) blockedUntil = SystemClock.elapsedRealtime() + Math.min(left, COOLDOWN_MS);
+    }
+
+    private static void persist() {
+        long left = blockedUntil - SystemClock.elapsedRealtime();
+        guard().edit().putInt("fails", fails).putLong("until", left > 0 ? System.currentTimeMillis() + left : 0).apply();
+    }
 
     private PrizmaArchiveLock() {
     }
@@ -334,6 +353,7 @@ public class PrizmaArchiveLock {
 
         private void type(String digit, View v) {
             if (busy) return;
+            restore();
             if (SystemClock.elapsedRealtime() < blockedUntil) {
                 shake();
                 return;
@@ -400,6 +420,7 @@ public class PrizmaArchiveLock {
             }
             if (sha256(pin).equals(PrizmaConfig.archivePinHash())) {
                 fails = 0;
+                persist();
                 if (PrizmaConfig.archivePinLength() == 0) PrizmaConfig.setArchivePinLength(pin.length());
                 success();
             } else {
@@ -409,8 +430,10 @@ public class PrizmaArchiveLock {
                 if (fails >= MAX_FAILS) {
                     fails = 0;
                     blockedUntil = SystemClock.elapsedRealtime() + COOLDOWN_MS;
+                    persist();
                     tick.run();
                 } else {
+                    persist();
                     hint.setText("Неверный код. Осталось попыток: " + (MAX_FAILS - fails));
                 }
                 AndroidUtilities.runOnUIThread(() -> {
@@ -477,6 +500,7 @@ public class PrizmaArchiveLock {
             content.setScaleY(0.94f);
             content.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
                     .setUpdateListener(a -> root.invalidate()).start();
+            restore();
             if (!setup && SystemClock.elapsedRealtime() < blockedUntil) tick.run();
         }
     }

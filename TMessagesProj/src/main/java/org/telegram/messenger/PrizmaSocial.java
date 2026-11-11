@@ -707,6 +707,7 @@ public final class PrizmaSocial {
                 try (InputStream in = activity.getContentResolver().openInputStream(uri)) {
                     bmp = BitmapFactory.decodeStream(in, null, o);
                 }
+                bmp = PrizmaExif.upright(bmp, PrizmaExif.orientation(activity.getContentResolver(), uri));
                 if (bmp != null) {
                     float scale = Math.min(1f, 1280f / Math.max(bmp.getWidth(), bmp.getHeight()));
                     if (scale < 1f) {

@@ -47,6 +47,7 @@ public class PrizmaWallpaper {
 
     private static android.graphics.Bitmap customBitmap;
     private static String customBitmapPath;
+    private static String customFailedPath;
 
     public static void preload() {
         if (!hasCustom() || PrizmaConfig.chatWallpaperIsVideo()) {
@@ -64,6 +65,9 @@ public class PrizmaWallpaper {
         }
         if (customBitmap != null && !customBitmap.isRecycled() && path.equals(customBitmapPath)) {
             return customBitmap;
+        }
+        if (path.equals(customFailedPath)) {
+            return null;
         }
         try {
             android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
@@ -84,6 +88,7 @@ public class PrizmaWallpaper {
             customBitmap = null;
             customBitmapPath = null;
         }
+        customFailedPath = customBitmap == null ? path : null;
         return customBitmap;
     }
 

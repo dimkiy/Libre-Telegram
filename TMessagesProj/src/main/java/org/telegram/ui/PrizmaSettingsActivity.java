@@ -36,7 +36,6 @@ import org.telegram.messenger.PrizmaSocial;
 import org.telegram.messenger.PrizmaSounds;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
-import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.CubicBezierInterpolator;
@@ -50,6 +49,8 @@ import org.telegram.ui.Components.PrizmaClanSheet;
 import org.telegram.ui.Components.PrizmaCloudSetup;
 import org.telegram.ui.Components.PrizmaGiftsSheet;
 import org.telegram.ui.Components.PrizmaGlass;
+import org.telegram.ui.Components.PrizmaGlassBar;
+import org.telegram.ui.Components.PrizmaGlassFrame;
 import org.telegram.ui.Components.PrizmaMaxSetup;
 import org.telegram.ui.Components.PrizmaNfcExchange;
 import org.telegram.ui.Components.PrizmaPalette;
@@ -108,6 +109,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
     private final ArrayList<Entry> entries = new ArrayList<>();
     private int textColor, grayColor, cardColor, accent, onAccent, dividerColor;
     private PrizmaSwitch ghostSwitch;
+    private boolean resumedOnce;
 
     public PrizmaSettingsActivity() {
         this(HOME);
@@ -119,15 +121,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
 
     @Override
     public View createView(Context context) {
-        actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle(section == HOME ? "Libre" : NAMES[section]);
-        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
-            @Override
-            public void onItemClick(int id) {
-                if (id == -1) finishFragment();
-            }
-        });
+        actionBar.setAddToContainer(false);
         textColor = getThemedColor(Theme.key_windowBackgroundWhiteBlackText);
         grayColor = getThemedColor(Theme.key_windowBackgroundWhiteGrayText);
         cardColor = getThemedColor(Theme.key_windowBackgroundWhite);
@@ -135,16 +129,21 @@ public class PrizmaSettingsActivity extends BaseFragment {
         onAccent = AndroidUtilities.computePerceivedBrightness(accent) > 0.62f ? 0xff111114 : 0xffffffff;
         dividerColor = getThemedColor(Theme.key_divider);
 
-        FrameLayout frame = new FrameLayout(context);
+        PrizmaGlassFrame frame = new PrizmaGlassFrame(context);
         frame.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundGray));
+        frame.setBaseColor(getThemedColor(Theme.key_windowBackgroundGray));
         ScrollView scroll = new ScrollView(context);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(10), AndroidUtilities.dp(14), AndroidUtilities.dp(120));
+        content.setPadding(AndroidUtilities.dp(14), PrizmaGlassBar.height() + AndroidUtilities.dp(6), AndroidUtilities.dp(14), AndroidUtilities.dp(120));
         scroll.addView(content, new ScrollView.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         frame.addView(scroll, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        PrizmaGlassBar bar = new PrizmaGlassBar(context, frame, section == HOME ? "Libre" : NAMES[section], this::finishFragment);
+        bar.follow(scroll);
         fragmentView = frame;
 
         buildEntries(context);
@@ -157,13 +156,20 @@ public class PrizmaSettingsActivity extends BaseFragment {
     }
 
     @Override
+    public boolean isLightStatusBar() {
+        return PrizmaGlassBar.lightStatusBar(getThemedColor(Theme.key_windowBackgroundGray));
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
-        if (content != null && section == HOME && homeBody != null) {
+        Activity activity = getParentActivity();
+        if (resumedOnce && activity != null && content != null && section == HOME && homeBody != null) {
             homeBody.removeAllViews();
-            buildEntries(getParentActivity());
-            fillHome(getParentActivity());
+            buildEntries(activity);
+            fillHome(activity);
         }
+        resumedOnce = true;
     }
 
     private void buildHome(Context context) {
@@ -643,8 +649,8 @@ public class PrizmaSettingsActivity extends BaseFragment {
         toggle(OTHER, "Блокировка рекламы в браузере", "Встроенный браузер не грузит рекламу и счётчики", PrizmaConfig::adBlock, PrizmaConfig::setAdBlock);
         toggle(OTHER, "ИИ на телефоне", "Gemini Nano: пересказ чата и улучшение черновика без интернета", PrizmaConfig::aiEnabled, PrizmaConfig::setAiEnabled);
         toggle(OTHER, "Кружки в 60 кадров", "Плавнее, если камера телефона это умеет", PrizmaConfig::round60, PrizmaConfig::setRound60);
-        toggle(OTHER, "Ползунок зума в кружках", "Ведите пальцем по ползунку справа во время записи", PrizmaConfig::roundZoomSlider, PrizmaConfig::setRoundZoomSlider);
-        toggle(OTHER, "Начинать с широкоугольной", "Задняя камера кружка открывается на самом широком объективе", PrizmaConfig::wideStart, PrizmaConfig::setWideStart);
+        toggle(OTHER, "Шкала зума в кружках", "Под кругом: нажмите 1×, 2× или ведите пальцем по шкале", PrizmaConfig::roundZoomSlider, PrizmaConfig::setRoundZoomSlider);
+        toggle(OTHER, "Кружки в высоком качестве", "Чётче картинка и звук. Файл кружка получается больше", PrizmaConfig::roundHd, PrizmaConfig::setRoundHd);
         toggle(OTHER, "Тишина при записи", "Глушить звуки уведомлений, пока пишете голосовое или кружок", PrizmaConfig::muteSystemOnRecord, PrizmaConfig::setMuteSystemOnRecord);
         action(OTHER, "Пропорции фото", "Для камеры в чате", () -> choose(ctx, "Пропорции фото", new String[]{"Как снято", "Квадрат 1:1", "4:3", "16:9"}, new int[]{0, 1, 2, 3}, PrizmaConfig.photoAspect(), PrizmaConfig::setPhotoAspect));
         toggle(OTHER, "Скрывать рекламу", "Без спонсорских сообщений в каналах и ботах", PrizmaConfig::hideAds, PrizmaConfig::setHideAds);

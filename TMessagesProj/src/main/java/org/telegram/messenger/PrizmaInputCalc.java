@@ -240,7 +240,7 @@ public final class PrizmaInputCalc {
     private static void loadRates() {
         if (ratesLoading || !rates.isEmpty() && System.currentTimeMillis() - ratesAt < 6 * 3600 * 1000L) return;
         ratesLoading = true;
-        Utilities.globalQueue.postRunnable(() -> {
+        PrizmaJobs.net(() -> {
             try {
                 String body = PrizmaCloud.enabled() ? PrizmaNet.get(PrizmaCloud.host() + "/v1/rates", 8000) : null;
                 if (body == null) body = PrizmaNet.get("https://open.er-api.com/v6/latest/USD", 8000);

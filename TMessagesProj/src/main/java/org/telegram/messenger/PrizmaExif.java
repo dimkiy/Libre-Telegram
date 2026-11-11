@@ -63,6 +63,57 @@ public final class PrizmaExif {
         in.close();
     }
 
+    public static int orientation(android.content.ContentResolver resolver, android.net.Uri uri) {
+        try (InputStream in = resolver.openInputStream(uri)) {
+            return in == null ? ExifInterface.ORIENTATION_NORMAL : new ExifInterface(in).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+        } catch (Throwable e) {
+            return ExifInterface.ORIENTATION_NORMAL;
+        }
+    }
+
+    public static android.graphics.Bitmap upright(android.graphics.Bitmap bitmap, int orientation) {
+        if (bitmap == null) return null;
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_ROTATE_90: m.postRotate(90); break;
+            case ExifInterface.ORIENTATION_ROTATE_180: m.postRotate(180); break;
+            case ExifInterface.ORIENTATION_ROTATE_270: m.postRotate(270); break;
+            case ExifInterface.ORIENTATION_FLIP_HORIZONTAL: m.postScale(-1, 1); break;
+            case ExifInterface.ORIENTATION_FLIP_VERTICAL: m.postScale(1, -1); break;
+            case ExifInterface.ORIENTATION_TRANSPOSE: m.postRotate(90); m.postScale(-1, 1); break;
+            case ExifInterface.ORIENTATION_TRANSVERSE: m.postRotate(270); m.postScale(-1, 1); break;
+            default: return bitmap;
+        }
+        try {
+            android.graphics.Bitmap turned = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), m, true);
+            if (turned != bitmap) bitmap.recycle();
+            return turned;
+        } catch (Throwable e) {
+            return bitmap;
+        }
+    }
+
+    public static void normalize(String path) {
+        try {
+            int orientation = new ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) return;
+            android.graphics.Bitmap bitmap = upright(PrizmaBitmaps.decode(path, 2560), orientation);
+            if (bitmap == null) return;
+            File tmp = new File(path + ".turn");
+            try (FileOutputStream out = new FileOutputStream(tmp)) {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out);
+            }
+            bitmap.recycle();
+            File dst = new File(path);
+            if (!tmp.renameTo(dst)) {
+                dst.delete();
+                if (!tmp.renameTo(dst)) tmp.delete();
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
+
     private static final String[] TAGS_TO_CLEAR = {
             ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF,
             ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF,

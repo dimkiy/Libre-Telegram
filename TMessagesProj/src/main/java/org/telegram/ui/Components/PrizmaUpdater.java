@@ -131,7 +131,8 @@ public final class PrizmaUpdater {
     private static void show(Activity activity, JSONObject info) {
         showing = true;
         final String version = info.optString("version");
-        final String url = info.optString("url");
+        final String link = info.optString("url");
+        final String url = link.startsWith("/") ? PrizmaCloud.host() + link : link;
         final String sha = info.optString("sha256", "");
         final long size = info.optLong("size", 0);
         final Context ctx = activity;

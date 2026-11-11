@@ -1249,6 +1249,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
             ArrayList<DelayedMessage> arr = delayedMessages.get(location);
             if (arr != null) {
+                if (!arr.isEmpty()) PrizmaSendErrors.upload();
                 for (int a = 0; a < arr.size(); a++) {
                     DelayedMessage obj = arr.get(a);
                     if (enc && obj.sendEncryptedRequest != null || !enc && obj.sendRequest != null) {
@@ -6569,6 +6570,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             }
         } catch (Exception e) {
             FileLog.e(e);
+            PrizmaSendErrors.failure(e);
             getMessagesStorage().markMessageAsSendError(newMsg, scheduleDate != 0 ? 1 : 0);
             if (newMsgObj != null) {
                 newMsgObj.messageOwner.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR;
@@ -8017,6 +8019,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     Utilities.stageQueue.postRunnable(() -> getMessagesController().processUpdates(updates, false));
                 } else {
                     AlertsCreator.processError(currentAccount, error, null, request);
+                    PrizmaSendErrors.server(error);
                     isSentError = true;
                 }
                 if (isSentError) {
@@ -8256,6 +8259,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
                     } else {
                         AlertsCreator.processError(currentAccount, error, null, req);
+                        PrizmaSendErrors.server(error);
                         removeFromSendingMessages(newMsgObj.id, scheduled);
                         revertEditingMessageObject(msgObj);
                     }
@@ -8303,6 +8307,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
                     } else {
                         AlertsCreator.processError(currentAccount, error, null, req);
+                        PrizmaSendErrors.server(error);
                         removeFromSendingMessages(newMsgObj.id, scheduled);
                         revertEditingMessageObject(msgObj);
                     }
@@ -8559,6 +8564,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         }
                     } else {
                         AlertsCreator.processError(currentAccount, error, null, req);
+                        PrizmaSendErrors.server(error);
                         isSentError = true;
                     }
                     if (isSentError) {
