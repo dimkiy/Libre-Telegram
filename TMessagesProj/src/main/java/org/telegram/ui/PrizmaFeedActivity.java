@@ -307,9 +307,10 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             up.setAlpha(0f);
             up.setScaleX(0.6f);
             up.setScaleY(0.6f);
-            up.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK)
-                    .setUpdateListener(a -> root.invalidate()).start();
+            org.telegram.ui.Components.PrizmaMotion.popIn(up, 0.6f);
+            root.postInvalidateOnAnimation();
         } else {
+            org.telegram.ui.Components.PrizmaMotion.halt(up);
             up.animate().alpha(0f).scaleX(0.6f).scaleY(0.6f).setDuration(180).setInterpolator(CubicBezierInterpolator.EASE_IN)
                     .setUpdateListener(a -> root.invalidate()).withEndAction(() -> up.setVisibility(View.GONE)).start();
         }
@@ -335,7 +336,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
         float target = shift < -topRowHeight() / 2f && list.canScrollVertically(-1) ? -topRowHeight() : 0;
         snap = ValueAnimator.ofFloat(shift, target);
         snap.setDuration(260);
-        snap.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
+        snap.setInterpolator(org.telegram.ui.Components.PrizmaMotion.EASE);
         snap.addUpdateListener(a -> setShift((float) a.getAnimatedValue()));
         snap.start();
     }
@@ -477,7 +478,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
     private void revealList() {
         if (list.getAlpha() >= 1f && list.getTranslationX() == 0) return;
         list.animate().cancel();
-        list.animate().alpha(1f).translationX(0).setDuration(300).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
+        list.animate().alpha(1f).translationX(0).setDuration(300).setInterpolator(org.telegram.ui.Components.PrizmaMotion.EASE)
                 .setUpdateListener(a -> root.invalidate()).start();
     }
 
@@ -1314,7 +1315,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
                         cell.setAlpha(0f);
                         cell.setTranslationY(AndroidUtilities.dp(18));
                         cell.animate().alpha(1f).translationY(0).setStartDelay(delay).setDuration(360)
-                                .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).setUpdateListener(a -> root.invalidate()).start();
+                                .setInterpolator(org.telegram.ui.Components.PrizmaMotion.EASE).setUpdateListener(a -> root.invalidate()).start();
                     } else {
                         cell.setAlpha(1f);
                         cell.setTranslationY(0);
@@ -1336,7 +1337,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
         private final RectF rect = new RectF();
         private final ArrayList<String> keys = new ArrayList<>();
         private float left, right, lensWidth;
-        private ValueAnimator anim;
+        private final org.telegram.ui.Components.PrizmaMotion.Stretch pill = new org.telegram.ui.Components.PrizmaMotion.Stretch();
         private String selected;
 
         Tabs(Context context) {
@@ -1346,12 +1347,20 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
             row = new LinearLayout(context) {
                 @Override
                 protected void dispatchDraw(Canvas canvas) {
-                    super.dispatchDraw(canvas);
+                    if (pill.placed()) {
+                        boolean moving = pill.step();
+                        left = pill.left();
+                        right = pill.right();
+                        if (moving) {
+                            postInvalidateOnAnimation();
+                            root.invalidate();
+                        }
+                    }
                     if (right > left) {
                         int ink = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText);
                         bar.setColor(Theme.multAlpha(ink, 0.1f));
                         float hh = AndroidUtilities.dp(34);
-                        float stretch = Math.max(0f, (right - left) - lensWidth) * 0.04f;
+                        float stretch = Math.min(AndroidUtilities.dp(6), Math.max(0f, (right - left) - lensWidth) * 0.05f);
                         rect.set(left, (getHeight() - hh) / 2f + stretch, right, (getHeight() + hh) / 2f - stretch);
                         float rr = rect.height() / 2f;
                         canvas.drawRoundRect(rect, rr, rr, bar);
@@ -1361,12 +1370,14 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
                         rect.set(cx - lw / 2f, rect.bottom - AndroidUtilities.dp(4.5f), cx + lw / 2f, rect.bottom - AndroidUtilities.dp(2.5f));
                         canvas.drawRoundRect(rect, AndroidUtilities.dp(1), AndroidUtilities.dp(1), bar);
                     }
+                    super.dispatchDraw(canvas);
                 }
 
                 @Override
                 protected void onLayout(boolean changed, int l, int t, int r, int b) {
                     super.onLayout(changed, l, t, r, b);
-                    if (anim == null || !anim.isRunning()) snapIndicator();
+                    float[] tg = target();
+                    if (tg[1] > tg[0]) pill.moveTo(tg[0], tg[1], pill.placed());
                 }
             };
             row.setOrientation(LinearLayout.HORIZONTAL);
@@ -1448,6 +1459,7 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
 
         private void snapIndicator() {
             float[] tg = target();
+            pill.moveTo(tg[0], tg[1], false);
             left = tg[0];
             right = tg[1];
             row.invalidate();
@@ -1466,27 +1478,9 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
                 snapIndicator();
                 return;
             }
-            if (anim != null) anim.cancel();
-            float l0 = left, r0 = right;
-            boolean forward = tg[0] > l0;
-            anim = ValueAnimator.ofFloat(0f, 1f);
-            anim.setDuration(420);
-            anim.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-            anim.addUpdateListener(a -> {
-                float t = (float) a.getAnimatedValue();
-                float lead = Math.min(1f, t * 1.35f), trail = Math.max(0f, (t - 0.35f) / 0.65f);
-                left = AndroidUtilities.lerp(l0, tg[0], forward ? trail : lead);
-                right = AndroidUtilities.lerp(r0, tg[1], forward ? lead : trail);
-                row.invalidate();
-                root.invalidate();
-            });
-            anim.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(android.animation.Animator animation) {
-                    if (anim == animation) snapIndicator();
-                }
-            });
-            anim.start();
+            pill.moveTo(tg[0], tg[1], true);
+            row.invalidate();
+            if (i >= 0 && i < row.getChildCount()) org.telegram.ui.Components.PrizmaMotion.pop(row.getChildAt(i));
         }
     }
 
@@ -1543,13 +1537,14 @@ public class PrizmaFeedActivity extends BaseFragment implements PrizmaPostCell.H
                 setScaleX(0.7f);
                 setScaleY(0.7f);
             }
-            animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK)
-                    .setUpdateListener(a -> root.invalidate()).start();
+            org.telegram.ui.Components.PrizmaMotion.popIn(this, 0.7f);
+            root.postInvalidateOnAnimation();
         }
 
         void hide() {
             if (!shown) return;
             shown = false;
+            org.telegram.ui.Components.PrizmaMotion.halt(this);
             animate().cancel();
             animate().alpha(0f).scaleX(0.8f).scaleY(0.8f).setDuration(200).setUpdateListener(a -> root.invalidate())
                     .withEndAction(() -> {

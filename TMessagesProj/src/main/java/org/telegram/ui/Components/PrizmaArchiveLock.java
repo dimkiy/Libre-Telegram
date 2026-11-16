@@ -376,7 +376,7 @@ public class PrizmaArchiveLock {
             action.setText(setup ? "Далее" : "Открыть");
             if (showAction && action.getVisibility() != View.VISIBLE) {
                 action.setVisibility(View.VISIBLE);
-                action.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320).setInterpolator(new OvershootInterpolator(2f))
+                action.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(PrizmaMotion.duration(PrizmaMotion.POP)).setInterpolator(PrizmaMotion.curve(PrizmaMotion.POP))
                         .setUpdateListener(a -> root.invalidate()).start();
             } else if (!showAction && action.getVisibility() == View.VISIBLE) {
                 action.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(160).setUpdateListener(a -> root.invalidate())
@@ -498,7 +498,7 @@ public class PrizmaArchiveLock {
             content.setAlpha(0f);
             content.setScaleX(0.94f);
             content.setScaleY(0.94f);
-            content.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
+            content.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320).setInterpolator(PrizmaMotion.EASE)
                     .setUpdateListener(a -> root.invalidate()).start();
             restore();
             if (!setup && SystemClock.elapsedRealtime() < blockedUntil) tick.run();
@@ -536,8 +536,8 @@ public class PrizmaArchiveLock {
                 }
                 if (level[i] == target) continue;
                 ValueAnimator a = ValueAnimator.ofFloat(level[i], target);
-                a.setDuration(target > 0 ? 260 : 160);
-                a.setInterpolator(target > 0 ? new OvershootInterpolator(3f) : CubicBezierInterpolator.EASE_OUT);
+                a.setDuration(target > 0 ? PrizmaMotion.duration(PrizmaMotion.POP) : PrizmaMotion.duration(PrizmaMotion.FADE));
+                a.setInterpolator(target > 0 ? PrizmaMotion.curve(PrizmaMotion.POP) : PrizmaMotion.curve(PrizmaMotion.FADE));
                 a.addUpdateListener(an -> {
                     if (idx < level.length) level[idx] = (float) an.getAnimatedValue();
                     invalidate();
@@ -605,8 +605,8 @@ public class PrizmaArchiveLock {
 
         void open() {
             ValueAnimator a = ValueAnimator.ofFloat(0f, 1f);
-            a.setDuration(340);
-            a.setInterpolator(new OvershootInterpolator(2.2f));
+            a.setDuration(PrizmaMotion.duration(PrizmaMotion.SETTLE));
+            a.setInterpolator(PrizmaMotion.curve(PrizmaMotion.SETTLE));
             a.addUpdateListener(an -> {
                 open = (float) an.getAnimatedValue();
                 invalidate();

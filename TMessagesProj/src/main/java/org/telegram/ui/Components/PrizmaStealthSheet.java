@@ -263,7 +263,7 @@ public class PrizmaStealthSheet {
                 numberView.setAlpha(0.35f);
                 numberView.animate().translationY(0f).alpha(1f)
                         .setDuration(done ? 260 : 70)
-                        .setInterpolator(done ? new OvershootInterpolator(2.4f) : CubicBezierInterpolator.EASE_OUT)
+                        .setInterpolator(done ? PrizmaMotion.curve(PrizmaMotion.POP) : PrizmaMotion.curve(PrizmaMotion.FADE))
                         .start();
                 if (step[0] % 5 == 0) {
                     try { numberView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); } catch (Throwable ignore) {}
@@ -275,7 +275,7 @@ public class PrizmaStealthSheet {
                     numberView.setTextColor(accent);
                     numberView.setScaleX(0.9f); numberView.setScaleY(0.9f);
                     numberView.animate().scaleX(1f).scaleY(1f).setDuration(300)
-                            .setInterpolator(new OvershootInterpolator(3f)).start();
+                            .setInterpolator(PrizmaMotion.curve(PrizmaMotion.POP)).start();
                     AndroidUtilities.runOnUIThread(() -> numberView.setTextColor(textColor), 550);
                     try { numberView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); } catch (Throwable ignore) {}
                     return;

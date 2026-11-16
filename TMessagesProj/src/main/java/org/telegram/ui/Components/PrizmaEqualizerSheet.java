@@ -47,7 +47,7 @@ public class PrizmaEqualizerSheet {
         PrizmaGlass.Toggle toggle;
         TextView status;
         GraphicEq graph;
-        LinearLayout presets;
+        PillRow presets;
         View presetsScroll;
         PrizmaSlider bass, virt;
         TextView bassValue, virtValue;
@@ -138,7 +138,7 @@ public class PrizmaEqualizerSheet {
             HorizontalScrollView scroll = new HorizontalScrollView(context);
             scroll.setHorizontalScrollBarEnabled(false);
             scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-            presets = new LinearLayout(context);
+            presets = new PillRow(context, accent);
             presets.setOrientation(LinearLayout.HORIZONTAL);
             presets.setGravity(Gravity.CENTER_VERTICAL);
             scroll.addView(presets);
@@ -186,16 +186,19 @@ public class PrizmaEqualizerSheet {
         private void fillPresets() {
             if (presets == null) return;
             presets.removeAllViews();
+            View chosen = null;
             short count = eq.getNumberOfPresets();
             for (short i = 0; i < count; i++) {
                 final short preset = i;
                 final String key = "p:" + i;
-                presets.addView(presetItem(prettyPreset(eq.getPresetName(i)), key.equals(selectedPreset), v -> {
+                TextView item = presetItem(prettyPreset(eq.getPresetName(i)), key.equals(selectedPreset), v -> {
                     eq.usePreset(preset);
                     if (!eq.isEnabled()) setEnabled(true);
                     selectedPreset = key;
                     syncFromEq(true);
-                }));
+                });
+                if (key.equals(selectedPreset)) chosen = item;
+                presets.addView(item);
             }
             int custom = eq.getCustomCount();
             if (custom > 0) {
@@ -226,11 +229,13 @@ public class PrizmaEqualizerSheet {
                     b.show();
                     return true;
                 });
+                if (key.equals(selectedPreset)) chosen = item;
                 presets.addView(item);
             }
             TextView save = presetItem("Сохранить…", false, v -> showSaveDialog());
             save.setTextColor(PrizmaGlass.TEXT_3);
             presets.addView(save);
+            presets.select(chosen);
         }
 
         private TextView presetItem(String text, boolean selected, View.OnClickListener onClick) {
@@ -240,15 +245,12 @@ public class PrizmaEqualizerSheet {
             t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
             t.setTextColor(selected ? PrizmaGlass.TEXT : PrizmaGlass.TEXT_2);
             t.setTypeface(selected ? AndroidUtilities.bold() : null);
-            t.setGravity(Gravity.CENTER_HORIZONTAL);
-            t.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(6), AndroidUtilities.dp(8), AndroidUtilities.dp(4));
-            GradientDrawable dot = new GradientDrawable();
-            dot.setShape(GradientDrawable.OVAL);
-            dot.setColor(selected ? 0xffffffff : 0x00000000);
-            dot.setSize(AndroidUtilities.dp(4), AndroidUtilities.dp(4));
-            t.setCompoundDrawablesWithIntrinsicBounds(null, null, null, dot);
-            t.setCompoundDrawablePadding(AndroidUtilities.dp(4));
-            t.setOnClickListener(onClick);
+            t.setGravity(Gravity.CENTER);
+            t.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(8), AndroidUtilities.dp(14), AndroidUtilities.dp(8));
+            t.setOnClickListener(v -> {
+                PrizmaMotion.pop(v);
+                onClick.onClick(v);
+            });
             return t;
         }
 
@@ -269,7 +271,9 @@ public class PrizmaEqualizerSheet {
             root.addView(line, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, topMargin, 0, 0));
 
             PrizmaSlider slider = new PrizmaSlider(context);
-            slider.setColors(0xf2ffffff, 0x26ffffff);
+            slider.setColors(accent, 0x26ffffff);
+            slider.setTicks(true);
+            slider.setLabel(v -> Math.round(v * 100) + "");
             slider.setValue(strength / 1000f);
             slider.setOnChange((v, fromUser) -> {
                 if (!fromUser) return;
@@ -278,7 +282,7 @@ public class PrizmaEqualizerSheet {
                 value.setText(percent(s));
                 if (s > 0 && !eq.isEnabled()) setEnabled(true);
             });
-            root.addView(slider, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36, -12, 0, -12, 0));
+            root.addView(slider, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 68, -12, -30, -12, 0));
             return slider;
         }
 
@@ -294,7 +298,7 @@ public class PrizmaEqualizerSheet {
             View[] views = {graph, presetsScroll, bass, virt};
             for (View v : views) {
                 if (v == null) continue;
-                if (animated) v.animate().alpha(a).setDuration(220).start();
+                if (animated) PrizmaMotion.to(v, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA, a, PrizmaMotion.FADE);
                 else v.setAlpha(a);
             }
         }
@@ -358,6 +362,56 @@ public class PrizmaEqualizerSheet {
         }
     }
 
+    private static final class PillRow extends LinearLayout {
+        private final PrizmaMotion.Stretch pill = new PrizmaMotion.Stretch();
+        private final PrizmaMotion.Value shown = new PrizmaMotion.Value(0f, PrizmaMotion.FADE);
+        private final PrizmaMotion.Clock clock = new PrizmaMotion.Clock();
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rect = new RectF();
+        private View selected;
+
+        PillRow(Context c, int accent) {
+            super(c);
+            setWillNotDraw(false);
+            paint.setColor((accent & 0x00ffffff) | 0x38000000);
+        }
+
+        void select(View v) {
+            selected = v;
+            shown.t = v == null ? 0f : 1f;
+            clock.reset();
+            requestLayout();
+            invalidate();
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            super.onLayout(changed, l, t, r, b);
+            if (selected != null && selected.getParent() == this) {
+                pill.moveTo(selected.getLeft(), selected.getRight(), pill.placed() && shown.x > 0.05f);
+            }
+        }
+
+        @Override
+        protected void dispatchDraw(Canvas canvas) {
+            boolean moving = pill.placed() && pill.step();
+            moving |= PrizmaMotion.run(clock.tick(), shown);
+            float a = PrizmaMotion.clamp(shown.x, 0f, 1f);
+            if (pill.placed() && a > 0.01f) {
+                float inset = AndroidUtilities.dp(3);
+                rect.set(pill.left(), inset, pill.right(), getHeight() - inset);
+                float stretch = Math.max(0f, rect.width() - (selected != null ? selected.getWidth() : rect.width()));
+                rect.inset(0, Math.min(AndroidUtilities.dp(4), stretch * 0.03f));
+                int base = paint.getAlpha();
+                paint.setAlpha((int) (base * a));
+                canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, paint);
+                paint.setAlpha(base);
+            }
+            super.dispatchDraw(canvas);
+            if (moving) postInvalidateOnAnimation();
+        }
+    }
+
     interface BandListener {
         void onBand(int band, short level, boolean done);
     }
@@ -372,9 +426,17 @@ public class PrizmaEqualizerSheet {
         private BandListener listener;
         private int dragging = -1;
         private int lastDragged = -1;
-        private float dragProgress;
         private boolean snapped;
-        private long lastTime;
+        private final int accent;
+        private final PrizmaMotion.Value[] springs;
+        private final PrizmaMotion.Value[] all;
+        private final long[] wait;
+        private final PrizmaMotion.Value drag = new PrizmaMotion.Value(0f, PrizmaMotion.FADE);
+        private final PrizmaMotion.Value bubble = new PrizmaMotion.Value(0f, PrizmaMotion.BUBBLE);
+        private final PrizmaMotion.Clock clock = new PrizmaMotion.Clock();
+        private final Paint pillar = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint drop = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final TextPaint dropText = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 
         private final Paint hair = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint zero = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -400,6 +462,21 @@ public class PrizmaEqualizerSheet {
             value = new float[bands];
             display = new float[bands];
             xs = new float[bands];
+            this.accent = accent;
+            springs = new PrizmaMotion.Value[bands];
+            wait = new long[bands];
+            for (int i = 0; i < bands; i++) springs[i] = new PrizmaMotion.Value(0f, PrizmaMotion.SETTLE);
+            all = new PrizmaMotion.Value[bands + 2];
+            System.arraycopy(springs, 0, all, 0, bands);
+            all[bands] = drag;
+            all[bands + 1] = bubble;
+            pillar.setColor((accent & 0x00ffffff) | 0x2e000000);
+            drop.setColor(accent);
+            dropText.setTextAlign(Paint.Align.CENTER);
+            dropText.setTypeface(AndroidUtilities.bold());
+            dropText.setTextSize(AndroidUtilities.dp(12));
+            int cr = (accent >> 16) & 0xff, cg = (accent >> 8) & 0xff, cb = accent & 0xff;
+            dropText.setColor((cr * 299 + cg * 587 + cb * 114) / 1000 > 150 ? 0xff111114 : 0xffffffff);
 
             hair.setColor(0x17ffffff);
             hair.setStrokeWidth(Math.max(1f, AndroidUtilities.dpf2(0.6f)));
@@ -433,10 +510,19 @@ public class PrizmaEqualizerSheet {
         }
 
         void setLevels(short[] levels, boolean animate) {
+            long now = System.currentTimeMillis();
             for (int i = 0; i < bands && i < levels.length; i++) {
                 value[i] = toValue(levels[i]);
-                if (!animate) display[i] = value[i];
+                if (!animate || PrizmaMotion.calm()) {
+                    springs[i].snap(value[i]);
+                    display[i] = value[i];
+                    wait[i] = 0;
+                } else {
+                    springs[i].tune(PrizmaMotion.SETTLE);
+                    wait[i] = now + (long) i * PrizmaMotion.STAGGER;
+                }
             }
+            clock.reset();
             invalidate();
         }
 
@@ -479,6 +565,11 @@ public class PrizmaEqualizerSheet {
                     float col = (getWidth() - gutter()) / (float) bands;
                     dragging = Math.max(0, Math.min(bands - 1, (int) ((e.getX() - gutter()) / col)));
                     lastDragged = dragging;
+                    drag.t = 1f;
+                    bubble.t = 1f;
+                    springs[dragging].tune(PrizmaMotion.FOLLOW);
+                    wait[dragging] = 0;
+                    clock.reset();
                     snapped = Math.abs(value[dragging] - toValue((short) 0)) < 0.001f;
                     if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
@@ -490,7 +581,13 @@ public class PrizmaEqualizerSheet {
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    if (dragging >= 0) move(e.getY(), true);
+                    if (dragging >= 0) {
+                        move(e.getY(), true);
+                        springs[dragging].tune(PrizmaMotion.RELEASE);
+                        springs[dragging].t = value[dragging];
+                    }
+                    drag.t = 0f;
+                    bubble.t = 0f;
                     dragging = -1;
                     if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
                     invalidate();
@@ -500,8 +597,8 @@ public class PrizmaEqualizerSheet {
         }
 
         private void move(float y, boolean done) {
-            float v = (bottom() - y) / Math.max(1f, bottom() - top());
-            v = Math.max(0f, Math.min(1f, v));
+            float raw = (bottom() - y) / Math.max(1f, bottom() - top());
+            float v = Math.max(0f, Math.min(1f, raw));
             boolean inSnap = min < 0 && max > 0 && Math.abs(v - toValue((short) 0)) < 0.03f;
             if (inSnap) {
                 v = toValue((short) 0);
@@ -509,7 +606,7 @@ public class PrizmaEqualizerSheet {
             }
             snapped = inSnap;
             value[dragging] = v;
-            display[dragging] = v;
+            springs[dragging].t = inSnap ? v : PrizmaMotion.rubber(raw, 0f, 1f, 0.06f);
             if (listener != null) listener.onBand(dragging, toLevel(v), done);
             invalidate();
         }
@@ -519,23 +616,17 @@ public class PrizmaEqualizerSheet {
             final int w = getWidth();
             if (w <= 0 || bands == 0) return;
             long now = System.currentTimeMillis();
-            float dt = lastTime == 0 ? 16 : Math.min(40, now - lastTime);
-            lastTime = now;
             boolean moving = false;
-            float k = Math.min(1f, dt / 140f * 2.2f);
             for (int i = 0; i < bands; i++) {
-                float d = value[i] - display[i];
-                if (Math.abs(d) > 0.0015f) {
-                    display[i] += d * k;
-                    moving = true;
-                } else {
-                    display[i] = value[i];
+                if (wait[i] != 0 && now >= wait[i]) {
+                    springs[i].t = value[i];
+                    wait[i] = 0;
                 }
+                if (wait[i] != 0) moving = true;
             }
-            float targetDrag = dragging >= 0 ? 1f : 0f;
-            dragProgress += (targetDrag - dragProgress) * Math.min(1f, dt / 90f * 2f);
-            if (Math.abs(targetDrag - dragProgress) > 0.01f) moving = true;
-            else dragProgress = targetDrag;
+            moving |= PrizmaMotion.run(clock.tick(), all);
+            for (int i = 0; i < bands; i++) display[i] = springs[i].x;
+            float dragProgress = PrizmaMotion.clamp(drag.x, 0f, 1f);
 
             final float top = top(), bottom = bottom(), g = gutter();
             final float zeroY = yOf(toValue((short) 0));
@@ -556,9 +647,15 @@ public class PrizmaEqualizerSheet {
             }
 
             final float trackW = AndroidUtilities.dpf2(2f);
+            final float pillarW = AndroidUtilities.dpf2(10f);
             for (int i = 0; i < bands; i++) {
                 rect.set(xs[i] - trackW / 2f, top, xs[i] + trackW / 2f, bottom);
                 canvas.drawRoundRect(rect, trackW / 2f, trackW / 2f, track);
+                float ky = yOf(display[i]);
+                if (Math.abs(ky - zeroY) > AndroidUtilities.dp(2)) {
+                    rect.set(xs[i] - pillarW / 2f, Math.min(ky, zeroY), xs[i] + pillarW / 2f, Math.max(ky, zeroY));
+                    canvas.drawRoundRect(rect, pillarW / 2f, pillarW / 2f, pillar);
+                }
             }
 
             buildCurve(g, w);
@@ -573,15 +670,37 @@ public class PrizmaEqualizerSheet {
                 float cx = xs[i], cy = yOf(display[i]);
                 float grow = i == lastDragged ? dragProgress : 0f;
                 float r = AndroidUtilities.dpf2(7.5f) + AndroidUtilities.dpf2(2.5f) * grow;
-                canvas.drawCircle(cx, cy + AndroidUtilities.dpf2(1f), r, knobShadow);
-                canvas.drawCircle(cx, cy, r, knob);
+                float st = 1f + Math.min(Math.abs(springs[i].v) / 6f, 0.35f);
+                rect.set(cx - r / st, cy - r * st + AndroidUtilities.dpf2(1f), cx + r / st, cy + r * st + AndroidUtilities.dpf2(1f));
+                canvas.drawOval(rect, knobShadow);
+                rect.set(cx - r / st, cy - r * st, cx + r / st, cy + r * st);
+                canvas.drawOval(rect, knob);
                 if (grow > 0.01f) {
                     ring.setAlpha((int) (255 * grow));
                     canvas.drawCircle(cx, cy, r + AndroidUtilities.dpf2(3f), ring);
                 }
                 canvas.drawText(freqShort(freqs[i]), cx, getHeight() - AndroidUtilities.dp(6), freq);
             }
-            if (moving) postInvalidateOnAnimation();
+            float up = PrizmaMotion.clamp(bubble.x, 0f, 1.2f);
+            if (lastDragged >= 0 && up > 0.02f) {
+                float cx = xs[lastDragged], cy = yOf(display[lastDragged]);
+                String label = dbLabel(toLevel(value[lastDragged]));
+                float tw = dropText.measureText(label) + AndroidUtilities.dp(16);
+                float th = AndroidUtilities.dp(24);
+                float by = cy - AndroidUtilities.dp(22) - th / 2f - AndroidUtilities.dp(6) * up;
+                if (by - th / 2f < 0) by = cy + AndroidUtilities.dp(22) + th / 2f;
+                float bx = Math.max(gutter() + tw / 2f, Math.min(w - tw / 2f, cx));
+                float sc = Math.min(1f, up);
+                canvas.save();
+                canvas.scale(sc, sc, cx, cy);
+                drop.setAlpha((int) (255 * Math.min(1f, up)));
+                rect.set(bx - tw / 2f, by - th / 2f, bx + tw / 2f, by + th / 2f);
+                canvas.drawRoundRect(rect, th / 2f, th / 2f, drop);
+                dropText.setAlpha((int) (255 * PrizmaMotion.clamp((up - 0.6f) / 0.3f, 0f, 1f)));
+                canvas.drawText(label, bx, by + AndroidUtilities.dp(4), dropText);
+                canvas.restore();
+            }
+            if (moving || dragging >= 0) postInvalidateOnAnimation();
         }
 
         private void buildCurve(float left, int w) {

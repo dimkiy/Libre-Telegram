@@ -54,7 +54,7 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
     private float downX, downY;
     private boolean swiping, longFired;
     private final Runnable longPress = this::showMenu;
-    private final PrizmaSpring shift = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.76f, this::applyShift);
+    private final PrizmaSpring shift = new PrizmaSpring(0f, PrizmaMotion.SETTLE, this::applyShift);
 
     public PrizmaMiniPlayer(Context context) {
         super(context);
@@ -328,10 +328,11 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
             set.run();
             return;
         }
-        title.animate().alpha(0f).translationY(-AndroidUtilities.dp(6)).setDuration(110).withEndAction(() -> {
+        title.animate().alpha(0f).translationY(-AndroidUtilities.dp(10)).setDuration(110).setInterpolator(CubicBezierInterpolator.EASE_IN).withEndAction(() -> {
             set.run();
-            title.setTranslationY(AndroidUtilities.dp(8));
-            title.animate().alpha(1f).translationY(0f).setDuration(240).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).withEndAction(null).start();
+            title.setTranslationY(AndroidUtilities.dp(12));
+            PrizmaMotion.to(title, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA, 1f, PrizmaMotion.FADE);
+            PrizmaMotion.to(title, androidx.dynamicanimation.animation.DynamicAnimation.TRANSLATION_Y, 0f, PrizmaMotion.ROLL);
         }).start();
     }
 
@@ -375,7 +376,7 @@ public class PrizmaMiniPlayer extends FrameLayout implements NotificationCenter.
         private final PlayPauseDrawable icon = new PlayPauseDrawable(18);
         private boolean playing;
         private float flip;
-        private final PrizmaSpring flipSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.8f, v -> {
+        private final PrizmaSpring flipSpring = new PrizmaSpring(0f, PrizmaMotion.SETTLE, v -> {
             flip = v;
             invalidate();
         });

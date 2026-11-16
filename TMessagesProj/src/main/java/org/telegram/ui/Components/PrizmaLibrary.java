@@ -109,7 +109,7 @@ public class PrizmaLibrary extends Dialog {
     public void show() {
         super.show();
         current = this;
-        root.post(() -> new PrizmaSpring(root.getHeight(), 300f, 0.92f, root::setTranslationY).to(0f));
+        root.post(() -> new PrizmaSpring(root.getHeight(), PrizmaMotion.SOFT, root::setTranslationY).to(0f));
     }
 
     @Override
@@ -204,11 +204,18 @@ public class PrizmaLibrary extends Dialog {
             } else {
                 bindCreate(card);
             }
-            card.setAlpha(0f);
-            card.setTranslationY(AndroidUtilities.dp(14));
-            card.animate().alpha(1f).translationY(0f).setStartDelay(Math.min(240, 40L * position)).setDuration(300)
-                    .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+            long now = System.currentTimeMillis();
+            if (firstBindAt == 0) firstBindAt = now;
+            if (now - firstBindAt < 500) {
+                PrizmaMotion.appear(card, Math.min(6, position), 16);
+            } else {
+                PrizmaMotion.halt(card);
+                card.setAlpha(1f);
+                card.setTranslationY(0f);
+            }
         }
+
+        private long firstBindAt;
 
         @Override
         public int getItemCount() {
@@ -271,9 +278,7 @@ public class PrizmaLibrary extends Dialog {
 
     private static void bounce(View v) {
         v.animate().cancel();
-        v.setScaleX(0.96f);
-        v.setScaleY(0.96f);
-        v.animate().scaleX(1f).scaleY(1f).setDuration(300).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start();
+        PrizmaMotion.pop(v);
     }
 
     private interface NameSink {
@@ -353,7 +358,7 @@ public class PrizmaLibrary extends Dialog {
         pages.addView(page, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         final PlaylistPage shown = page;
         float width = AndroidUtilities.displaySize.x;
-        new PrizmaSpring(width, 380f, 0.92f, v -> {
+        new PrizmaSpring(width, PrizmaMotion.SOFT, v -> {
             shown.setTranslationX(v);
             home.setTranslationX(-(width - v) * 0.22f);
             home.setAlpha(Math.max(0.2f, v / width));
@@ -364,8 +369,9 @@ public class PrizmaLibrary extends Dialog {
         final PlaylistPage gone = page;
         page = null;
         if (gone == null) return;
-        home.animate().translationX(0f).alpha(1f).setDuration(240).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
-        gone.animate().translationX(gone.getWidth()).setDuration(240).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
+        PrizmaMotion.to(home, androidx.dynamicanimation.animation.DynamicAnimation.TRANSLATION_X, 0f, PrizmaMotion.SOFT);
+        PrizmaMotion.to(home, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA, 1f, PrizmaMotion.FADE);
+        gone.animate().translationX(gone.getWidth()).setDuration(240).setInterpolator(PrizmaMotion.EASE)
                 .withEndAction(() -> pages.removeView(gone)).start();
         refresh();
     }

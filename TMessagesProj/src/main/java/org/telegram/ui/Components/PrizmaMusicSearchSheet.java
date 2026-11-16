@@ -277,10 +277,10 @@ public class PrizmaMusicSearchSheet {
             added += in ? -1 : 1;
             button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
             button.animate().cancel();
+            PrizmaMotion.halt(button);
             button.animate().scaleX(0.6f).scaleY(0.6f).setDuration(110).withEndAction(() -> {
                 setAddState(button, !in);
-                button.animate().scaleX(1f).scaleY(1f).setDuration(260)
-                        .setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).withEndAction(null).start();
+                PrizmaMotion.scaleTo(button, 1f, PrizmaMotion.POP);
             }).start();
         }
 

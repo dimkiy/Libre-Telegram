@@ -93,6 +93,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private RoundVideoSession.OutputResolution activeOutputResolution;
     private RoundVideoSession.StateInfo stateInfo;
     private RoundVideoSession.CameraCapabilities capabilities;
+    private PrizmaZoomSlider prizmaZoom;
     private TelegramRoundVideoUpload upload;
     private VideoEditedInfo videoEditedInfo;
     private SendOptions pendingSend;
@@ -243,6 +244,11 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 0
         ));
 
+        prizmaZoom = new PrizmaZoomSlider(context);
+        prizmaZoom.setVisibility(GONE);
+        prizmaZoom.setListener(this::applyPrizmaZoom);
+        addView(prizmaZoom, LayoutHelper.createFrame(248, 48, Gravity.CENTER));
+
         switchCameraButton = new FlashViews.ImageViewInvertable(context);
         switchCameraButton.setScaleType(ImageView.ScaleType.CENTER);
         switchCameraButton.setContentDescription(
@@ -371,6 +377,14 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         if (session != null) return;
         setVisibilityFromPause = fromPaused;
         setVisibility(VISIBLE);
+        zoomProgress = 0f;
+        if (prizmaZoom != null) {
+            prizmaZoom.setVisibility(org.telegram.messenger.PrizmaConfig.roundZoomSlider() ? VISIBLE : GONE);
+            prizmaZoom.setRange(1f, prizmaMaxZoom(), 1f);
+            prizmaZoom.bringToFront();
+            placePrizmaZoom();
+            post(this::placePrizmaZoom);
+        }
         progressView.getPaint().setAlpha(255);
         sent = false;
         muted = false;
@@ -570,6 +584,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     @Override
     public void hideCamera(boolean async) {
+        if (prizmaZoom != null) prizmaZoom.setVisibility(GONE);
         destroy(async);
         cameraContainer.setTranslationX(0f);
         animationTranslationY = 0f;
@@ -754,6 +769,10 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 @NonNull RoundVideoSession.CameraCapabilities cameraCapabilities
         ) {
             capabilities = cameraCapabilities;
+            if (prizmaZoom != null && prizmaZoom.getVisibility() == VISIBLE) {
+                float max = prizmaMaxZoom();
+                prizmaZoom.setRange(1f, max, 1f + zoomProgress * (max - 1f));
+            }
             if (cameraCapabilities.getActiveFacing() != null) {
                 SharedSettings.roundVideoLastCamera.set(cameraCapabilities.getActiveFacing());
             }
@@ -1051,7 +1070,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
             zoomPointerId2 = event.getPointerId(1);
             pinchStartDistance = pointerDistance(event, 0, 1);
             pinchZoomActive = pinchStartDistance > 0f;
-            zoomProgress = 0f;
+            if (!prizmaZoomShown()) zoomProgress = 0f;
+            pinchBaseProgress = zoomProgress;
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE && pinchZoomActive) {
@@ -1065,6 +1085,15 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
             float maximumZoomRatio = capabilities == null
                     ? 1f
                     : capabilities.getMaximumZoomRatio();
+            if (prizmaZoomShown()) {
+                float max = prizmaMaxZoom();
+                float baseRatio = 1f + pinchBaseProgress * (max - 1f);
+                float ratio = clamp(baseRatio * (1f + (scale - 1f) / ZOOM_GESTURE_EFFORT), 1f, max);
+                zoomProgress = max <= 1f ? 0f : (ratio - 1f) / (max - 1f);
+                prizmaZoom.setValue(ratio);
+                session.setZoom(zoomProgress);
+                return true;
+            }
             float requestedZoomRatio = 1f
                     + Math.max(0f, scale - 1f) / ZOOM_GESTURE_EFFORT;
             zoomProgress = maximumZoomRatio <= 1f
@@ -1104,7 +1133,47 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         pinchZoomActive = false;
         zoomPointerId1 = -1;
         zoomPointerId2 = -1;
+        if (prizmaZoomShown()) return;
         animateZoomReset();
+    }
+
+    private float pinchBaseProgress;
+
+    private boolean prizmaZoomShown() {
+        return prizmaZoom != null && prizmaZoom.getVisibility() == VISIBLE;
+    }
+
+    private float prizmaMaxZoom() {
+        float max = capabilities == null ? 4f : capabilities.getMaximumZoomRatio();
+        if (max <= 1.05f) max = 2f;
+        return Math.min(8f, max);
+    }
+
+    private void applyPrizmaZoom(float ratio) {
+        if (zoomResetAnimator != null) zoomResetAnimator.cancel();
+        float max = prizmaMaxZoom();
+        zoomProgress = max <= 1f ? 0f : clamp((ratio - 1f) / (max - 1f), 0f, 1f);
+        if (session != null) session.setZoom(zoomProgress);
+    }
+
+    private void placePrizmaZoom() {
+        if (prizmaZoom == null || cameraContainer == null) return;
+        int size = cameraContainer.getHeight() > 0 ? cameraContainer.getHeight() : (textureViewSize > 0 ? textureViewSize + dp(28) : AndroidUtilities.roundPlayingMessageSize);
+        float containerCenter = cameraContainer.getTop() + cameraContainer.getHeight() / 2f;
+        float zoomCenter = prizmaZoom.getTop() + prizmaZoom.getHeight() / 2f;
+        float shift = prizmaZoom.getHeight() > 0 && cameraContainer.getHeight() > 0 ? containerCenter - zoomCenter : 0f;
+        float y = shift + cameraContainer.getTranslationY() + size / 2f + dp(16);
+        if (getHeight() > 0 && prizmaZoom.getHeight() > 0) {
+            float limit = getHeight() - getPaddingBottom() - dp(64) - (prizmaZoom.getTop() + prizmaZoom.getHeight());
+            y = Math.min(y, Math.max(shift, limit));
+        }
+        prizmaZoom.setTranslationY(y);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        placePrizmaZoom();
     }
 
     private void animateZoomReset() {
@@ -1142,6 +1211,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     private void updateTranslationY() {
         cameraContainer.setTranslationY(animationTranslationY + panTranslationY);
+        placePrizmaZoom();
     }
 
     private void showInitialPlaceholder() {

@@ -48,7 +48,7 @@ public final class PrizmaPlayerSettings {
     private boolean closing;
     private static PrizmaPlayerSettings shown;
 
-    private final PrizmaSpring slide = new PrizmaSpring(1f, 360f, 0.86f, v -> updateSlide(v));
+    private final PrizmaSpring slide = new PrizmaSpring(1f, PrizmaMotion.SOFT, v -> updateSlide(v));
 
     public static boolean closeIfOpen() {
         if (shown != null) {
@@ -311,11 +311,11 @@ public final class PrizmaPlayerSettings {
         row.setOnClickListener(v -> {
             boolean open = details.getVisibility() != View.VISIBLE;
             details.setVisibility(open ? View.VISIBLE : View.GONE);
-            arrow.animate().rotation(open ? 180f : 0f).setDuration(260).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start();
+            PrizmaMotion.to(arrow, androidx.dynamicanimation.animation.DynamicAnimation.ROTATION, open ? 180f : 0f, PrizmaMotion.SETTLE);
             if (open) {
                 details.setAlpha(0f);
                 details.setTranslationY(-AndroidUtilities.dp(8));
-                details.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+                details.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(PrizmaMotion.EASE).start();
             }
         });
         return box;
@@ -417,7 +417,7 @@ public final class PrizmaPlayerSettings {
             this.accent = accent;
             this.pick = pick;
             pos = this.selected / (float) (labels.length - 1);
-            spring = new PrizmaSpring(pos, PrizmaSpring.MEDIUM, 0.7f, v -> {
+            spring = new PrizmaSpring(pos, PrizmaMotion.SETTLE, v -> {
                 pos = v;
                 invalidate();
             });
@@ -433,13 +433,15 @@ public final class PrizmaPlayerSettings {
                     touching = true;
                     getParent().requestDisallowInterceptTouchEvent(true);
                 case MotionEvent.ACTION_MOVE:
-                    spring.snap(x);
+                    spring.tune(PrizmaMotion.FOLLOW);
+                    spring.to(x);
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     touching = false;
                     getParent().requestDisallowInterceptTouchEvent(false);
                     int next = Math.round(x * (labels.length - 1));
+                    spring.tune(PrizmaMotion.RELEASE);
                     spring.to(next / (float) (labels.length - 1));
                     if (next != selected) {
                         selected = next;

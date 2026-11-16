@@ -4471,6 +4471,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (contentView != null) {
                         contentView.updateBlurContent();
                     }
+                    org.telegram.ui.Components.PrizmaParticles.push(dx, dy);
                     if (prizmaWidgets != null && topPanelLayout != null) {
                         boolean canUp = recyclerView.canScrollVertically(-1);
                         int offset = recyclerView.computeVerticalScrollOffset();
@@ -5329,6 +5330,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             final FrameLayout.LayoutParams layoutParams = LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT);
             contentView.addView(actionBar, layoutParams);
         //}
+        if (!onlySelect && initialDialogsType == DIALOGS_TYPE_DEFAULT) {
+            contentView.addView(new org.telegram.ui.Components.PrizmaParticles(context), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        }
         if (!onlySelect) {
             animatedStatusView = new AnimatedStatusView(context, 20, 60);
             contentView.addView(animatedStatusView, LayoutHelper.createFrame(20, 20, Gravity.LEFT | Gravity.TOP));

@@ -395,7 +395,7 @@ public class PrizmaPostMedia extends LinearLayout {
             if (reveal) {
                 android.animation.ValueAnimator a = android.animation.ValueAnimator.ofFloat(0f, 1f);
                 a.setDuration(420);
-                a.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
+                a.setInterpolator(PrizmaMotion.EASE);
                 a.addUpdateListener(an -> {
                     progress = (float) an.getAnimatedValue();
                     invalidate();

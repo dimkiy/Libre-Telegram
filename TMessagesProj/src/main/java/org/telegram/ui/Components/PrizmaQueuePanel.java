@@ -392,8 +392,9 @@ public class PrizmaQueuePanel extends LinearLayout {
             setOnClickListener(v -> {
                 if (isCurrent(item)) return;
                 hideKeyboard();
-                v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).withEndAction(() ->
-                        v.animate().scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start()).start();
+                v.setScaleX(0.96f);
+                v.setScaleY(0.96f);
+                PrizmaMotion.scaleTo(v, 1f, PrizmaMotion.POP);
                 MediaController.getInstance().prizmaPlayFromQueue(item);
             });
             setOnLongClickListener(v -> {

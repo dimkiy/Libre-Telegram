@@ -82,11 +82,12 @@ public final class PrizmaFeedKit {
         v.setOnTouchListener((view, e) -> {
             switch (e.getActionMasked()) {
                 case android.view.MotionEvent.ACTION_DOWN:
-                    view.animate().scaleX(scale).scaleY(scale).setDuration(110).setInterpolator(CubicBezierInterpolator.EASE_OUT).start();
+                    view.animate().cancel();
+                    PrizmaMotion.scaleTo(view, scale, PrizmaMotion.FOLLOW);
                     break;
                 case android.view.MotionEvent.ACTION_UP:
                 case android.view.MotionEvent.ACTION_CANCEL:
-                    view.animate().scaleX(1f).scaleY(1f).setDuration(380).setInterpolator(SPRING).start();
+                    PrizmaMotion.scaleTo(view, 1f, PrizmaMotion.POP);
                     break;
             }
             return false;

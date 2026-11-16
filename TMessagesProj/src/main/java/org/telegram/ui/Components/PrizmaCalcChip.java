@@ -67,9 +67,9 @@ public class PrizmaCalcChip extends TextView {
         visible = true;
         animate().cancel();
         setVisibility(VISIBLE);
-        setScaleX(0.9f);
-        setScaleY(0.9f);
-        animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).withEndAction(null).start();
+        setScaleX(0.86f);
+        setScaleY(0.86f);
+        PrizmaMotion.popIn(this, 0.86f);
     }
 
     private void hide() {

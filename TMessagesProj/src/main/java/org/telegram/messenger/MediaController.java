@@ -3258,6 +3258,15 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void prizmaPlayFromQueue(MessageObject mo) {
+        if (mo == null) {
+            return;
+        }
+        if (isSamePlayingMessage(mo)) {
+            if (isMessagePaused()) {
+                playMessage(playingMessageObject);
+            }
+            return;
+        }
         ArrayList<MessageObject> list = activeList();
         int index = list.indexOf(mo);
         if (index < 0) {

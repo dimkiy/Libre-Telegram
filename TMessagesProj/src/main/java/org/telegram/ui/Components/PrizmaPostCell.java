@@ -337,9 +337,10 @@ public class PrizmaPostCell extends LinearLayout {
             styleFollow(false);
             follow.setOnClickListener(v -> {
                 f.getMessagesController().addUserToChat(chatId, f.getUserConfig().getCurrentUser(), 0, null, f, null);
+                PrizmaMotion.halt(follow);
                 follow.animate().scaleX(0.82f).scaleY(0.82f).alpha(0.4f).setDuration(120).withEndAction(() -> {
                     styleFollow(true);
-                    follow.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(360).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start();
+                    PrizmaMotion.popIn(follow, 0.82f);
                 }).start();
             });
         } else {

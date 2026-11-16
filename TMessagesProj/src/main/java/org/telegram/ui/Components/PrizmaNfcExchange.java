@@ -459,7 +459,7 @@ public class PrizmaNfcExchange extends Dialog {
         card.setScaleX(0.94f);
         card.setScaleY(0.94f);
         card.animate().alpha(1f).translationY(0).scaleX(1f).scaleY(1f).setStartDelay(120).setDuration(520)
-                .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+                .setInterpolator(PrizmaMotion.EASE).start();
         hint.setText("Ваш контакт тоже уходит на другой телефон, пока открыт этот экран");
         status.setText("Контакт получен");
         qrLink.setVisibility(View.GONE);
@@ -498,7 +498,7 @@ public class PrizmaNfcExchange extends Dialog {
         in.setAlpha(0f);
         in.setScaleX(0.9f);
         in.setScaleY(0.9f);
-        in.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+        in.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(PrizmaMotion.EASE).start();
         scene.setRingsVisible(!visible);
     }
 

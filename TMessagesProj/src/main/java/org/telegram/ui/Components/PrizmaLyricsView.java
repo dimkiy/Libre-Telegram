@@ -34,6 +34,7 @@ public class PrizmaLyricsView extends View {
     private static final int DIM_ALPHA = 0x5c;
 
     public Listener listener;
+    public org.telegram.messenger.Utilities.Callback<Integer> onSide;
 
     private final TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<PrizmaLyrics.Line> lines = new ArrayList<>();
@@ -59,8 +60,9 @@ public class PrizmaLyricsView extends View {
     private long userScrolledAt;
     private final OverScroller scroller;
     private VelocityTracker velocity;
-    private float downY, lastY;
-    private boolean moved;
+    private float downX, downY, lastY;
+    private long downAt;
+    private boolean moved, wasFlinging, sideways;
     private final int touchSlop;
 
     private final Matrix fillMatrix = new Matrix();
@@ -169,9 +171,13 @@ public class PrizmaLyricsView extends View {
     public boolean onTouchEvent(MotionEvent e) {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                wasFlinging = !scroller.isFinished() || System.currentTimeMillis() - userScrolledAt < 350;
                 scroller.abortAnimation();
+                downX = e.getX();
                 downY = lastY = e.getY();
+                downAt = System.currentTimeMillis();
                 moved = false;
+                sideways = false;
                 if (velocity == null) velocity = VelocityTracker.obtain();
                 velocity.clear();
                 velocity.addMovement(e);
@@ -180,6 +186,12 @@ public class PrizmaLyricsView extends View {
             case MotionEvent.ACTION_MOVE: {
                 if (velocity != null) velocity.addMovement(e);
                 float dy = lastY - e.getY();
+                if (sideways) return true;
+                if (!moved && Math.abs(e.getX() - downX) > touchSlop && Math.abs(e.getX() - downX) > Math.abs(e.getY() - downY)) {
+                    sideways = true;
+                    if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
+                    return true;
+                }
                 if (!moved && Math.abs(e.getY() - downY) > touchSlop) {
                     moved = true;
                     following = false;
@@ -194,13 +206,19 @@ public class PrizmaLyricsView extends View {
                 return true;
             }
             case MotionEvent.ACTION_UP:
+                if (sideways) {
+                    float dx = e.getX() - downX;
+                    if (onSide != null && Math.abs(dx) > AndroidUtilities.dp(56)) onSide.run(dx < 0 ? 1 : -1);
+                    endTouch();
+                    return true;
+                }
                 if (moved) {
                     if (velocity != null) {
                         velocity.computeCurrentVelocity(1000);
                         scroller.fling(0, (int) scroll, 0, (int) -velocity.getYVelocity(), 0, 0, 0, (int) clampScroll(Integer.MAX_VALUE), 0, AndroidUtilities.dp(40));
                         invalidate();
                     }
-                } else {
+                } else if (!wasFlinging && System.currentTimeMillis() - downAt < 400) {
                     tapAt(e.getY());
                 }
                 endTouch();

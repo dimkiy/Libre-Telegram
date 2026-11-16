@@ -718,8 +718,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         if (prizmaZoom != null) {
             prizmaZoom.setVisibility(org.telegram.messenger.PrizmaConfig.roundZoomSlider() ? VISIBLE : GONE);
             prizmaZoom.setRange(1f, useCamera2 ? 4f : 2f, 1f);
-            prizmaZoom.setTranslationY(textureViewSize / 2f + dp(40));
             prizmaZoom.bringToFront();
+            placePrizmaZoom();
+            post(this::placePrizmaZoom);
         }
         if (textureView != null) {
             return;
@@ -959,6 +960,26 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private void updateTranslationY() {
         textureOverlayView.setTranslationY(animationTranslationY + panTranslationY);
         cameraContainer.setTranslationY(animationTranslationY + panTranslationY);
+        placePrizmaZoom();
+    }
+
+    private void placePrizmaZoom() {
+        if (prizmaZoom == null || cameraContainer == null) return;
+        int size = cameraContainer.getHeight() > 0 ? cameraContainer.getHeight() : textureViewSize;
+        if (size <= 0) size = AndroidUtilities.roundPlayingMessageSize;
+        float containerCenter = cameraContainer.getTop() + cameraContainer.getHeight() / 2f;
+        float zoomCenter = prizmaZoom.getTop() + prizmaZoom.getHeight() / 2f;
+        float shift = prizmaZoom.getHeight() > 0 && cameraContainer.getHeight() > 0 ? containerCenter - zoomCenter : 0f;
+        float y = shift + cameraContainer.getTranslationY() + size / 2f + dp(30);
+        float limit = getHeight() - getPaddingBottom() - dp(64) - (prizmaZoom.getTop() + prizmaZoom.getHeight());
+        if (getHeight() > 0 && prizmaZoom.getHeight() > 0) y = Math.min(y, Math.max(0, limit) + 0f);
+        prizmaZoom.setTranslationY(y);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        placePrizmaZoom();
     }
 
     public RectF getCameraRect() {

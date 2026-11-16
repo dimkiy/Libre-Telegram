@@ -122,7 +122,7 @@ public class PrizmaZoomSlider extends View {
         final float from = position(value), to = position(target);
         glide = ValueAnimator.ofFloat(0f, 1f);
         glide.setDuration(220);
-        glide.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
+        glide.setInterpolator(PrizmaMotion.EASE);
         glide.addUpdateListener(a -> push(valueAt(from + (to - from) * (float) a.getAnimatedValue()), false));
         glide.start();
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);

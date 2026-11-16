@@ -26,7 +26,7 @@ public final class PrizmaCoverLens {
     private final Object shader;
     private boolean active;
 
-    private final PrizmaSpring power = new PrizmaSpring(0f, 150f, 1f, this::apply);
+    private final PrizmaSpring power = new PrizmaSpring(0f, PrizmaMotion.SOFT, this::apply);
 
     public PrizmaCoverLens(View target) {
         this.target = target;

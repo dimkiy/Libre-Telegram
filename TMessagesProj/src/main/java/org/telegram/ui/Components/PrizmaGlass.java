@@ -208,29 +208,17 @@ public final class PrizmaGlass {
     }
 
     public static void pressable(View v) {
-        v.setOnTouchListener((view, e) -> {
-            switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    view.animate().cancel();
-                    view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(90).start();
-                    break;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    view.animate().scaleX(1f).scaleY(1f).setDuration(260)
-                            .setInterpolator(new android.view.animation.OvershootInterpolator(2.2f)).start();
-                    break;
-            }
-            return false;
-        });
+        PrizmaMotion.pressable(v);
     }
 
     public static class Toggle extends View {
         private boolean checked;
-        private float progress;
         private int accent = DEFAULT_ACCENT;
-        private ValueAnimator animator;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF rect = new RectF();
+        private final PrizmaMotion.Value pos = new PrizmaMotion.Value(0f, PrizmaMotion.KNOB);
+        private final PrizmaMotion.Value grow = new PrizmaMotion.Value(0f, PrizmaMotion.KNOB_STRETCH);
+        private final PrizmaMotion.Clock clock = new PrizmaMotion.Clock();
 
         public Toggle(Context context) {
             super(context);
@@ -246,47 +234,47 @@ public final class PrizmaGlass {
         }
 
         public void setChecked(boolean value, boolean animated) {
+            boolean changed = value != checked;
             checked = value;
-            if (animator != null) {
-                animator.cancel();
-                animator = null;
-            }
-            final float target = value ? 1f : 0f;
-            if (!animated) {
-                progress = target;
-                invalidate();
-                return;
-            }
-            animator = ValueAnimator.ofFloat(progress, target);
-            animator.addUpdateListener(a -> {
-                progress = (float) a.getAnimatedValue();
-                invalidate();
-            });
-            animator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    animator = null;
+            if (animated && !PrizmaMotion.calm()) {
+                pos.t = value ? 1f : 0f;
+                if (changed) {
+                    grow.t = 0f;
+                    grow.v = 60f;
                 }
-            });
-            animator.setDuration(260);
-            animator.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-            animator.start();
+                clock.reset();
+            } else {
+                pos.snap(value ? 1f : 0f);
+                grow.snap(0f);
+            }
+            invalidate();
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
+            boolean moving = PrizmaMotion.run(clock.tick(), pos, grow);
+            float p = Math.max(0f, Math.min(1f, pos.x));
             float w = getWidth(), h = getHeight();
             float r = h / 2f;
             rect.set(0, 0, w, h);
-            paint.setColor(blend(0x2effffff, accent, progress));
+            paint.setColor(blend(0x2effffff, accent, p));
             canvas.drawRoundRect(rect, r, r, paint);
             float pad = AndroidUtilities.dpf2(2.5f);
             float tr = r - pad;
-            float cx = pad + tr + (w - 2 * (pad + tr)) * progress;
+            float travel = w - 2 * (pad + tr);
+            float cx = pad + tr + travel * pos.x;
+            float extra = Math.max(0f, Math.min(1f, grow.x)) * tr * 0.8f;
+            float left = cx - tr - (checked ? extra * p : 0f);
+            float right = cx + tr + (checked ? 0f : extra * (1f - p));
+            left = Math.max(pad, left);
+            right = Math.min(w - pad, right);
             paint.setColor(0x33000000);
-            canvas.drawCircle(cx, r + AndroidUtilities.dpf2(1f), tr, paint);
+            rect.set(left, pad + AndroidUtilities.dpf2(1f), right, h - pad + AndroidUtilities.dpf2(1f));
+            canvas.drawRoundRect(rect, tr, tr, paint);
             paint.setColor(0xffffffff);
-            canvas.drawCircle(cx, r, tr, paint);
+            rect.set(left, pad, right, h - pad);
+            canvas.drawRoundRect(rect, tr, tr, paint);
+            if (moving) postInvalidateOnAnimation();
         }
     }
 
@@ -297,7 +285,8 @@ public final class PrizmaGlass {
         private final android.graphics.Path part = new android.graphics.Path();
         private int accent = 0xffffffff;
         private float progress;
-        private ValueAnimator animator;
+        private final PrizmaMotion.Value tickValue = new PrizmaMotion.Value(0f, PrizmaMotion.SETTLE);
+        private final PrizmaMotion.Clock clock = new PrizmaMotion.Clock();
 
         public Check(Context context) {
             super(context);
@@ -311,29 +300,25 @@ public final class PrizmaGlass {
         }
 
         public void setChecked(boolean value, boolean animated) {
-            if (animator != null) {
-                animator.cancel();
-                animator = null;
-            }
             float target = value ? 1f : 0f;
-            if (!animated) {
+            if (!animated || PrizmaMotion.calm()) {
+                tickValue.snap(target);
                 progress = target;
                 invalidate();
                 return;
             }
-            animator = ValueAnimator.ofFloat(progress, target);
-            animator.addUpdateListener(a -> {
-                progress = (float) a.getAnimatedValue();
-                invalidate();
-            });
-            animator.setDuration(240);
-            animator.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-            animator.start();
+            tickValue.t = target;
+            clock.reset();
+            invalidate();
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             float w = getWidth(), h = getHeight();
+            boolean moving = PrizmaMotion.run(clock.tick(), tickValue);
+            if (moving) postInvalidateOnAnimation();
+            progress = Math.max(0f, Math.min(1f, tickValue.x));
+            float pop = tickValue.x;
             float r = Math.min(w, h) / 2f - AndroidUtilities.dpf2(1f);
             float cx = w / 2f, cy = h / 2f;
             paint.setStyle(Paint.Style.STROKE);
@@ -344,7 +329,7 @@ public final class PrizmaGlass {
             if (progress <= 0.01f) return;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(accent);
-            canvas.drawCircle(cx, cy, r * (0.6f + 0.4f * progress), paint);
+            canvas.drawCircle(cx, cy, Math.min(r * 1.08f, r * (0.6f + 0.4f * pop)), paint);
             tick.rewind();
             tick.moveTo(cx - r * 0.42f, cy + r * 0.02f);
             tick.lineTo(cx - r * 0.1f, cy + r * 0.34f);
@@ -461,7 +446,7 @@ public final class PrizmaGlass {
             panel.setAlpha(0f);
             panel.setTranslationY(AndroidUtilities.dp(fancy ? 56 : 24));
             panel.animate().alpha(1f).translationY(0).setDuration(fancy ? 420 : 180)
-                    .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+                    .setInterpolator(PrizmaMotion.EASE).start();
         }
 
         @Override

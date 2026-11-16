@@ -140,7 +140,7 @@ public class PrizmaPdfViewer extends Dialog {
         updateCounter();
         root.setAlpha(0f);
         root.setTranslationY(AndroidUtilities.dp(30));
-        root.animate().alpha(1f).translationY(0f).setDuration(260).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+        root.animate().alpha(1f).translationY(0f).setDuration(260).setInterpolator(PrizmaMotion.EASE).start();
     }
 
     private void updateCounter() {
@@ -285,7 +285,7 @@ public class PrizmaPdfViewer extends Dialog {
                     child.setPivotX(focusX);
                     child.setPivotY(focusY);
                     child.animate().scaleX(zoom).scaleY(zoom).translationX(zoom == 1f ? 0f : child.getTranslationX())
-                            .setDuration(240).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+                            .setDuration(240).setInterpolator(PrizmaMotion.EASE).start();
                     return true;
                 }
 

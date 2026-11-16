@@ -274,7 +274,7 @@ public class PrizmaGiftsSheet implements NotificationCenter.NotificationCenterDe
     private static void pressFeedback(View v) {
         v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(90)
                 .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f)
-                        .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).setDuration(220).start())
+                        .setInterpolator(PrizmaMotion.EASE).setDuration(220).start())
                 .start();
     }
 

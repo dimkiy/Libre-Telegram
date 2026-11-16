@@ -19,6 +19,10 @@ public final class PrizmaSpring {
     private final Sink sink;
     private float target;
 
+    public PrizmaSpring(float start, PrizmaMotion.Spec spec, Sink sink) {
+        this(start, spec.stiffness, spec.ratio(), sink);
+    }
+
     public PrizmaSpring(float start, float stiffness, float damping, Sink sink) {
         this.sink = sink;
         target = start;
@@ -29,8 +33,16 @@ public final class PrizmaSpring {
         animation.addUpdateListener((a, value, velocity) -> sink.set(value));
     }
 
+    public void tune(PrizmaMotion.Spec spec) {
+        animation.getSpring().setStiffness(spec.stiffness).setDampingRatio(spec.ratio());
+    }
+
     public void to(float value) {
         target = value;
+        if (PrizmaMotion.calm()) {
+            snap(value);
+            return;
+        }
         animation.animateToFinalPosition(value);
     }
 

@@ -234,20 +234,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     @Override
     public void onTransitionAnimationStart(boolean isOpen, boolean backward) {
         super.onTransitionAnimationStart(isOpen, backward);
-        if (isOpen) {
+        if (isOpen && !backward && System.currentTimeMillis() - prizmaEntranceAt > 650) {
             prizmaEntranceAt = System.currentTimeMillis();
             org.telegram.ui.Components.PrizmaEntrance.play(listView);
         } else {
             org.telegram.ui.Components.PrizmaEntrance.reset(listView);
-        }
-    }
-
-    @Override
-    public void onBecomeFullyVisible() {
-        super.onBecomeFullyVisible();
-        if (System.currentTimeMillis() - prizmaEntranceAt > 650) {
-            prizmaEntranceAt = System.currentTimeMillis();
-            org.telegram.ui.Components.PrizmaEntrance.play(listView);
         }
     }
 

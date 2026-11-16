@@ -138,25 +138,25 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
     private PrizmaLyrics.Lyrics currentLyrics;
     private boolean lyricsAnswered;
 
-    private final PrizmaSpring pageSpring = new PrizmaSpring(0f, 380f, 0.84f, v -> {
+    private final PrizmaSpring pageSpring = new PrizmaSpring(0f, PrizmaMotion.SOFT, v -> {
         pageProgress = v;
         applyPage();
     });
-    private final PrizmaSpring lyricsSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 1f, v -> {
+    private final PrizmaSpring lyricsSpring = new PrizmaSpring(0f, PrizmaMotion.FADE, v -> {
         lyricsAlpha = v;
         applyPanels();
     });
-    private final PrizmaSpring queueSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 1f, v -> {
+    private final PrizmaSpring queueSpring = new PrizmaSpring(0f, PrizmaMotion.FADE, v -> {
         queueAlpha = v;
         applyPanels();
     });
-    private final PrizmaSpring kick = new PrizmaSpring(1f, 520f, 0.42f, v -> {
+    private final PrizmaSpring kick = new PrizmaSpring(1f, PrizmaMotion.POP, v -> {
         if (coverInner != null) {
             coverInner.setScaleX(v);
             coverInner.setScaleY(v);
         }
     });
-    private final PrizmaSpring swipe = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.78f, v -> {
+    private final PrizmaSpring swipe = new PrizmaSpring(0f, PrizmaMotion.SETTLE, v -> {
         if (coverInner != null) {
             coverInner.setTranslationX(v);
             coverInner.setRotation(coverSide == 0 ? 0f : v / coverSide * 7f);
@@ -860,17 +860,24 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         final float off = coverSide * 0.5f;
         for (View v : texts) {
             v.animate().cancel();
-            v.animate().alpha(0f).translationY(-AndroidUtilities.dp(8)).setDuration(130).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+            PrizmaMotion.stop(v, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA);
+            PrizmaMotion.stop(v, androidx.dynamicanimation.animation.DynamicAnimation.TRANSLATION_Y);
+            v.animate().alpha(0f).translationY(-AndroidUtilities.dp(14)).setDuration(130).setInterpolator(CubicBezierInterpolator.EASE_IN).start();
         }
         coverBox.animate().cancel();
-        coverBox.animate().alpha(page == PAGE_COVER ? 0f : 0.4f).setDuration(150).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).withEndAction(() -> {
+        coverBox.animate().alpha(page == PAGE_COVER ? 0f : 0.4f).setDuration(150).setInterpolator(PrizmaMotion.EASE).withEndAction(() -> {
             applyTrack(mo);
             swipe.snap(-dir * off);
             coverBox.animate().alpha(1f).setDuration(240).withEndAction(null).start();
             swipe.to(0f);
-            for (View v : texts) {
-                v.setTranslationY(AndroidUtilities.dp(10));
-                v.animate().alpha(1f).translationY(0f).setDuration(280).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+            for (int i = 0; i < texts.length; i++) {
+                final View v = texts[i];
+                v.animate().cancel();
+                v.setTranslationY(AndroidUtilities.dp(16));
+                v.postOnAnimationDelayed(() -> {
+                    PrizmaMotion.to(v, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA, 1f, PrizmaMotion.FADE);
+                    PrizmaMotion.to(v, androidx.dynamicanimation.animation.DynamicAnimation.TRANSLATION_Y, 0f, PrizmaMotion.ROLL);
+                }, (long) i * PrizmaMotion.STAGGER);
             }
         }).start();
     }
@@ -1382,7 +1389,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         private boolean dragging, allowed;
         private VelocityTracker velocity;
         private float cornerRadius;
-        private final PrizmaSpring sheet = new PrizmaSpring(0f, 300f, 0.92f, this::setTranslationY);
+        private final PrizmaSpring sheet = new PrizmaSpring(0f, PrizmaMotion.SOFT, this::setTranslationY);
 
         DragRoot(Context context) {
             super(context);
@@ -1484,6 +1491,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         LyricsPanel(Context c) {
             super(c);
             view = new PrizmaLyricsView(c);
+            view.onSide = dir -> setPage(Math.max(PAGE_COVER, Math.min(PAGE_QUEUE, page + dir)));
             view.listener = ms -> {
                 MessageObject mo = MediaController.getInstance().getPlayingMessageObject();
                 if (mo != null && mo.getDuration() > 0) {
@@ -1591,15 +1599,15 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         boolean ghost;
         private final Path path = new Path();
         private PillButton left, right;
-        private final PrizmaSpring growSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.48f, v -> {
+        private final PrizmaSpring growSpring = new PrizmaSpring(0f, PrizmaMotion.POP, v -> {
             grow = v;
             invalidate();
         });
-        private final PrizmaSpring shiftSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.5f, v -> {
+        private final PrizmaSpring shiftSpring = new PrizmaSpring(0f, PrizmaMotion.SETTLE, v -> {
             shift = v;
             invalidate();
         });
-        private final PrizmaSpring roundSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.8f, v -> {
+        private final PrizmaSpring roundSpring = new PrizmaSpring(0f, PrizmaMotion.FADE, v -> {
             round = v;
             invalidate();
         });
@@ -1720,7 +1728,8 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         private int accent = TEXT;
         private int selected;
         private float position;
-        private final PrizmaSpring spring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.7f, v -> {
+        private final PrizmaMotion.Stretch pill = new PrizmaMotion.Stretch();
+        private final PrizmaSpring spring = new PrizmaSpring(0f, PrizmaMotion.FADE, v -> {
             position = v;
             invalidate();
         });
@@ -1741,6 +1750,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         void select(int index) {
             selected = index;
             spring.to(index);
+            if (widths[index] > 0) pill.moveTo(lefts[index], lefts[index] + widths[index], true);
             invalidate();
         }
 
@@ -1769,12 +1779,14 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
                 canvas.drawText(labels[i], x, baseline, text);
                 x += widths[i] + AndroidUtilities.dp(22);
             }
-            int from = Math.max(0, Math.min(1, (int) Math.floor(position)));
-            float t = Math.max(0f, Math.min(1f, position - from));
-            float left = AndroidUtilities.lerp(lefts[from], lefts[from + 1], t);
-            float right = AndroidUtilities.lerp(lefts[from] + widths[from], lefts[from + 1] + widths[from + 1], t);
-            float top = baseline + AndroidUtilities.dp(7);
-            rect.set(left, top, right, top + AndroidUtilities.dp(4));
+            if (!pill.placed()) pill.moveTo(lefts[selected], lefts[selected] + widths[selected], false);
+            boolean moving = pill.step();
+            float left = pill.left(), right = pill.right();
+            float stretch = Math.max(0f, (right - left) / Math.max(1f, widths[selected]) - 1f);
+            float thick = AndroidUtilities.dp(4) / (1f + Math.min(0.5f, stretch * 0.6f));
+            float top = baseline + AndroidUtilities.dp(7) + (AndroidUtilities.dp(4) - thick) / 2f;
+            rect.set(left, top, right, top + thick);
+            if (moving) postInvalidateOnAnimation();
             PrizmaShape.leaf(path, rect, AndroidUtilities.dp(3), AndroidUtilities.dp(1), 0f);
             bar.setColor(accent);
             canvas.drawPath(path, bar);
@@ -1816,8 +1828,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         void setActive(boolean value) {
             active = value;
             image.setColorFilter(value ? accent : 0x8cffffff);
-            dot.animate().scaleX(value ? 1f : 0f).scaleY(value ? 1f : 0f).setDuration(240)
-                    .setInterpolator(new OvershootInterpolator(2.4f)).start();
+            PrizmaMotion.scaleTo(dot, value ? 1f : 0f, value ? PrizmaMotion.POP : PrizmaMotion.FADE);
         }
     }
 
@@ -1829,12 +1840,11 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
         private int accent = 0xffffffff;
         private float fill;
         private boolean checked;
-        private float pop = 1f;
-        private final PrizmaSpring popSpring = new PrizmaSpring(1f, PrizmaSpring.MEDIUM, 0.4f, v -> {
-            pop = v;
-            invalidate();
-        });
-        private final PrizmaSpring fillSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 1f, v -> {
+        private final PrizmaMotion.Value pop = new PrizmaMotion.Value(1f, PrizmaMotion.HEART);
+        private final PrizmaMotion.Clock clock = new PrizmaMotion.Clock();
+        private final Paint dots = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private float burst = 9f;
+        private final PrizmaSpring fillSpring = new PrizmaSpring(0f, PrizmaMotion.FILL, v -> {
             fill = v;
             invalidate();
         });
@@ -1864,9 +1874,13 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
             checked = value;
             if (animated) {
                 fillSpring.to(value ? 1f : 0f);
-                if (changed && value) {
-                    popSpring.snap(0.72f);
-                    popSpring.to(1f);
+                if (changed && !PrizmaMotion.calm()) {
+                    pop.x = value ? 0.6f : 0.85f;
+                    pop.v = value ? 9f : 3f;
+                    pop.t = 1f;
+                    if (value) burst = 0f;
+                    clock.reset();
+                    invalidate();
                 }
             } else {
                 fillSpring.snap(value ? 1f : 0f);
@@ -1881,8 +1895,25 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
             matrix.setScale(k, k);
             matrix.postTranslate((getWidth() - size) / 2f, (getHeight() - size) / 2f);
             path.transform(matrix, scaled);
+            float dt = clock.tick();
+            boolean moving = PrizmaMotion.run(dt, pop);
+            float cx = getWidth() / 2f, cy = getHeight() / 2f;
+            if (burst < 1f) {
+                burst += dt;
+                moving = true;
+                float q = Math.min(1f, burst / 0.55f);
+                float e = 1f - (float) Math.pow(1f - q, 3);
+                for (int i = 0; i < 8; i++) {
+                    double angle = i / 8.0 * Math.PI * 2 + 0.2;
+                    float r = AndroidUtilities.dp(9) + e * AndroidUtilities.dp(10 + (i % 2) * 4);
+                    dots.setColor(i % 2 == 0 ? accent : 0xffffffff);
+                    dots.setAlpha((int) (255 * (1f - q * q)));
+                    canvas.drawCircle(cx + (float) Math.cos(angle) * r, cy + (float) Math.sin(angle) * r, AndroidUtilities.dp(2.2f) * (1f - 0.7f * q), dots);
+                }
+            }
+            float sq = pop.x;
             canvas.save();
-            canvas.scale(pop, pop, getWidth() / 2f, getHeight() / 2f);
+            canvas.scale(sq * (2f - Math.min(sq, 1.15f)), sq, cx, cy);
             float t = Math.max(0f, Math.min(1f, fill));
             if (t > 0f) {
                 paint.setStyle(Paint.Style.FILL);
@@ -1894,6 +1925,7 @@ public class PrizmaFullPlayer extends Dialog implements PrizmaQueuePanel.Host {
             paint.setColor(PrizmaPalette.mix(0xd9ffffff, accent, t));
             canvas.drawPath(scaled, paint);
             canvas.restore();
+            if (moving) postInvalidateOnAnimation();
         }
     }
 }

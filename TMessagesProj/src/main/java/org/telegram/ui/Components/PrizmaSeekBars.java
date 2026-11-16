@@ -29,7 +29,7 @@ public class PrizmaSeekBars extends View implements PrizmaVisualizerData.Listene
     private boolean dragging;
     private float touchX = -1f;
     private float lens;
-    private final PrizmaSpring lensSpring = new PrizmaSpring(0f, PrizmaSpring.MEDIUM, 0.72f, v -> {
+    private final PrizmaSpring lensSpring = new PrizmaSpring(0f, PrizmaMotion.SETTLE, v -> {
         lens = v;
         invalidate();
     });
@@ -41,7 +41,7 @@ public class PrizmaSeekBars extends View implements PrizmaVisualizerData.Listene
 
     private float[] peaks;
     private float peaksMorph = 1f;
-    private final PrizmaSpring morphSpring = new PrizmaSpring(1f, PrizmaSpring.SOFT, 1f, v -> {
+    private final PrizmaSpring morphSpring = new PrizmaSpring(1f, PrizmaMotion.SOFT, v -> {
         peaksMorph = v;
         invalidate();
     });

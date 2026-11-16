@@ -95,7 +95,7 @@ public class PrizmaPlayerBackdrop extends View implements PrizmaBeat.Listener {
         }
         android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0f, 1f);
         va.setDuration(520);
-        va.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
+        va.setInterpolator(PrizmaMotion.EASE);
         va.addUpdateListener(a -> {
             float t = (float) a.getAnimatedValue();
             top = PrizmaPalette.mix(fromTop, next.backgroundTop, t);

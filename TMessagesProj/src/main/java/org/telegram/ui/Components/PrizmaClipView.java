@@ -141,7 +141,7 @@ public class PrizmaClipView extends FrameLayout {
         if (revealed) return;
         revealed = true;
         animate().cancel();
-        animate().alpha(1f).setDuration(420).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+        animate().alpha(1f).setDuration(420).setInterpolator(PrizmaMotion.EASE).start();
     }
 
     private void release() {

@@ -166,7 +166,9 @@ public class PrizmaPopup {
         filler.fill(this);
         list.setAlpha(0f);
         list.setTranslationX(AndroidUtilities.dp(18));
-        list.animate().alpha(1f).translationX(0f).setDuration(200).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+        PrizmaMotion.to(list, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA, 1f, PrizmaMotion.FADE);
+        PrizmaMotion.to(list, androidx.dynamicanimation.animation.DynamicAnimation.TRANSLATION_X, 0f, PrizmaMotion.SETTLE);
+        for (int i = 0; i < rows.size(); i++) PrizmaMotion.appear(rows.get(i), i, -8);
     }
 
     public void showAt(View anchor, boolean top) {
@@ -185,15 +187,19 @@ public class PrizmaPopup {
         shown = this;
         final int anchorTop = ay, anchorBottom = ay + anchor.getHeight();
         card.setAlpha(0f);
-        card.setScaleX(0.82f);
-        card.setScaleY(0.82f);
+        card.setScaleX(0.9f);
+        card.setScaleY(0.55f);
+        for (View row : rows) row.setAlpha(0f);
         card.post(() -> {
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) card.getLayoutParams();
             p.topMargin = top ? anchorBottom + AndroidUtilities.dp(2) : Math.max(AndroidUtilities.statusBarHeight, anchorTop - card.getHeight() - AndroidUtilities.dp(6));
             card.setLayoutParams(p);
             card.setPivotX(alignRight ? card.getWidth() : 0);
             card.setPivotY(top ? 0 : card.getHeight());
-            card.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start();
+            PrizmaMotion.to(card, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA, 1f, PrizmaMotion.FADE);
+            PrizmaMotion.to(card, androidx.dynamicanimation.animation.DynamicAnimation.SCALE_Y, 1f, PrizmaMotion.MENU);
+            PrizmaMotion.to(card, androidx.dynamicanimation.animation.DynamicAnimation.SCALE_X, 1f, PrizmaMotion.SOFT);
+            for (int i = 0; i < rows.size(); i++) PrizmaMotion.appear(rows.get(i), i + 1, -14);
         });
     }
 
@@ -202,7 +208,10 @@ public class PrizmaPopup {
         closed = true;
         if (shown == this) shown = null;
         card.animate().cancel();
-        card.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f).setDuration(140).withEndAction(() -> {
+        PrizmaMotion.stop(card, androidx.dynamicanimation.animation.DynamicAnimation.ALPHA);
+        PrizmaMotion.stop(card, androidx.dynamicanimation.animation.DynamicAnimation.SCALE_X);
+        PrizmaMotion.stop(card, androidx.dynamicanimation.animation.DynamicAnimation.SCALE_Y);
+        card.animate().alpha(0f).scaleX(0.94f).scaleY(0.8f).setDuration(150).setInterpolator(CubicBezierInterpolator.EASE_IN).withEndAction(() -> {
             AndroidUtilities.removeFromParent(overlay);
             if (onClosed != null) onClosed.run();
         }).start();

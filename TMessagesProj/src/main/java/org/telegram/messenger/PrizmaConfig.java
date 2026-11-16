@@ -737,6 +737,22 @@ public class PrizmaConfig {
         done(edit().putInt("live_wallpaper_palette", v));
     }
 
+    public static int particles() {
+        return getInt("particles", 0);
+    }
+
+    public static void setParticles(int v) {
+        done(edit().putInt("particles", v));
+    }
+
+    public static int particlesDensity() {
+        return getInt("particles_density", 1);
+    }
+
+    public static void setParticlesDensity(int v) {
+        done(edit().putInt("particles_density", v));
+    }
+
     public static boolean keepHistory() {
         return getBool("keep_history", true);
     }
@@ -943,6 +959,22 @@ public class PrizmaConfig {
 
     public static void setTabletPane(int v) {
         done(edit().putInt("tablet_pane", v));
+    }
+
+    public static boolean giftBubbles() {
+        return getBool("gift_bubbles", true);
+    }
+
+    public static void setGiftBubbles(boolean v) {
+        done(edit().putBoolean("gift_bubbles", v));
+    }
+
+    public static String widgets() {
+        return getString("widgets_list", "");
+    }
+
+    public static void setWidgets(String v) {
+        done(edit().putString("widgets_list", v));
     }
 
     public static String weatherCity() {

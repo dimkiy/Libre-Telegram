@@ -481,7 +481,7 @@ public class PrizmaWallActivity extends BaseFragment {
                     sendButton.setTranslationY(AndroidUtilities.dp(6));
                     sendButton.animate()
                             .translationX(0).translationY(0).alpha(sendReady() ? 1f : 0.6f)
-                            .setDuration(260).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK)
+                            .setDuration(org.telegram.ui.Components.PrizmaMotion.duration(org.telegram.ui.Components.PrizmaMotion.SETTLE)).setInterpolator(org.telegram.ui.Components.PrizmaMotion.curve(org.telegram.ui.Components.PrizmaMotion.SETTLE))
                             .withEndAction(null).start();
                 }).start();
     }
@@ -761,7 +761,7 @@ public class PrizmaWallActivity extends BaseFragment {
                     f.setScaleY(0.94f);
                     f.setPivotY(0);
                     f.animate().alpha(rest).translationY(0).scaleX(1f).scaleY(1f)
-                            .setDuration(440).setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK).start();
+                            .setDuration(org.telegram.ui.Components.PrizmaMotion.duration(org.telegram.ui.Components.PrizmaMotion.SOFT)).setInterpolator(org.telegram.ui.Components.PrizmaMotion.curve(org.telegram.ui.Components.PrizmaMotion.SOFT)).start();
                 } else if (settle == p) {
                     settle = null;
                     f.setAlpha(0.6f);
@@ -778,7 +778,7 @@ public class PrizmaWallActivity extends BaseFragment {
                     f.setAlpha(0f);
                     f.setTranslationY(AndroidUtilities.dp(28));
                     f.animate().alpha(rest).translationY(0)
-                            .setDuration(320).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+                            .setDuration(320).setInterpolator(org.telegram.ui.Components.PrizmaMotion.EASE).start();
                 } else {
                     f.setAlpha(rest);
                 }
@@ -952,10 +952,10 @@ public class PrizmaWallActivity extends BaseFragment {
                 if (p.sending) return true;
                 heart.animate().cancel();
                 heart.setAlpha(0f);
-                heart.setScaleX(0.3f);
-                heart.setScaleY(0.3f);
-                heart.animate().alpha(0.95f).scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(260)
-                        .setInterpolator(CubicBezierInterpolator.EASE_OUT_BACK)
+                heart.setScaleX(0.6f);
+                heart.setScaleY(0.6f);
+                heart.animate().alpha(0.95f).scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(org.telegram.ui.Components.PrizmaMotion.duration(org.telegram.ui.Components.PrizmaMotion.HEART))
+                        .setInterpolator(org.telegram.ui.Components.PrizmaMotion.curve(org.telegram.ui.Components.PrizmaMotion.HEART))
                         .withEndAction(() -> heart.animate().alpha(0f).scaleX(1.15f).scaleY(1.15f)
                                 .setStartDelay(260).setDuration(220).setInterpolator(CubicBezierInterpolator.EASE_IN)
                                 .withEndAction(null).start())
@@ -1065,7 +1065,7 @@ public class PrizmaWallActivity extends BaseFragment {
             heartOn = ctx.getResources().getDrawable(R.drawable.media_like_active).mutate();
             heartOn.setColorFilter(new PorterDuffColorFilter(colorOn, PorterDuff.Mode.SRC_IN));
             count.setTextSize(AndroidUtilities.dp(14));
-            count.setAnimationProperties(0.35f, 0, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
+            count.setAnimationProperties(0.35f, 0, 320, org.telegram.ui.Components.PrizmaMotion.EASE);
             count.setCallback(this);
             background.setCallback(this);
             dot.setColor(colorOn);
@@ -1083,7 +1083,7 @@ public class PrizmaWallActivity extends BaseFragment {
                 if (burstAnimator != null) burstAnimator.cancel();
                 burstAnimator = ValueAnimator.ofFloat(0f, 1f);
                 burstAnimator.setDuration(520);
-                burstAnimator.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
+                burstAnimator.setInterpolator(org.telegram.ui.Components.PrizmaMotion.EASE);
                 burstAnimator.addUpdateListener(a -> {
                     burst = (float) a.getAnimatedValue();
                     invalidate();

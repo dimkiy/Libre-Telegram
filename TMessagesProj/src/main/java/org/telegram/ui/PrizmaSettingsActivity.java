@@ -110,6 +110,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
     private int textColor, grayColor, cardColor, accent, onAccent, dividerColor;
     private PrizmaSwitch ghostSwitch;
     private boolean resumedOnce;
+    private boolean tilesEntered;
 
     public PrizmaSettingsActivity() {
         this(HOME);
@@ -224,7 +225,9 @@ public class PrizmaSettingsActivity extends BaseFragment {
 
     private void fillHome(Context context) {
         if (context == null) return;
-        homeBody.addView(ghostCard(context), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
+        View ghost = ghostCard(context);
+        if (!tilesEntered) org.telegram.ui.Components.PrizmaMotion.appear(ghost, 0, 14);
+        homeBody.addView(ghost, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
         LinearLayout row = null;
         for (int i = 0; i < NAMES.length; i++) {
             if (i % 2 == 0) {
@@ -234,6 +237,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
             }
             row.addView(tile(context, i, i), LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, i % 2 == 0 ? 0 : 5, 0, i % 2 == 0 ? 5 : 0, 0));
         }
+        tilesEntered = true;
         TextView version = new TextView(context);
         version.setText("Libre " + BuildVars.BUILD_VERSION_STRING);
         version.setTextColor(grayColor);
@@ -336,10 +340,7 @@ public class PrizmaSettingsActivity extends BaseFragment {
         t.addView(sub, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
         t.setOnClickListener(v -> presentFragment(new PrizmaSettingsActivity(index)));
         PrizmaGlass.pressable(t);
-        t.setAlpha(0f);
-        t.setTranslationY(AndroidUtilities.dp(14));
-        t.animate().alpha(1f).translationY(0f).setStartDelay(30L * position).setDuration(300)
-                .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).start();
+        if (!tilesEntered) org.telegram.ui.Components.PrizmaMotion.appear(t, position + 1, 14);
         return t;
     }
 
@@ -552,6 +553,15 @@ public class PrizmaSettingsActivity extends BaseFragment {
             MessagesController.getInstance(acc).sortDialogs(null);
             NotificationCenter.getInstance(acc).postNotificationName(NotificationCenter.dialogsNeedReload);
         });
+        action(LOOK, "Частицы на главном экране", org.telegram.ui.Components.PrizmaParticles.NAMES[Math.max(0, Math.min(org.telegram.ui.Components.PrizmaParticles.NAMES.length - 1, PrizmaConfig.particles()))], () -> choose(ctx, "Частицы на главном экране", org.telegram.ui.Components.PrizmaParticles.NAMES, new int[]{0, 1, 2, 3, 4, 5}, PrizmaConfig.particles(), v -> {
+            PrizmaConfig.setParticles(v);
+            org.telegram.ui.Components.PrizmaParticles.changed();
+        }));
+        action(LOOK, "Сколько частиц", org.telegram.ui.Components.PrizmaParticles.DENSITY[Math.max(0, Math.min(2, PrizmaConfig.particlesDensity()))], () -> choose(ctx, "Сколько частиц", org.telegram.ui.Components.PrizmaParticles.DENSITY, new int[]{0, 1, 2}, PrizmaConfig.particlesDensity(), v -> {
+            PrizmaConfig.setParticlesDensity(v);
+            org.telegram.ui.Components.PrizmaParticles.changed();
+        }));
+        toggle(LOOK, "Подарки в пузырях", "Подарки в профиле плавают в стеклянных пузырях. Пузырь можно бросить, а нажатие раздувает его", PrizmaConfig::giftBubbles, PrizmaConfig::setGiftBubbles);
         toggle(LOOK, "Сообщения без хвостика", "Пузыри без уголка у последнего сообщения", PrizmaConfig::noTail, PrizmaConfig::setNoTail);
         action(LOOK, "Скругление аватаров", "Круг, лист или квадрат", () -> choose(ctx, "Скругление аватаров", new String[]{"Круг", "Сильное", "Среднее", "Лёгкое", "Квадрат"}, new int[]{100, 70, 45, 25, 0}, PrizmaConfig.avatarCorner(), PrizmaConfig::setAvatarCorner));
         toggle(LOOK, "Компактная панель вкладок", "Подпись только у открытой вкладки. Применится после перезапуска", PrizmaConfig::dockTabs, PrizmaConfig::setDockTabs);

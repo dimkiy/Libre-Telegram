@@ -35,6 +35,7 @@ public class PrizmaPostActions extends LinearLayout {
     public PrizmaPostActions(Context context, boolean big) {
         super(context);
         this.big = big;
+        setClipChildren(false);
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
         int blue = Theme.getColor(Theme.key_featuredStickers_addButton);
@@ -104,6 +105,7 @@ public class PrizmaPostActions extends LinearLayout {
             super(context);
             this.accent = accent;
             this.gray = Theme.getColor(Theme.key_windowBackgroundWhiteGrayText);
+            setClipChildren(false);
             setOrientation(HORIZONTAL);
             setGravity(Gravity.CENTER_VERTICAL);
             glyph = new Glyph(context, type, big ? 23 : 19);
@@ -115,7 +117,7 @@ public class PrizmaPostActions extends LinearLayout {
                 count.setTextSize(AndroidUtilities.dp(big ? 14 : 13));
                 count.setTextColor(gray);
                 count.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-                count.setAnimationProperties(0.35f, 0, 260, CubicBezierInterpolator.EASE_OUT_QUINT);
+                count.setAnimationProperties(0.55f, 0, 380, PrizmaMotion.BOUNCE);
                 addView(count, LayoutHelper.createLinear(0, LayoutHelper.MATCH_PARENT, 1f, 0, 0, 2, 0));
             } else {
                 count = null;
@@ -127,10 +129,10 @@ public class PrizmaPostActions extends LinearLayout {
             if (event.getAction() == android.view.MotionEvent.ACTION_DOWN && glyph.getBackground() != null) {
                 glyph.getBackground().setHotspot(glyph.getWidth() / 2f, glyph.getHeight() / 2f);
                 glyph.setPressed(true);
-                glyph.animate().scaleX(0.78f).scaleY(0.78f).setDuration(110).setInterpolator(CubicBezierInterpolator.EASE_OUT).start();
+                PrizmaMotion.scaleTo(glyph, 0.8f, PrizmaMotion.FOLLOW);
             } else if (event.getAction() == android.view.MotionEvent.ACTION_UP || event.getAction() == android.view.MotionEvent.ACTION_CANCEL) {
                 glyph.setPressed(false);
-                glyph.animate().scaleX(1f).scaleY(1f).setDuration(420).setInterpolator(new android.view.animation.OvershootInterpolator(3.2f)).start();
+                PrizmaMotion.scaleTo(glyph, 1f, PrizmaMotion.POP);
             }
             return super.onTouchEvent(event);
         }
@@ -153,12 +155,14 @@ public class PrizmaPostActions extends LinearLayout {
     }
 
     private static final class Glyph extends View {
+        private static final int[] DOTS = {0xffff4d6d, 0xffff9f0a, 0xffffd23f, 0xff34d17a, 0xff3ec9ff, 0xffc69bff, 0xffff6ad5, 0xffff4d6d};
         final PrizmaFeedIcons icon;
         private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final int size;
-        private float scale = 1f;
-        private float wave = -1f;
-        private ValueAnimator anim;
+        private final PrizmaMotion.Value heart = new PrizmaMotion.Value(1f, PrizmaMotion.HEART);
+        private final PrizmaMotion.Clock clock = new PrizmaMotion.Clock();
+        private float burstTime = 9f;
 
         Glyph(Context context, int type, int sizeDp) {
             super(context);
@@ -174,42 +178,48 @@ public class PrizmaPostActions extends LinearLayout {
         }
 
         void burst(int color) {
-            if (anim != null) anim.cancel();
             ring.setColor(color);
-            anim = ValueAnimator.ofFloat(0f, 1f);
-            anim.setDuration(520);
-            anim.addUpdateListener(a -> {
-                float t = (float) a.getAnimatedValue();
-                scale = t < 0.28f ? 1f - 0.35f * (t / 0.28f) : 0.65f + 0.35f * CubicBezierInterpolator.EASE_OUT_BACK.getInterpolation((t - 0.28f) / 0.72f) * 1.08f;
-                if (t > 0.98f) scale = 1f;
-                wave = t;
-                invalidate();
-            });
-            anim.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(android.animation.Animator animation) {
-                    scale = 1f;
-                    wave = -1f;
-                    invalidate();
-                }
-            });
-            anim.start();
+            if (PrizmaMotion.calm()) return;
+            heart.x = 0.6f;
+            heart.v = 9f;
+            heart.t = 1f;
+            burstTime = 0f;
+            clock.reset();
+            invalidate();
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
-            float cx = getWidth() / 2f, cy = getHeight() / 2f;
-            if (wave >= 0.2f && wave < 1f) {
-                float t = (wave - 0.2f) / 0.8f;
-                ring.setStrokeWidth(AndroidUtilities.dp(2.2f) * (1f - t));
-                ring.setAlpha((int) (255 * (1f - t)));
-                canvas.drawCircle(cx, cy, size * (0.45f + 0.5f * t), ring);
+            float dt = clock.tick();
+            boolean moving = PrizmaMotion.run(dt, heart);
+            if (burstTime < 1f) {
+                burstTime += dt;
+                moving = true;
             }
+            float cx = getWidth() / 2f, cy = getHeight() / 2f;
+            float k = Math.min(1f, burstTime / 0.55f);
+            if (k < 1f) {
+                float e = 1f - (float) Math.pow(1f - k, 3);
+                ring.setStrokeWidth(AndroidUtilities.dp(2f) * (1f - k));
+                ring.setAlpha((int) (200 * (1f - k)));
+                canvas.drawCircle(cx, cy, size * (0.4f + 0.45f * e), ring);
+                float alpha = 1f - k * k;
+                for (int i = 0; i < DOTS.length; i++) {
+                    float angle = (float) (i / (double) DOTS.length * Math.PI * 2 + 0.2);
+                    float r = AndroidUtilities.dp(6) + e * AndroidUtilities.dp(9 + (i % 2) * 3);
+                    dot.setColor(DOTS[i]);
+                    dot.setAlpha((int) (255 * alpha));
+                    canvas.drawCircle(cx + (float) Math.cos(angle) * r, cy + (float) Math.sin(angle) * r, AndroidUtilities.dp(2.2f) * (1f - 0.7f * k), dot);
+                }
+            }
+            float sq = heart.x;
+            float sx = sq * (2f - Math.min(sq, 1.15f));
             canvas.save();
-            canvas.scale(scale, scale, cx, cy);
+            canvas.scale(sx, sq, cx, cy);
             icon.setBounds((int) (cx - size / 2f), (int) (cy - size / 2f), (int) (cx + size / 2f), (int) (cy + size / 2f));
             icon.draw(canvas);
             canvas.restore();
+            if (moving) postInvalidateOnAnimation();
         }
     }
 }
